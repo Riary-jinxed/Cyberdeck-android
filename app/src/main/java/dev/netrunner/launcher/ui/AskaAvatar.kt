@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.netrunner.launcher.R
 import java.io.File
 import kotlin.math.sin
 
@@ -45,10 +46,8 @@ object AskaPortrait {
     }
 
     /** The portrait shipped with the launcher, used until the user imports their own. */
-    @android.annotation.SuppressLint("DiscouragedApi")
     private fun bundled(context: Context): ImageBitmap? = runCatching {
-        val id = context.resources.getIdentifier("aska_portrait", "drawable", context.packageName)
-        if (id == 0) null else BitmapFactory.decodeResource(context.resources, id)?.asImageBitmap()
+        BitmapFactory.decodeResource(context.resources, R.drawable.aska_portrait)?.asImageBitmap()
     }.getOrNull()
 
     /** Decodes, crops to a centred square and scales to 512 px, so drawing it stays cheap. */
