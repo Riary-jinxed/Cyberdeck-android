@@ -19,6 +19,8 @@ data class ZoneConditions(
     val humidity: Int,
     val isDay: Boolean,
     val fetchedAt: Long,
+    /** The next few hours, soonest first (may be empty). */
+    val hours: List<HourForecast> = emptyList(),
 ) {
     /** WMO weather code as a Night City status line. */
     val label: String
@@ -36,16 +38,22 @@ data class ZoneConditions(
             else -> "CONDITIONS INCONNUES"
         }
 
-    val icon: String
-        get() = when (code) {
-            0 -> if (isDay) "☀" else "☾"
-            1, 2, 3 -> "☁"
-            45, 48 -> "≋"
-            in 51..67, in 80..82 -> "☂"
-            in 71..77, 85, 86 -> "❄"
-            in 95..99 -> "ϟ"
-            else -> "?"
-        }
+    val icon: String get() = weatherIcon(code, isDay)
+}
+
+/** One hour of forecast: local hour (0-23), temperature and WMO code. */
+data class HourForecast(val hour: Int, val tempC: Double, val code: Int, val isDay: Boolean) {
+    val icon: String get() = weatherIcon(code, isDay)
+}
+
+private fun weatherIcon(code: Int, isDay: Boolean) = when (code) {
+    0 -> if (isDay) "☀" else "☾"
+    1, 2, 3 -> "☁"
+    45, 48 -> "≋"
+    in 51..67, in 80..82 -> "☂"
+    in 71..77, 85, 86 -> "❄"
+    in 95..99 -> "ϟ"
+    else -> "?"
 }
 
 /**
@@ -82,7 +90,8 @@ object Weather {
             String.format(
                 Locale.ROOT,
                 "https://api.open-meteo.com/v1/forecast?latitude=%.3f&longitude=%.3f" +
-                    "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m,is_day",
+                    "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m,is_day" +
+                    "&hourly=temperature_2m,weather_code,is_day&forecast_hours=5&timezone=auto",
                 lat, lon,
             )
         )
@@ -92,7 +101,8 @@ object Weather {
         }
         try {
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val current = JSONObject(body).getJSONObject("current")
+            val json = JSONObject(body)
+            val current = json.getJSONObject("current")
             return ZoneConditions(
                 tempC = current.getDouble("temperature_2m"),
                 feelsC = current.optDouble("apparent_temperature", current.getDouble("temperature_2m")),
@@ -101,9 +111,30 @@ object Weather {
                 humidity = current.optInt("relative_humidity_2m", 0),
                 isDay = current.optInt("is_day", 1) == 1,
                 fetchedAt = System.currentTimeMillis(),
+                hours = runCatching { hours(json, current.optString("time")) }.getOrDefault(emptyList()),
             )
         } finally {
             connection.disconnect()
         }
+    }
+
+    /** The next [count] full hours after [now] (local ISO time, as Open-Meteo returns with timezone=auto). */
+    private fun hours(json: JSONObject, now: String, count: Int = 3): List<HourForecast> {
+        val hourly = json.getJSONObject("hourly")
+        val times = hourly.getJSONArray("time")
+        val temps = hourly.getJSONArray("temperature_2m")
+        val codes = hourly.getJSONArray("weather_code")
+        val days = hourly.optJSONArray("is_day")
+        return (0 until times.length())
+            .filter { times.getString(it) > now }
+            .take(count)
+            .map {
+                HourForecast(
+                    hour = times.getString(it).substring(11, 13).toInt(),
+                    tempC = temps.getDouble(it),
+                    code = codes.getInt(it),
+                    isDay = (days?.optInt(it, 1) ?: 1) == 1,
+                )
+            }
     }
 }

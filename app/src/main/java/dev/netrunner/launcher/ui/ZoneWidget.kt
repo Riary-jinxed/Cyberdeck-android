@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.netrunner.launcher.ui
 
 import android.Manifest
@@ -5,6 +7,7 @@ import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +32,10 @@ import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.data.Agenda
 import dev.netrunner.launcher.data.Contract
 import dev.netrunner.launcher.data.Weather
+import dev.netrunner.launcher.data.HourForecast
 import dev.netrunner.launcher.data.ZoneConditions
+import dev.netrunner.launcher.system.DeckLinks
+import dev.netrunner.launcher.system.UiSound
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -62,6 +68,14 @@ fun ZoneWidget() {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Tapping the conditions opens the Netrunner weather app.
+        Column(
+            Modifier.fillMaxWidth().clickable {
+                UiSound.play(context, UiSound.Cue.Tap)
+                DeckLinks.openWeather(context)
+            },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
         Text("// CONDITIONS DE ZONE", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         val z = zone
         when {
@@ -82,21 +96,44 @@ fun ZoneWidget() {
             }
             else -> Text("> en attente d'une position…", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
         }
+        zone?.hours?.takeIf { it.isNotEmpty() }?.let { HourStrip(it) }
+        }
 
         Spacer(Modifier.padding(top = 2.dp))
-        Text("// CONTRATS", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        // Contracts: tap one to open it, "+" or a long press on the title for a new one.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = {}, onLongClick = { DeckLinks.newEvent(context) }),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("// CONTRATS", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (Agenda.granted(context)) {
+                Text(
+                    "+ NOUVEAU",
+                    color = Cp.Cyan,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        UiSound.play(context, UiSound.Cue.Tap)
+                        DeckLinks.newEvent(context)
+                    },
+                )
+            }
+        }
         when {
             !Agenda.granted(context) -> SmallHudButton("[ RELIER L'AGENDA ]", Cp.Cyan) {
                 ask.launch(arrayOf(Manifest.permission.READ_CALENDAR))
             }
             contracts.isEmpty() -> Text("> aucun contrat dans les 48 h", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
-            else -> contracts.forEach { c -> ContractRow(c) { Agenda.open(context, c) } }
+            else -> contracts.forEach { c -> ContractRow(c, onClick = { DeckLinks.openEvent(context, c.id) }, onLongClick = { DeckLinks.newEvent(context) }) }
         }
     }
 }
 
 @Composable
-private fun ContractRow(contract: Contract, onClick: () -> Unit) {
+private fun ContractRow(contract: Contract, onClick: () -> Unit, onLongClick: () -> Unit) {
     val context = LocalContext.current
     val now = System.currentTimeMillis()
     val live = contract.begin <= now
@@ -111,7 +148,7 @@ private fun ContractRow(contract: Contract, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -126,5 +163,19 @@ private fun ContractRow(contract: Contract, onClick: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         Text(whenText, color = if (live) Cp.Red else Cp.Dim, fontFamily = HudFont, fontSize = 10.sp)
+    }
+}
+
+/** The next hours under the current conditions: "21H ☁ 12°". */
+@Composable
+private fun HourStrip(hours: List<HourForecast>) {
+    Row(Modifier.fillMaxWidth().padding(start = 40.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        hours.forEach { h ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("%02dH ".format(h.hour), color = Cp.Dim, fontFamily = HudFont, fontSize = 10.sp)
+                Text(h.icon, color = Cp.Cyan, fontSize = 12.sp)
+                Text(" %.0f°".format(h.tempC), color = Cp.Text, fontFamily = HudFont, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }

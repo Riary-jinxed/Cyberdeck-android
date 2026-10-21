@@ -96,6 +96,7 @@ import dev.netrunner.launcher.media.MediaWatcher
 import dev.netrunner.launcher.notify.NotificationHub
 import dev.netrunner.launcher.system.BatteryState
 import dev.netrunner.launcher.system.ClaudeApp
+import dev.netrunner.launcher.system.DeckLinks
 import dev.netrunner.launcher.system.Ghost
 import dev.netrunner.launcher.system.HomeRole
 import dev.netrunner.launcher.system.SystemInfo
@@ -305,12 +306,13 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             }
             Spacer(Modifier.height(28.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Double tap on the clock: ghost mode on or off.
+                // Tap on the clock: Horloge Netrunner. Double tap and long press: the gestures.
                 Box(
                     Modifier
                         .weight(1f)
                         .pointerInput(Unit) {
                             detectTapGestures(
+                                onTap = { DeckLinks.openClock(context) },
                                 onDoubleTap = { runAction(Gestures.actionFor(Gestures.Gesture.DoubleTap)) },
                                 onLongPress = { runAction(Gestures.actionFor(Gestures.Gesture.LongPress)) },
                             )
