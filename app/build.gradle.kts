@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.1.0"
+        versionCode = 16
+        versionName = "1.2.0"
     }
 
     // Stable key from the CI secrets, so each new APK installs over the previous one (and the
