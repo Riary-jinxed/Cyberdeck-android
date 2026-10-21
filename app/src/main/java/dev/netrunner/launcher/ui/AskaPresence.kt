@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.R
+import dev.netrunner.launcher.aska.AskaDate
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -43,11 +44,11 @@ private fun presenceClock(animated: Boolean, fps: Int): State<Long> =
 
 /** The soft pink glow she stands on, like a projector pad on the deck. */
 @Composable
-private fun HoloPad(modifier: Modifier, strength: Float = 1f) {
+private fun HoloPad(modifier: Modifier, strength: Float = 1f, color: Color = AskaColors.Pink) {
     Canvas(modifier) {
         drawOval(
             Brush.radialGradient(
-                listOf(AskaColors.Pink.copy(alpha = 0.35f * strength), Color.Transparent),
+                listOf(color.copy(alpha = 0.35f * strength), Color.Transparent),
                 center = Offset(size.width / 2, size.height / 2),
                 radius = size.width / 2,
             ),
@@ -149,7 +150,7 @@ fun AskaBubble(text: String, modifier: Modifier = Modifier) {
 
 /** On the home screen, the morning after: she pops up and tries to start a conversation. */
 @Composable
-fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, animated: Boolean = true) {
+fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, animated: Boolean = true, briefing: String? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -163,6 +164,10 @@ fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, a
             Text("AS//KA // RÉVEIL", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 10.sp)
             Spacer(Modifier.height(2.dp))
             Text(greeting, color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, lineHeight = 18.sp)
+            briefing?.let {
+                Spacer(Modifier.height(5.dp))
+                Text(it, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 11.sp, lineHeight = 15.sp)
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -222,6 +227,28 @@ fun Modifier.dragonScales(): Modifier = drawWithCache {
     }
 }
 
+/**
+ * During a rendez-vous, the scene's sky over her scales: its night color, a glow on the
+ * horizon and a few fixed lights. Drawn once into a cache, like the scales.
+ */
+fun Modifier.dateSky(scene: AskaDate.Scene?): Modifier = if (scene == null) this else drawWithCache {
+    val sky = Color(scene.sky)
+    val glow = Color(scene.glow)
+    val wash = Brush.verticalGradient(listOf(sky.copy(alpha = 0.92f), sky.copy(alpha = 0.55f), glow.copy(alpha = 0.18f)))
+    val horizon = Brush.radialGradient(
+        listOf(glow.copy(alpha = 0.32f), Color.Transparent),
+        center = Offset(size.width * 0.75f, size.height * 0.3f),
+        radius = size.width * 0.8f,
+    )
+    val random = java.util.Random(scene.ordinal * 31L)
+    val lights = List(40) { Offset(random.nextFloat() * size.width, random.nextFloat() * size.height * 0.6f) to random.nextFloat() }
+    onDrawBehind {
+        drawRect(wash)
+        drawRect(horizon)
+        lights.forEach { (at, a) -> drawCircle(glow.copy(alpha = 0.15f + a * 0.35f), radius = 1.dp.toPx() + a * 1.5f.dp.toPx(), center = at) }
+    }
+}
+
 /** Three pink dots taking turns, while she has not written anything yet. */
 @Composable
 fun TypingDots(animated: Boolean = true) {
@@ -236,6 +263,6 @@ fun TypingDots(animated: Boolean = true) {
     }
 }
 
-/** Her little holo pad, for the chibi in the chat. */
+/** Her little holo pad, for the chibi in the chat (in the color of the socle she wears). */
 @Composable
-fun AskaPad(modifier: Modifier) = HoloPad(modifier)
+fun AskaPad(modifier: Modifier, color: Color = AskaColors.Pink) = HoloPad(modifier, color = color)

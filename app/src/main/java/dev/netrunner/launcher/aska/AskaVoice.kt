@@ -239,6 +239,8 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
 
     /** Turns a sentence into a clip ready to play, with the engine [pack] uses. Null when no engine works. */
     private suspend fun speaker(pack: Pack): (suspend (String) -> Clip?)? {
+        // Installed while her panel was closed.
+        if (!neural && AskaPiper.isInstalled(context)) neural = true
         if (pack == Pack.Ashka && neural) {
             return { sentence -> withContext(piperDispatcher) { neuralClip(sentence) } }
         }

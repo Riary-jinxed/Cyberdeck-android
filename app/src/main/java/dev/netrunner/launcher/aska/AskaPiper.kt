@@ -8,6 +8,11 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.File
 import java.io.FilterInputStream
 import java.io.InputStream
+import java.util.concurrent.Executors
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * Her neural voice: a Piper model (French, "upmc", speaker Jessica, CC BY-SA 4.0) run offline by sherpa-onnx.
@@ -83,18 +88,51 @@ object AskaPiper {
     /** True when a downloaded archive waits to be unpacked. */
     fun hasArchive(context: Context) = archive(context).let { it.exists() && it.length() > 0 }
 
-    /** Unpacks the downloaded archive, reporting progress from 0 to 1. Slow (bzip2): call off the main thread. */
-    fun install(context: Context, onProgress: (Float) -> Unit) {
+    /** Progress of the unpacking, from 0 to 1, while it runs. */
+    var progress by mutableStateOf<Float?>(null)
+        private set
+
+    /** Why the last unpacking failed. */
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    /** Bumped each time an unpacking ends, for the screens to pick up the new voice. */
+    var finished by mutableIntStateOf(0)
+        private set
+
+    private val worker = Executors.newSingleThreadExecutor { Thread(it, "aska-voice-unpack") }
+
+    /**
+     * Unpacks the downloaded archive on its own thread (about a minute: bzip2 is slow), once at
+     * a time, whether or not the screen that asked stays open.
+     */
+    fun installInBackground(context: Context) {
+        if (progress != null) return
+        val app = context.applicationContext
+        progress = 0f
+        error = null
+        worker.execute {
+            runCatching { install(app) { progress = it } }.onFailure {
+                delete(app)
+                error = "Installation impossible : ${it.message ?: it.javaClass.simpleName}. Télécharge-la à nouveau."
+            }
+            progress = null
+            finished++
+        }
+    }
+
+    private fun install(context: Context, onProgress: (Float) -> Unit) {
         val source = archive(context)
         val root = dir(context).canonicalFile
         home(context).deleteRecursively()
         val total = source.length().coerceAtLeast(1)
         var read = 0L
-        val counting = object : FilterInputStream(source.inputStream().buffered(1 shl 16)) {
+        // Counted below the buffer: bzip2 reads byte by byte, the file is read in large blocks.
+        val counting = object : FilterInputStream(source.inputStream()) {
             override fun read(b: ByteArray, off: Int, len: Int): Int =
                 super.read(b, off, len).also { if (it > 0) read += it }
         }
-        TarArchiveInputStream(BZip2CompressorInputStream(counting)).use { tar ->
+        TarArchiveInputStream(BZip2CompressorInputStream(counting.buffered(1 shl 16))).use { tar ->
             var last = -1
             while (true) {
                 val entry = tar.nextEntry ?: break

@@ -1,6 +1,10 @@
 package dev.netrunner.launcher.ui
 
+import android.Manifest
 import android.app.DownloadManager
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,10 +54,17 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.netrunner.launcher.aska.AlarmAction
+import dev.netrunner.launcher.aska.AskaEars
 import dev.netrunner.launcher.aska.AskaBrain
+import dev.netrunner.launcher.aska.AskaDate
+import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
+import dev.netrunner.launcher.aska.AskaPet
+import dev.netrunner.launcher.aska.AskaPetCalls
 import dev.netrunner.launcher.aska.AskaPiper
 import dev.netrunner.launcher.aska.AskaVoice
 import dev.netrunner.launcher.system.SystemInfo
@@ -63,8 +74,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val Prompts = listOf(
+    "Quoi de neuf ?",
+    "Mon programme du jour",
     "Prochaine alarme ?",
     "Réveille-moi à 7h30",
+    "Allume la lampe",
     "Minuteur 10 min",
     "Qui es-tu ?",
     "Que sais-tu sur moi ?",
@@ -84,12 +98,22 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
     var showModels by remember { mutableStateOf(false) }
     // Her nest (Tamagotchi), opened by touching her chibi.
     var nest by remember { mutableStateOf(false) }
+    // Her notification was touched: straight to her nest.
+    LaunchedEffect(AskaPetCalls.openNest) {
+        if (AskaPetCalls.openNest) {
+            nest = true
+            AskaPetCalls.openNest = false
+        }
+    }
+    // Her reminders, opened from the strip above the chat's input.
+    var reminders by remember { mutableStateOf(false) }
     val noModel = brain.state == AskaBrain.State.NoModel
 
     Column(
         Modifier
             .fillMaxSize()
             .dragonScales()
+            .dateSky(brain.date)
             .scanlines()
             .systemBarsPadding()
             .displayCutoutPadding()
@@ -115,12 +139,15 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                     fontSize = 11.sp,
                 )
             }
-            if (nest) {
-                HeaderButton("◂ CHAT", Cp.Cyan) { nest = false }
+            if (nest || reminders) {
+                HeaderButton("◂ CHAT", Cp.Cyan) {
+                    nest = false
+                    reminders = false
+                }
             } else {
                 HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
             }
-            if (!nest && !showModels && !noModel) {
+            if (!nest && !reminders && !showModels && !noModel) {
                 HeaderButton(if (brain.voice.enabled) "VOIX ●" else "VOIX ○", if (brain.voice.enabled) AskaColors.Pink else Cp.Dim) {
                     brain.voice.toggle()
                 }
@@ -144,10 +171,41 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                 .background(Brush.horizontalGradient(listOf(AskaColors.Pink, AskaColors.Magenta, Color.Transparent)))
         )
         when {
-            nest -> AskaNest(brain.pet, Modifier.weight(1f))
+            nest -> AskaNest(brain.pet, Modifier.weight(1f)) { scene ->
+                brain.startDate(scene)
+                nest = false
+            }
+            reminders -> ReminderBay(Modifier.weight(1f))
             showModels || noModel -> ModelBay(brain, Modifier.weight(1f))
-            else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true })
+            else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true }, onReminders = { reminders = true })
         }
+    }
+}
+
+/** Over the chat during a rendez-vous: where they are, and the way home. */
+@Composable
+private fun DateBanner(scene: AskaDate.Scene, onEnd: () -> Unit) {
+    val glow = Color(scene.glow)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .hudPanel(borderColor = glow.copy(alpha = 0.7f), fill = Color(scene.sky).copy(alpha = 0.85f), cut = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("♥ RENDEZ-VOUS · ${scene.glyph} ${scene.label}", color = glow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(
+            "RENTRER ◂",
+            color = Cp.Text,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .hudPanel(borderColor = glow.copy(alpha = 0.6f), fill = Color.Transparent, cut = 5.dp)
+                .clickable(onClick = onEnd)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }
 
@@ -176,7 +234,7 @@ private fun HeaderButton(label: String, color: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
+private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onReminders: () -> Unit) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val lines = brain.lines
@@ -191,7 +249,23 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
         input = ""
     }
 
+    // Her ears: hold a conversation out loud.
+    val context = LocalContext.current
+    val ears = remember { AskaEars(context) }
+    val earsAvailable = remember { ears.available }
+    DisposableEffect(Unit) { onDispose { ears.stop() } }
+    var earsError by remember { mutableStateOf<String?>(null) }
+    fun listen() {
+        earsError = null
+        brain.voice.stop()
+        ears.listen(onResult = { send(it) }, onError = { earsError = it })
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) listen() else earsError = "Sans accès au micro, je ne t'entends pas."
+    }
+
     Column(modifier) {
+        brain.date?.let { scene -> DateBanner(scene, onEnd = brain::endDate) }
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -202,6 +276,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
         ) {
             items(lines, key = { it.id }) { line -> Bubble(brain, line) }
         }
+        ReminderStrip(onReminders)
         Row(verticalAlignment = Alignment.Bottom) {
             // Touching her chibi opens her nest.
             Box(
@@ -214,7 +289,8 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(18.dp)
+                        .height(18.dp),
+                    color = Color(brain.pet.looks.getValue(AskaPet.Slot.Pad).argb),
                 )
                 AskaChibi(
                     brain,
@@ -232,7 +308,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Prompts.forEach { prompt ->
+                    (brain.date?.prompts ?: Prompts).forEach { prompt ->
                         Text(
                             prompt,
                             color = AskaColors.HotPink,
@@ -261,10 +337,42 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
                             .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.6f), fill = AskaColors.Panel, cut = 8.dp)
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         decorationBox = { field ->
-                            if (input.isEmpty()) Text("Parle à As//ka…", color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
-                            field()
+                            when {
+                                ears.listening -> Text(
+                                    ears.heard.ifEmpty { "◉ Je t'écoute…" },
+                                    color = AskaColors.HotPink,
+                                    fontFamily = HudFont,
+                                    fontSize = 15.sp,
+                                )
+                                input.isEmpty() -> Text(earsError ?: "Parle à As//ka…", color = if (earsError != null) Cp.Red else Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
+                            }
+                            if (!ears.listening) field()
                         },
                     )
+                    if (earsAvailable && !thinking) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (ears.listening) "■" else "◉",
+                            color = if (ears.listening) AskaColors.Void else AskaColors.Pink,
+                            fontFamily = MonoFont,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .hudPanel(
+                                    borderColor = AskaColors.Pink,
+                                    fill = if (ears.listening) AskaColors.HotPink else AskaColors.Panel,
+                                    cut = 8.dp,
+                                )
+                                .clickable {
+                                    when {
+                                        ears.listening -> ears.finish()
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> listen()
+                                        else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                                .padding(horizontal = 11.dp, vertical = 10.dp),
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (thinking) "■ STOP" else "◢ ENVOI",
@@ -285,6 +393,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
 
 @Composable
 private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (line.fromUser) Arrangement.End else Arrangement.Start,
@@ -338,7 +447,11 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .hudPanel(borderColor = AskaColors.Pink, fill = AskaColors.Pink, cut = 6.dp)
-                            .clickable { brain.confirm(line) }
+                            .clickable {
+                                // A reminder rings as a notification: ask for the right to post one.
+                                if (action is AlarmAction.Remind && Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                brain.confirm(line)
+                            }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                     Text(
@@ -353,6 +466,72 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+/** The next reminder, above the input: touch to see them all. */
+@Composable
+private fun ReminderStrip(onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val revision = AskaReminders.revision.intValue
+    val upcoming = remember(revision) { AskaReminders.upcoming(context) }
+    val next = upcoming.firstOrNull() ?: return
+    Text(
+        "◷ ${next.whenLabel.uppercase()} · ${next.text}" + if (upcoming.size > 1) "  (+${upcoming.size - 1})" else "",
+        color = AskaColors.HotPink,
+        fontFamily = MonoFont,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = 4.dp),
+    )
+}
+
+/** All her reminders, with a button to erase each one. */
+@Composable
+private fun ReminderBay(modifier: Modifier) {
+    val context = LocalContext.current
+    val revision = AskaReminders.revision.intValue
+    val all = remember(revision) { AskaReminders.list(context).sortedWith(compareBy({ it.done }, { it.at })) }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("RAPPELS", color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        if (all.isEmpty()) {
+            Text(
+                "Aucun rappel. Dis-lui « rappelle-moi d'appeler le client à 15h », « demain à 9h » ou « dans 20 minutes ».",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 13.sp,
+            )
+        }
+        all.forEach { reminder ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hudPanel(borderColor = AskaColors.Pink.copy(alpha = if (reminder.done) 0.2f else 0.5f), fill = AskaColors.Panel)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        (if (reminder.done) "✓ " else "◷ ") + reminder.whenLabel.uppercase(),
+                        color = if (reminder.done) Cp.Dim else AskaColors.HotPink,
+                        fontFamily = MonoFont,
+                        fontSize = 11.sp,
+                    )
+                    Text(reminder.text, color = if (reminder.done) Cp.Dim else Cp.Text, fontFamily = HudFont, fontSize = 14.sp)
+                }
+                BayButton("EFFACER", Cp.Dim) { AskaReminders.remove(context, reminder.id) }
             }
         }
     }
@@ -642,25 +821,22 @@ private fun VoiceBay(voice: AskaVoice, mobileData: Boolean) {
 private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
     val context = LocalContext.current
     var download by remember { mutableStateOf(AskaPiper.pollDownload(context)) }
-    var unpacking by remember { mutableStateOf<Float?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val unpacking = AskaPiper.progress
 
-    suspend fun unpack() {
-        unpacking = 0f
-        val result = withContext(Dispatchers.IO) { runCatching { AskaPiper.install(context) { unpacking = it } } }
-        unpacking = null
-        error = result.exceptionOrNull()?.let { "Installation impossible : ${it.message}" }
-        if (result.isFailure) AskaPiper.delete(context)
+    // An unpacking ended (maybe while this screen was closed): her voice picks it up.
+    val seen = remember { AskaPiper.finished }
+    LaunchedEffect(AskaPiper.finished) {
+        if (AskaPiper.finished == seen) return@LaunchedEffect
         voice.neuralChanged()
-        if (result.isSuccess) {
+        if (voice.neural) {
             voice.select(AskaVoice.Pack.Ashka)
             voice.speak("Voilà ma vraie voix. Tu me reconnais, runner ?", force = true)
         }
     }
-
     // A download finished while the panel was closed: unpack it now.
     LaunchedEffect(Unit) {
-        if (download == null && !voice.neural && AskaPiper.hasArchive(context)) unpack()
+        if (download == null && !voice.neural && unpacking == null && AskaPiper.hasArchive(context)) AskaPiper.installInBackground(context)
     }
     LaunchedEffect(download != null) {
         while (download != null) {
@@ -670,7 +846,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     AskaPiper.clearDownload(context)
                     download = null
-                    unpack()
+                    AskaPiper.installInBackground(context)
                 }
                 DownloadManager.STATUS_FAILED -> {
                     error = "Téléchargement échoué. Vérifie la connexion et l'espace libre, puis réessaie."
@@ -742,7 +918,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
             }
             Text(
                 when {
-                    unpacking != null -> "INSTALLATION… ${((unpacking ?: 0f) * 100).toInt()} %"
+                    unpacking != null -> "INSTALLATION… ${(unpacking * 100).toInt()} % (environ une minute)"
                     d?.third == DownloadManager.STATUS_PAUSED -> "EN PAUSE (attente du Wi-Fi ou du réseau)"
                     d?.third == DownloadManager.STATUS_PENDING -> "EN ATTENTE…"
                     else -> "${(d?.first ?: 0L) / 1_000_000} / ${(d?.second ?: 0L).coerceAtLeast(0L) / 1_000_000} Mo"
@@ -752,7 +928,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
                 fontSize = 11.sp,
             )
         }
-        error?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
+        (error ?: AskaPiper.error)?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
     }
 }
 

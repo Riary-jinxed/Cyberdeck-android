@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import dev.netrunner.launcher.ui.DeckSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +42,16 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val done: Boolean = true,
     )
 
-    val lines = mutableStateListOf<Line>()
+    private val talk = mutableStateListOf<Line>()
+    private val dateTalk = mutableStateListOf<Line>()
+
+    /** The rendez-vous under way, if any: its own conversation, kept apart and not saved. */
+    var date by mutableStateOf<AskaDate.Scene?>(null)
+        private set
+    private var dateMessages = 0
+
+    /** What the chat shows: the usual conversation, or the rendez-vous. */
+    val lines: SnapshotStateList<Line> get() = if (date != null) dateTalk else talk
 
     var state by mutableStateOf(State.Asleep)
         private set
@@ -118,14 +128,25 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         if (text.isEmpty() || state == State.Thinking) return
         voice.stop()
         add(Line(nextId++, fromUser = true, text = text))
+        if (date != null) dateMessages++
 
-        // Alarm requests are understood directly: instant, reliable, and they work without a model.
-        when (val request = AskaAlarms.parse(text)) {
+        // Alarm and reminder requests are understood directly: instant, reliable, and they work without a model.
+        when (val request = AskaAlarms.parse(context, text)) {
             is AskaAlarms.Request.Next -> return say(AskaAlarms.nextAlarm(context))
+            is AskaAlarms.Request.Reminders -> return say(AskaAlarms.remindersText(context))
+            is AskaAlarms.Request.NeedTime -> return say("Je te le rappelle quand ? Par exemple « rappelle-moi de … à 15h », « demain à 9h » ou « dans 20 minutes ».")
             is AskaAlarms.Request.Act -> {
                 if (!request.action.needsConfirm) return say(AskaAlarms.run(context, request.action))
-                return say("Je prépare ça. Valide et je l'envoie à l'horloge.", request.action)
+                return say(request.action.ask, request.action)
             }
+            null -> Unit
+        }
+
+        // The day, the notifications and the battery: read directly, no model needed.
+        when (AskaDay.parse(text)) {
+            AskaDay.Request.News -> return say(AskaDay.news(context))
+            AskaDay.Request.Briefing -> return say(AskaDay.briefing(context) ?: "Rien au programme aujourd'hui.")
+            AskaDay.Request.Battery -> return say(AskaDay.batteryText(context))
             null -> Unit
         }
 
@@ -182,7 +203,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     reply.id,
                     Line(
                         reply.id, false,
-                        clean.ifEmpty { if (action != null) "Je prépare ça. Valide et je l'envoie à l'horloge." else "…" },
+                        clean.ifEmpty { action?.ask ?: "…" },
                         action,
                     ),
                 )
@@ -204,6 +225,28 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 refreshState()
             }
         }
+    }
+
+    /** Takes her out: a fresh conversation in the scene, the usual one waits. */
+    fun startDate(scene: AskaDate.Scene) {
+        if (!scene.unlocked(pet.stats.bond)) return
+        stop()
+        dateTalk.clear()
+        dateMessages = 0
+        date = scene
+        say(scene.opening)
+        if (engine.connected) resetConversation()
+    }
+
+    /** Walks her home: back to the usual conversation, and the date goes in her journal. */
+    fun endDate() {
+        val scene = date ?: return
+        stop()
+        date = null
+        dateTalk.clear()
+        pet.dated(scene, dateMessages)
+        say(AskaDate.goodbye(scene))
+        if (engine.connected) resetConversation()
     }
 
     /** She speaks first, for her morning greeting. */
@@ -362,10 +405,10 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Tu parles français et tu tutoies. Tu réponds de façon concise (quelques phrases), sauf si on te demande plus de détails.
             Tu tournes entièrement hors ligne, sur le téléphone : pas d'internet, pas d'accès aux fichiers, messages ou applis. Si tu ne sais pas, dis-le franchement.
             Nous sommes le $now.
-            Ta seule action possible sur le téléphone : les alarmes et minuteurs. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
-            [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur.
+            Tes seules actions possibles sur le téléphone : les alarmes, les minuteurs et tes rappels. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
+            [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur, [[RAPPEL HH:MM | texte]] ou [[RAPPEL demain HH:MM | texte]] pour un rappel.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
-        """.trimIndent() + memoryBlock() + pet.forPrompt()
+        """.trimIndent() + memoryBlock() + pet.forPrompt() + (date?.let { AskaDate.prompt(it, DeckSettings.handle) } ?: "")
     }
 
     private fun memoryBlock(): String =
@@ -384,6 +427,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     }
 
     private fun saveHistory() {
+        if (date != null) return
         val snapshot = lines.filter { it.done && it.text.isNotEmpty() }.takeLast(MAX_LINES)
         scope.launch(Dispatchers.IO) {
             val array = JSONArray()
