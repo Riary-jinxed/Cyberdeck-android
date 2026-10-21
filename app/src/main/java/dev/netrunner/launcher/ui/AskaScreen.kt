@@ -252,6 +252,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
     // Her ears: hold a conversation out loud.
     val context = LocalContext.current
     val ears = remember { AskaEars(context) }
+    val earsAvailable = remember { ears.available }
     DisposableEffect(Unit) { onDispose { ears.stop() } }
     var earsError by remember { mutableStateOf<String?>(null) }
     fun listen() {
@@ -348,7 +349,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
                             if (!ears.listening) field()
                         },
                     )
-                    if (ears.available && !thinking) {
+                    if (earsAvailable && !thinking) {
                         Spacer(Modifier.width(6.dp))
                         Text(
                             if (ears.listening) "■" else "◉",
