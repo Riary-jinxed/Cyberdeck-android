@@ -39,7 +39,7 @@ import dev.netrunner.launcher.ui.scanlines
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class Layer { Letters, Symbols, More }
+private enum class Layer { Letters, Symbols, More, Numpad }
 private enum class Shift { Off, Once, Locked }
 
 private val LetterRows = listOf("azertyuiop", "qsdfghjklm", "wxcvbn'")
@@ -53,7 +53,7 @@ private val Accents = mapOf(
 )
 
 @Composable
-fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
+fun KeyboardUi(field: FieldInfo, suggestions: Suggestions, actions: KeyboardActions) {
     var layer by remember { mutableStateOf(Layer.Letters) }
     var shift by remember { mutableStateOf(Shift.Off) }
     var lastShiftTap by remember { mutableStateOf(0L) }
@@ -61,7 +61,7 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
     val view = LocalView.current
 
     LaunchedEffect(field) {
-        layer = if (field.numeric) Layer.Symbols else Layer.Letters
+        layer = if (field.numeric) Layer.Numpad else Layer.Letters
         shift = if (field.capsStart) Shift.Once else Shift.Off
         accents = null
     }
@@ -106,13 +106,27 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
                 }
                 Key("✕", Cp.Red, Modifier.weight(1f), onTap = { accents = null })
             } else {
-                Text(
-                    "◢ NETRUNNER//KB",
-                    color = Cp.Yellow,
-                    fontFamily = HudFont,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                if (field.spellcheck && suggestions.word.isNotEmpty()) {
+                    SuggestionStrip(suggestions, Modifier.weight(1f)) { pick ->
+                        tap()
+                        actions.pickSuggestion(pick)
+                        if (shift == Shift.Once) shift = Shift.Off
+                    }
+                } else {
+                    Text(
+                        "◢ NETRUNNER//KB",
+                        color = Cp.Yellow,
+                        fontFamily = HudFont,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f).padding(start = 6.dp),
+                    )
+                }
+                Key(
+                    if (layer == Layer.Numpad) "ABC" else "123",
+                    Cp.Cyan,
+                    Modifier.weight(0.6f),
+                    onTap = { tap(); layer = if (layer == Layer.Numpad) Layer.Letters else Layer.Numpad },
                 )
                 Key("◄", Cp.Cyan, Modifier.weight(0.5f), repeat = true, onTap = { actions.cursor(left = true) })
                 Key("►", Cp.Cyan, Modifier.weight(0.5f), repeat = true, onTap = { actions.cursor(left = false) })
@@ -121,10 +135,14 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
             }
         }
 
+        if (layer == Layer.Numpad) {
+            Numpad(field, ::tap, ::typeChar, actions, onLetters = { layer = Layer.Letters })
+            return@Column
+        }
         val rows = when (layer) {
             Layer.Letters -> LetterRows
             Layer.Symbols -> SymbolRows
-            Layer.More -> MoreRows
+            else -> MoreRows
         }
         KeyRow { rows[0].forEach { c -> CharKey(c, shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it } } }
         KeyRow {
@@ -149,7 +167,7 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
                     },
                 )
                 Layer.Symbols -> Key("=\\<", Cp.Cyan, Modifier.weight(1.5f), onTap = { tap(); layer = Layer.More })
-                Layer.More -> Key("?123", Cp.Cyan, Modifier.weight(1.5f), onTap = { tap(); layer = Layer.Symbols })
+                else -> Key("?123", Cp.Cyan, Modifier.weight(1.5f), onTap = { tap(); layer = Layer.Symbols })
             }
             rows[2].forEach { c -> CharKey(c, shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it } }
             Key("⌫", Cp.Red, Modifier.weight(1.5f), repeat = true, onTap = { tap(); actions.backspace() })
@@ -161,7 +179,13 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
                 Modifier.weight(1.4f),
                 onTap = { tap(); layer = if (layer == Layer.Letters) Layer.Symbols else Layer.Letters },
             )
-            CharKey(',', shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it }
+            // Email and web address fields get "@" or "/" where the comma usually sits.
+            val side = when (field.kind) {
+                FieldKind.Email -> '@'
+                FieldKind.Url -> '/'
+                else -> ','
+            }
+            CharKey(side, shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it }
             Key("━━ ESPACE ━━", Cp.Dim, Modifier.weight(4f), onTap = { tap(); typeChar(' ') })
             CharKey('.', shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it }
             Key(field.enterLabel, Cp.Background, Modifier.weight(1.6f), filled = true, fill = Cp.Yellow, onTap = {
@@ -170,6 +194,58 @@ fun KeyboardUi(field: FieldInfo, actions: KeyboardActions) {
                 if (actions.shouldCapitalize()) shift = Shift.Once
             })
         }
+    }
+}
+
+/** Spell checker strip: the typed word (red when it looks wrong) and up to three corrections. */
+@Composable
+private fun SuggestionStrip(s: Suggestions, modifier: Modifier, onPick: (String) -> Unit) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            s.word,
+            color = if (s.typo) Cp.Red else Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        s.options.forEach { option ->
+            val auto = option == s.autoFix
+            Text(
+                option,
+                color = if (auto) Cp.Background else Cp.Yellow,
+                fontFamily = HudFont,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.6f), fill = if (auto) Cp.Yellow else Cp.Panel, cut = 5.dp)
+                    .pointerInput(option) { detectTapGestures(onTap = { onPick(option) }) }
+                    .padding(vertical = 5.dp),
+            )
+        }
+    }
+}
+
+/** Phone-style digit pad for number and phone fields (and on demand with the 123 key). */
+@Composable
+private fun Numpad(field: FieldInfo, tap: () -> Unit, type: (Char) -> Unit, actions: KeyboardActions, onLetters: () -> Unit) {
+    val sides = if (field.kind == FieldKind.Phone) listOf('+', '*', '#') else listOf('-', ',', '.')
+    listOf("123", "456", "789").forEachIndexed { i, row ->
+        KeyRow {
+            row.forEach { c -> Key(c.toString(), Cp.Text, Modifier.weight(1f), onTap = { tap(); type(c) }) }
+            if (i < 2) Key(sides[i].toString(), Cp.Cyan, Modifier.weight(0.8f), onTap = { tap(); type(sides[i]) })
+            else Key("⌫", Cp.Red, Modifier.weight(0.8f), repeat = true, onTap = { tap(); actions.backspace() })
+        }
+    }
+    KeyRow {
+        Key("ABC", Cp.Cyan, Modifier.weight(1f), onTap = { tap(); onLetters() })
+        Key("0", Cp.Text, Modifier.weight(1f), onTap = { tap(); type('0') })
+        Key(sides[2].toString(), Cp.Cyan, Modifier.weight(1f), onTap = { tap(); type(sides[2]) })
+        Key(field.enterLabel, Cp.Background, Modifier.weight(0.8f), filled = true, fill = Cp.Yellow, onTap = { tap(); actions.enter() })
     }
 }
 
