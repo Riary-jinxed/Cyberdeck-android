@@ -228,6 +228,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Gestures.Action.Wifi -> viewModel.openPanel(Panel.Wifi)
             Gestures.Action.Kit -> viewModel.openPanel(Panel.Kit)
             Gestures.Action.Stats -> viewModel.openPanel(Panel.Stats)
+            Gestures.Action.Hub -> viewModel.openPanel(Panel.Hub)
             Gestures.Action.Ghost -> {
                 UiSound.play(context, UiSound.Cue.Glitch)
                 Ghost.toggle(context)
@@ -514,6 +515,28 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             StatsScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Hub,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            HubScreen(
+                apps = apps,
+                shortcuts = rememberHubShortcuts(
+                    openAska = { viewModel.openPanel(Panel.Aska) },
+                    openStats = { viewModel.openPanel(Panel.Stats) },
+                    openKit = { viewModel.openPanel(Panel.Kit) },
+                    openTerminal = { viewModel.openPanel(Panel.Terminal) },
+                    openMessages = { viewModel.openPanel(Panel.Messages) },
+                ),
+                onLaunch = { app ->
+                    viewModel.openPanel(Panel.None)
+                    viewModel.requestLaunch(app)
+                },
+                onClose = { viewModel.openPanel(Panel.None) },
+            )
         }
 
         AnimatedVisibility(
