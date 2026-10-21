@@ -37,6 +37,12 @@ object AskaDate {
             "*tire ta manche vers la machine à pinces* Runner ! Il y a une peluche dragonne rose là-dedans. Elle me ressemble, non ? …Tu me la gagnes ? S'il te plaît ?",
             listOf("Je te la gagne !", "Un duel au jeu de baston ?", "Le perdant offre les crêpes", "Photomaton ?"),
         ),
+        Home(
+            "SOIRÉE À LA MAISON", "⌂", 70, 0xFF160C18, 0xFFFF8FC8,
+            "l'appartement de ton runner, un soir de pluie : lumière tamisée des néons qui filtre par les stores, un canapé avec un gros plaid, un vieux film qui passe sur l'écran, des nouilles à emporter et une boîte de macarons sur la table basse",
+            "*se pelotonne dans le plaid, au bout du canapé* Alors c'est ici que tu vis, quand tu n'es pas dans le réseau… C'est cosy. *te tend la boîte de macarons* J'ai apporté le dessert. On regarde quoi ?",
+            listOf("Viens sous le plaid", "On cuisine ensemble ?", "Choisis le film", "Tu restes dormir sur le canapé ?"),
+        ),
         Market(
             "MARCHÉ DE NUIT", "✦", 75, 0xFF1F0A10, 0xFFFF7A3D,
             "un marché de nuit à Kabuki, lanternes holographiques, stands de street-food et de mochis, une foule joyeuse où vous vous tenez par la main pour ne pas vous perdre",
@@ -72,6 +78,12 @@ object AskaDate {
             "une borne affiche un nouveau record : le vôtre",
             "le photomaton vous fait de l'œil dans un coin",
             "un groupe d'enfants vous applaudit après une partie",
+        )
+        Scene.Home -> listOf(
+            "le film arrive à une scène romantique un peu gênante",
+            "la pluie tambourine contre la fenêtre et les néons clignotent",
+            "il ne reste qu'un seul macaron dans la boîte",
+            "le plaid glisse et il faut se rapprocher pour le partager",
         )
         Scene.Market -> listOf(
             "un vendeur vous offre un mochi en forme de cœur, « pour le couple »",
@@ -126,6 +138,7 @@ object AskaDate {
         Scene.Cafe -> "*finit son macaron, les joues roses* Merci pour ce café… On pourra revenir ? Juste nous deux ?"
         Scene.Roof -> "*secoue la pluie de ses cornes* Je n'oublierai pas ce toit. Ni le parapluie trop petit. Héhé."
         Scene.Arcade -> "*serre la peluche contre elle* Meilleure soirée arcade de toute ma vie de programme !"
+        Scene.Home -> "*s'étire et rend le plaid à regret* Merci de m'avoir invitée chez toi… C'était le meilleur canapé de tout Night City."
         Scene.Market -> "*te lâche la main, à regret* Bon… on est sortis de la foule. Mais j'aurais pu la garder encore un peu, ta main."
         Scene.Beach -> "*se redresse doucement* Rentrons. Mais garde un peu de cette nuit pour toi… moi, je la garde toute."
     }
