@@ -13,16 +13,25 @@ import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
-/** The only things As//ka may do on the phone: alarms and timers, through the clock app. */
+/** The only things As//ka may do on the phone: alarms and timers through the clock app, and her own reminders. */
 sealed class AlarmAction {
     /** Waits for the user's go before running. */
     open val needsConfirm = true
+
+    /** What she says while waiting for that go. */
+    open val ask = "Je prépare ça. Valide et je l'envoie à l'horloge."
 
     data class Set(val hour: Int, val minute: Int, val label: String?, val days: List<Int>?) : AlarmAction()
     data class Dismiss(val hour: Int, val minute: Int) : AlarmAction()
     data class Timer(val seconds: Int) : AlarmAction()
     object Show : AlarmAction() {
         override val needsConfirm = false
+    }
+    data class Remind(val at: Long, val text: String) : AlarmAction() {
+        override val ask = "Je le note ? Valide et je te le rappellerai à l'heure."
+    }
+    data class Forget(val reminders: List<Reminder>) : AlarmAction() {
+        override val ask = if (reminders.size > 1) "Je les efface tous ? Valide." else "J'efface ce rappel ? Valide."
     }
 
     val summary: String
@@ -31,6 +40,8 @@ sealed class AlarmAction {
             is Dismiss -> "SUPPRIMER L'ALARME DE ${hhmm(hour, minute)}"
             is Timer -> "MINUTEUR ${durationLabel(seconds)}"
             Show -> "OUVRIR L'HORLOGE"
+            is Remind -> "RAPPEL ${Reminder(0, at, text).whenLabel.uppercase(Locale.FRENCH)} · « $text »"
+            is Forget -> if (reminders.size == 1) "EFFACER LE RAPPEL « ${reminders[0].text} »" else "EFFACER ${reminders.size} RAPPELS"
         }
 }
 
@@ -38,6 +49,17 @@ object AskaAlarms {
 
     /** Runs the action. Returns the line As//ka says afterwards. */
     fun run(context: Context, action: AlarmAction): String {
+        when (action) {
+            is AlarmAction.Remind -> {
+                AskaReminders.add(context, action.at, action.text)
+                return "C'est noté. ${Reminder(0, action.at, action.text).whenLabel.replaceFirstChar { it.uppercase() }}, je te le rappelle."
+            }
+            is AlarmAction.Forget -> {
+                action.reminders.forEach { AskaReminders.remove(context, it.id) }
+                return if (action.reminders.size == 1) "Rappel effacé." else "Rappels effacés."
+            }
+            else -> Unit
+        }
         val intent = when (action) {
             is AlarmAction.Set -> Intent(AlarmClock.ACTION_SET_ALARM)
                 .putExtra(AlarmClock.EXTRA_HOUR, action.hour)
@@ -54,6 +76,7 @@ object AskaAlarms {
                 .putExtra(AlarmClock.EXTRA_MESSAGE, "As//ka")
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             AlarmAction.Show -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
+            is AlarmAction.Remind, is AlarmAction.Forget -> error("handled above")
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(intent)
@@ -62,6 +85,7 @@ object AskaAlarms {
                 is AlarmAction.Dismiss -> "Je transmets à l'horloge. Confirme-lui si elle te le demande."
                 is AlarmAction.Timer -> "Minuteur lancé : ${durationLabel(action.seconds)}."
                 AlarmAction.Show -> "J'ouvre l'horloge."
+                is AlarmAction.Remind, is AlarmAction.Forget -> ""
             }
         } catch (_: ActivityNotFoundException) {
             "Aucune appli d'horloge ne répond à mes signaux."
@@ -86,6 +110,91 @@ object AskaAlarms {
     sealed class Request {
         data class Act(val action: AlarmAction) : Request()
         object Next : Request()
+        /** Lists her reminders. */
+        object Reminders : Request()
+        /** A reminder without a time: she asks when. */
+        object NeedTime : Request()
+    }
+
+    /** Her reminders, numbered as "supprime le rappel 2" expects. */
+    fun remindersText(context: Context): String {
+        val all = AskaReminders.upcoming(context)
+        if (all.isEmpty()) return "Aucun rappel en attente. Dis « rappelle-moi de… à 15h » et je veille."
+        return "Tes rappels :\n" + all.mapIndexed { i, r -> "▸ ${i + 1} · ${r.whenLabel} · ${r.text}" }.joinToString("\n")
+    }
+
+    private val REMIND_WORDS = Regex(
+        "\\b(rappelle[- ]?(moi|nous)|tu peux me rappeler|peux-tu me rappeler|fais[- ]moi penser|pense a me rappeler|n'oublie pas de me rappeler" +
+            "|(mets?|met|cree|ajoute|programme)[- ]?(moi )?un rappel)"
+    )
+    private val REMINDER_LIST = Regex("\\b(mes rappels|liste (des |de mes )?rappels|quels (sont mes )?rappels|rappels? (prevus?|en attente))")
+
+    private fun parseReminder(context: Context, input: String, t: String): Request? {
+        val mentionsReminder = Regex("\\brappels?\\b").containsMatchIn(t)
+        if (mentionsReminder && REMOVE_WORDS.containsMatchIn(t)) {
+            val all = AskaReminders.upcoming(context)
+            if (all.isEmpty()) return Request.Reminders
+            val picked = when {
+                Regex("\\btous\\b|\\bmes rappels\\b|\\bles rappels\\b").containsMatchIn(t) -> all
+                else -> Regex("\\brappel\\s*(n°|numero|no)?\\s*(\\d+)").find(t)?.groupValues?.get(2)?.toIntOrNull()
+                    ?.let { all.getOrNull(it - 1) }?.let { listOf(it) }
+                    ?: if (all.size == 1) all else null
+            } ?: return Request.Reminders
+            return Request.Act(AlarmAction.Forget(picked))
+        }
+        if (REMINDER_LIST.containsMatchIn(t) && !REMIND_WORDS.containsMatchIn(t)) return Request.Reminders
+        if (!REMIND_WORDS.containsMatchIn(t)) return null
+        val at = reminderTime(t) ?: return Request.NeedTime
+        return Request.Act(AlarmAction.Remind(at, reminderText(input)))
+    }
+
+    /** When the reminder rings: "dans 20 minutes", "demain à 9h", "lundi à 18h30", "à 15h" (today, or tomorrow if past). */
+    private fun reminderTime(t: String): Long? {
+        val zone = ZoneId.systemDefault()
+        Regex("\\bdans\\s+(.+)").find(t)?.let { m ->
+            duration(m.groupValues[1])?.let { return System.currentTimeMillis() + it * 1000L }
+        }
+        var (hour, minute) = clockTime(t) ?: return null
+        if (hour < 12 && Regex("\\bce soir\\b|\\bcet? apres-?midi\\b|\\bcet aprem\\b").containsMatchIn(t) && !CLOCK_MORNING.containsMatchIn(t)) hour += 12
+        val today = java.time.LocalDate.now()
+        var date = when {
+            Regex("\\bapres[- ]demain\\b").containsMatchIn(t) -> today.plusDays(2)
+            Regex("\\bdemain\\b").containsMatchIn(t) -> today.plusDays(1)
+            else -> DAY_NAMES.firstOrNull { (name, _) -> Regex("\\b$name\\b").containsMatchIn(t) }?.let { (_, day) ->
+                val target = java.time.DayOfWeek.of(if (day == Calendar.SUNDAY) 7 else day - 1)
+                var ahead = (target.value - today.dayOfWeek.value + 7) % 7
+                if (ahead == 0 && java.time.LocalTime.of(hour, minute) <= java.time.LocalTime.now()) ahead = 7
+                today.plusDays(ahead.toLong())
+            } ?: today
+        }
+        var at = LocalDateTime.of(date, java.time.LocalTime.of(hour, minute))
+        if (!at.isAfter(LocalDateTime.now())) {
+            date = date.plusDays(1)
+            at = LocalDateTime.of(date, java.time.LocalTime.of(hour, minute))
+        }
+        return at.atZone(zone).toInstant().toEpochMilli()
+    }
+
+    private val CLOCK_MORNING = Regex("\\b(du|ce) matin\\b")
+
+    /** "Rappelle-moi d'appeler le client à 15h" → "appeler le client". */
+    private fun reminderText(input: String): String {
+        var s = input.trim()
+        val trigger = Regex(
+            "(?i)^.*?\\b(rappelle[- ]?(moi|nous)|tu peux me rappeler|peux-tu me rappeler|fais[- ]moi penser|pense à me rappeler|pense a me rappeler" +
+                "|n'oublie pas de me rappeler|(mets?|met|crée|cree|ajoute|programme)[- ]?(moi )?un rappel( pour)?)\\s*"
+        )
+        s = s.replace(trigger, "")
+        val removals = listOf(
+            "(?i)\\bdans\\s+(une demi[- ]heure|une?\\s+(heure|minute)s?|\\d+\\s*(h|heures?|min|minutes?|mn|secondes?|sec|s)\\b(\\s*\\d+)?)",
+            "(?i)\\b(à|a|vers|pour)\\s+(\\d{1,2}\\s*(h|heures?|:)\\s*\\d{0,2}|midi|minuit)(\\s*(et (demie|quart)|moins (le )?quart))?(\\s*(du|de l'|de)\\s*(matin|soir|après[- ]midi|apres[- ]midi|aprem))?",
+            "(?i)\\b(après[- ]demain|apres[- ]demain|demain|aujourd'hui|ce soir|ce matin|cet après[- ]midi|cet apres[- ]midi)\\b",
+            "(?i)\\b(ce |le |)(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochain)?\\b",
+        )
+        removals.forEach { s = s.replace(Regex(it), " ") }
+        s = s.replace(Regex("\\s+"), " ").trim().trim(',', '.', '!', '?', ':', ' ')
+        s = s.replace(Regex("(?i)^(de |d'|d’|que |qu'|qu’|pour |à |a )"), "").trim()
+        return s.replaceFirstChar { it.lowercase() }.ifEmpty { "ton rappel" }.take(80)
     }
 
     private val ALARM_WORDS = Regex("\\b(alarme|alarmes|reveil|reveille|reveiller|sonnerie|alarm|wake)")
@@ -94,8 +203,9 @@ object AskaAlarms {
     private val NEXT_WORDS = Regex("prochaine alarme|prochain reveil|a quelle heure (je me reveille|sonne|mon reveil)")
     private val SHOW_WORDS = Regex("\\b(montre|affiche|liste|ouvre|voir)\\b.*\\b(alarmes?|reveils?|horloge)|mes alarmes")
 
-    fun parse(input: String): Request? {
+    fun parse(context: Context, input: String): Request? {
         val t = normalize(input)
+        parseReminder(context, input, t)?.let { return it }
         val alarm = ALARM_WORDS.containsMatchIn(t)
         val timer = TIMER_WORDS.containsMatchIn(t)
         if (!alarm && !timer) return null
@@ -112,18 +222,19 @@ object AskaAlarms {
         return Request.Act(AlarmAction.Set(time.first, time.second, label(input), days(t)))
     }
 
-    /** Tags the model may add to its answer: [[ALARME 07:30 | label]], [[MINUTEUR 10]] (minutes). */
-    private val TAG = Regex("\\[\\[\\s*(ALARME|MINUTEUR)\\s+([^\\]|]+?)\\s*(?:\\|\\s*([^\\]]*?)\\s*)?]]", RegexOption.IGNORE_CASE)
+    /** Tags the model may add to its answer: [[ALARME 07:30 | label]], [[MINUTEUR 10]] (minutes), [[RAPPEL 15:00 | texte]]. */
+    private val TAG = Regex("\\[\\[\\s*(ALARME|MINUTEUR|RAPPEL)\\s+([^\\]|]+?)\\s*(?:\\|\\s*([^\\]]*?)\\s*)?]]", RegexOption.IGNORE_CASE)
 
     /** Removes the tags from a model answer and turns the first one into an action. */
     fun extractTag(answer: String): Pair<String, AlarmAction?> {
         val match = TAG.find(answer) ?: return answer to null
         val clean = answer.replace(TAG, "").trim()
         val value = normalize(match.groupValues[2])
-        val action = if (match.groupValues[1].equals("ALARME", ignoreCase = true)) {
-            clockTime(value)?.let { AlarmAction.Set(it.first, it.second, match.groupValues[3].trim().ifEmpty { null }, null) }
-        } else {
-            (duration(value) ?: value.trim().toIntOrNull()?.times(60))?.let { AlarmAction.Timer(it) }
+        val label = match.groupValues[3].trim().ifEmpty { null }
+        val action = when (match.groupValues[1].uppercase()) {
+            "ALARME" -> clockTime(value)?.let { AlarmAction.Set(it.first, it.second, label, null) }
+            "RAPPEL" -> reminderTime(value)?.let { AlarmAction.Remind(it, label ?: "ton rappel") }
+            else -> (duration(value) ?: value.trim().toIntOrNull()?.times(60))?.let { AlarmAction.Timer(it) }
         }
         return clean to action
     }

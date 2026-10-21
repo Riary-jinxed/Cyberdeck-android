@@ -33,6 +33,17 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- As//ka's reminders: exact time, and set again after a reboot. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The Agenda app (same signing key) reads her reminders. -->
+    <permission
+        android:name="dev.netrunner.permission.READ_REMINDERS"
+        android:label="Lire les rappels d'As//ka"
+        android:protectionLevel="signature" />
     <!-- Built-in updates from the GitHub releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Music spectrum: Android's Visualizer reads the output mix and requires these. -->
@@ -92,6 +103,24 @@
             android:name=".aska.AskaEngineService"
             android:exported="false"
             android:process=":aska" />
+
+        <!-- As//ka's reminders: the alarm and the notification's buttons, reboots, and the Agenda's view. -->
+        <receiver
+            android:name=".aska.AskaReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".aska.AskaReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <provider
+            android:name=".aska.AskaRemindersProvider"
+            android:authorities="dev.netrunner.launcher.reminders"
+            android:exported="true"
+            android:readPermission="dev.netrunner.permission.READ_REMINDERS" />
 
         <!-- Mirrors notifications into the HUD and unlocks media session control. -->
         <service

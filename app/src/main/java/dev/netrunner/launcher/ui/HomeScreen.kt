@@ -381,6 +381,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        AskaWidget(viewModel.aska.pet) { viewModel.openPanel(Panel.Aska) }
                         nowPlaying?.let { MediaWidget(it, mediaWatcher) }
                         if (feedAccess) {
                             FeedPreview(feed) { viewModel.openPanel(Panel.Feed) }

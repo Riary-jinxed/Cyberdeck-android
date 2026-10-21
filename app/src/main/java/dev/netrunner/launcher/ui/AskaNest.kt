@@ -42,7 +42,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.sin
 
 @DrawableRes
-private fun Mood.drawable(): Int = when (this) {
+internal fun Mood.drawable(): Int = when (this) {
     Mood.Sleeping -> R.drawable.aska_chibi_sleep
     Mood.Hungry, Mood.Eating -> R.drawable.aska_chibi_gourmand
     Mood.Tired -> R.drawable.aska_chibi_waiting

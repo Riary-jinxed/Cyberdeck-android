@@ -119,12 +119,14 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         voice.stop()
         add(Line(nextId++, fromUser = true, text = text))
 
-        // Alarm requests are understood directly: instant, reliable, and they work without a model.
-        when (val request = AskaAlarms.parse(text)) {
+        // Alarm and reminder requests are understood directly: instant, reliable, and they work without a model.
+        when (val request = AskaAlarms.parse(context, text)) {
             is AskaAlarms.Request.Next -> return say(AskaAlarms.nextAlarm(context))
+            is AskaAlarms.Request.Reminders -> return say(AskaAlarms.remindersText(context))
+            is AskaAlarms.Request.NeedTime -> return say("Je te le rappelle quand ? Par exemple « rappelle-moi de … à 15h », « demain à 9h » ou « dans 20 minutes ».")
             is AskaAlarms.Request.Act -> {
                 if (!request.action.needsConfirm) return say(AskaAlarms.run(context, request.action))
-                return say("Je prépare ça. Valide et je l'envoie à l'horloge.", request.action)
+                return say(request.action.ask, request.action)
             }
             null -> Unit
         }
@@ -182,7 +184,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     reply.id,
                     Line(
                         reply.id, false,
-                        clean.ifEmpty { if (action != null) "Je prépare ça. Valide et je l'envoie à l'horloge." else "…" },
+                        clean.ifEmpty { action?.ask ?: "…" },
                         action,
                     ),
                 )
@@ -362,8 +364,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Tu parles français et tu tutoies. Tu réponds de façon concise (quelques phrases), sauf si on te demande plus de détails.
             Tu tournes entièrement hors ligne, sur le téléphone : pas d'internet, pas d'accès aux fichiers, messages ou applis. Si tu ne sais pas, dis-le franchement.
             Nous sommes le $now.
-            Ta seule action possible sur le téléphone : les alarmes et minuteurs. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
-            [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur.
+            Tes seules actions possibles sur le téléphone : les alarmes, les minuteurs et tes rappels. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
+            [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur, [[RAPPEL HH:MM | texte]] ou [[RAPPEL demain HH:MM | texte]] pour un rappel.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
         """.trimIndent() + memoryBlock() + pet.forPrompt()
     }

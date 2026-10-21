@@ -1,6 +1,8 @@
 package dev.netrunner.launcher.ui
 
+import android.Manifest
 import android.app.DownloadManager
+import android.os.Build
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,9 +52,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.netrunner.launcher.aska.AlarmAction
 import dev.netrunner.launcher.aska.AskaBrain
+import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
 import dev.netrunner.launcher.aska.AskaPiper
 import dev.netrunner.launcher.aska.AskaVoice
@@ -84,6 +89,8 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
     var showModels by remember { mutableStateOf(false) }
     // Her nest (Tamagotchi), opened by touching her chibi.
     var nest by remember { mutableStateOf(false) }
+    // Her reminders, opened from the strip above the chat's input.
+    var reminders by remember { mutableStateOf(false) }
     val noModel = brain.state == AskaBrain.State.NoModel
 
     Column(
@@ -115,12 +122,15 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                     fontSize = 11.sp,
                 )
             }
-            if (nest) {
-                HeaderButton("◂ CHAT", Cp.Cyan) { nest = false }
+            if (nest || reminders) {
+                HeaderButton("◂ CHAT", Cp.Cyan) {
+                    nest = false
+                    reminders = false
+                }
             } else {
                 HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
             }
-            if (!nest && !showModels && !noModel) {
+            if (!nest && !reminders && !showModels && !noModel) {
                 HeaderButton(if (brain.voice.enabled) "VOIX ●" else "VOIX ○", if (brain.voice.enabled) AskaColors.Pink else Cp.Dim) {
                     brain.voice.toggle()
                 }
@@ -145,8 +155,9 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
         )
         when {
             nest -> AskaNest(brain.pet, Modifier.weight(1f))
+            reminders -> ReminderBay(Modifier.weight(1f))
             showModels || noModel -> ModelBay(brain, Modifier.weight(1f))
-            else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true })
+            else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true }, onReminders = { reminders = true })
         }
     }
 }
@@ -176,7 +187,7 @@ private fun HeaderButton(label: String, color: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
+private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onReminders: () -> Unit) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val lines = brain.lines
@@ -202,6 +213,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
         ) {
             items(lines, key = { it.id }) { line -> Bubble(brain, line) }
         }
+        ReminderStrip(onReminders)
         Row(verticalAlignment = Alignment.Bottom) {
             // Touching her chibi opens her nest.
             Box(
@@ -285,6 +297,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
 
 @Composable
 private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (line.fromUser) Arrangement.End else Arrangement.Start,
@@ -338,7 +351,11 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .hudPanel(borderColor = AskaColors.Pink, fill = AskaColors.Pink, cut = 6.dp)
-                            .clickable { brain.confirm(line) }
+                            .clickable {
+                                // A reminder rings as a notification: ask for the right to post one.
+                                if (action is AlarmAction.Remind && Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                brain.confirm(line)
+                            }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                     Text(
@@ -353,6 +370,72 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+/** The next reminder, above the input: touch to see them all. */
+@Composable
+private fun ReminderStrip(onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val revision = AskaReminders.revision.intValue
+    val upcoming = remember(revision) { AskaReminders.upcoming(context) }
+    val next = upcoming.firstOrNull() ?: return
+    Text(
+        "◷ ${next.whenLabel.uppercase()} · ${next.text}" + if (upcoming.size > 1) "  (+${upcoming.size - 1})" else "",
+        color = AskaColors.HotPink,
+        fontFamily = MonoFont,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = 4.dp),
+    )
+}
+
+/** All her reminders, with a button to erase each one. */
+@Composable
+private fun ReminderBay(modifier: Modifier) {
+    val context = LocalContext.current
+    val revision = AskaReminders.revision.intValue
+    val all = remember(revision) { AskaReminders.list(context).sortedWith(compareBy({ it.done }, { it.at })) }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("RAPPELS", color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        if (all.isEmpty()) {
+            Text(
+                "Aucun rappel. Dis-lui « rappelle-moi d'appeler le client à 15h », « demain à 9h » ou « dans 20 minutes ».",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 13.sp,
+            )
+        }
+        all.forEach { reminder ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hudPanel(borderColor = AskaColors.Pink.copy(alpha = if (reminder.done) 0.2f else 0.5f), fill = AskaColors.Panel)
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        (if (reminder.done) "✓ " else "◷ ") + reminder.whenLabel.uppercase(),
+                        color = if (reminder.done) Cp.Dim else AskaColors.HotPink,
+                        fontFamily = MonoFont,
+                        fontSize = 11.sp,
+                    )
+                    Text(reminder.text, color = if (reminder.done) Cp.Dim else Cp.Text, fontFamily = HudFont, fontSize = 14.sp)
+                }
+                BayButton("EFFACER", Cp.Dim) { AskaReminders.remove(context, reminder.id) }
             }
         }
     }
