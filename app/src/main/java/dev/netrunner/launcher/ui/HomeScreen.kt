@@ -373,8 +373,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            // Home pages: HUD (music, messages, zone, implants) then Android widgets.
-            val pages = rememberPagerState { 2 }
+            // Home pages: HUD (music, messages, zone, implants), quickhacks, then Android widgets.
+            val pages = rememberPagerState { 3 }
             HorizontalPager(
                 state = pages,
                 modifier = Modifier.weight(1f),
@@ -398,22 +398,22 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         ZoneWidget()
                         ImplantHud()
                     }
+                } else if (page == 1) {
+                    QuickhackGrid(
+                        slots = slots,
+                        folders = folders,
+                        onLaunch = viewModel::requestLaunch,
+                        onUnpin = viewModel::toggleFavorite,
+                        onInfo = viewModel::openAppInfo,
+                        onMoveToFolder = viewModel::moveToFolder,
+                        onOpenFolder = { openFolder = it },
+                    )
                 } else {
                     WidgetsPage(Modifier.fillMaxSize())
                 }
             }
-            PageDots(count = 2, current = pages.currentPage, labels = listOf("HUD", "WIDGETS"))
-            Spacer(Modifier.height(8.dp))
-            QuickhackGrid(
-                slots = slots,
-                folders = folders,
-                onLaunch = viewModel::requestLaunch,
-                onUnpin = viewModel::toggleFavorite,
-                onInfo = viewModel::openAppInfo,
-                onMoveToFolder = viewModel::moveToFolder,
-                onOpenFolder = { openFolder = it },
-            )
-            Spacer(Modifier.height(14.dp))
+            PageDots(count = 3, current = pages.currentPage, labels = listOf("HUD", "QUICKHACKS", "WIDGETS"))
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HudButton("WI-FI", Cp.Cyan, Modifier.weight(1f), HudGlyph.Wifi) { viewModel.openPanel(Panel.Wifi) }
                 HudButton("SMS", Cp.Yellow, Modifier.weight(1f), HudGlyph.Message) { viewModel.openPanel(Panel.Messages) }
@@ -744,49 +744,47 @@ private fun QuickhackGrid(
     onMoveToFolder: (String, String?) -> Unit,
     onOpenFolder: (String) -> Unit,
 ) {
-    // Two rows of four per page; more quickhacks spill onto further pages.
-    val pages = slots.chunked(8)
-    val pager = rememberPagerState { pages.size.coerceAtLeast(1) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "// QUICKHACKS",
-            color = Cp.Yellow,
-            fontFamily = HudFont,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f),
-        )
-        if (pages.size > 1) {
-            Text("${pager.currentPage + 1}/${pages.size}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+    // A home page of its own: rows of four, scrolling when there are many.
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "// QUICKHACKS",
+                color = Cp.Yellow,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            Text("${slots.size}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
         }
-    }
-    Spacer(Modifier.height(8.dp))
-    if (slots.isEmpty()) {
-        Text(
-            "Aucun raccourci. Ouvre le réseau et fais un appui long sur une appli pour l'épingler.",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 12.sp,
-        )
-        return
-    }
-    HorizontalPager(state = pager, verticalAlignment = Alignment.Top) { page ->
-        Column {
-            pages[page].chunked(4).forEach { row ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    row.forEach { slot ->
-                        when (slot) {
-                            is QuickSlot.App -> QuickhackTile(slot.app, folders, onLaunch, onUnpin, onInfo, onMoveToFolder, Modifier.weight(1f))
-                            is QuickSlot.Dir -> FolderTile(slot, Modifier.weight(1f)) { onOpenFolder(slot.folder.id) }
-                        }
+        Spacer(Modifier.height(8.dp))
+        if (slots.isEmpty()) {
+            Text(
+                "Aucun raccourci. Ouvre le réseau et fais un appui long sur une appli pour l'épingler.",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+            )
+            return@Column
+        }
+        slots.chunked(4).forEach { row ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                row.forEach { slot ->
+                    when (slot) {
+                        is QuickSlot.App -> QuickhackTile(slot.app, folders, onLaunch, onUnpin, onInfo, onMoveToFolder, Modifier.weight(1f))
+                        is QuickSlot.Dir -> FolderTile(slot, Modifier.weight(1f)) { onOpenFolder(slot.folder.id) }
                     }
-                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

@@ -5,7 +5,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 ## Ce qu'il fait
 
 - **HUD d'accueil** : grosse horloge jaune qui « glitche » de temps en temps, date, batterie segmentée, ligne de terminal animée.
-- **Quickhacks** : tes applis favorites en tuiles angulaires (appui long dans le tiroir pour épingler).
+- **Quickhacks** : tes applis favorites en tuiles angulaires, sur leur propre page de l'accueil (HUD › QUICKHACKS › WIDGETS) ; appui long dans le tiroir pour épingler.
 - **Accès réseau** : tiroir de toutes les applis avec recherche (Entrée lance le premier résultat).
 - **Lancement en ligne de commande** : chaque appli s'ouvre après une courte séquence « jack-in » façon terminal.
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
@@ -36,7 +36,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons). « Importer une musique » prend un morceau du téléphone : on choisit l'extrait (40 s max), on l'écoute, puis on le définit comme sonnerie ou notification. Le fichier découpé reste sur le téléphone, rien n'est envoyé ni inclus dans l'appli.
 - **Tuiles du volet** : mode furtif, verrou cyber, terminal et scan Wi-Fi dans les réglages rapides d'Android (ajout en un appui depuis Config).
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
-- **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
+- **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; la page défile quand il y a beaucoup de raccourcis.
 - **Gestes personnalisables** : chaque glisser et le double-tap / appui long sur l'horloge se règlent dans Config › Gestes.
 - **Stats du deck** : temps d'écran, déverrouillages, ouvertures et applis les plus utilisées (aujourd'hui ou sur 7 jours, en barres segmentées façon HUD), plus la batterie consommée et rechargée par jour. Il faut activer « Accès aux données d'utilisation ». Tout est calculé sur le téléphone, et l'historique batterie reste dans les fichiers privés de l'appli. On y voit aussi la data consommée (mobile et Wi-Fi, par jour et par appli). **Limites ICE** : touche une appli dans les stats pour lui fixer un temps max par jour. Une fois ce temps écoulé, un écran d'intrusion Netwatch la recouvre (bouton Déconnexion ou +5 min). Il faut « Afficher par-dessus les autres applis », sinon c'est une notification. À ouvrir avec `stats` dans le terminal ou via un geste.
 - **Applis du deck** : Config › Applis du deck liste les autres applis Netrunner du dépôt (horloge, calculatrice, fichiers…) pour les installer, les mettre à jour ou les ouvrir. Une nouvelle appli y apparaît dès sa première release, si elle respecte la convention : tag `<id>-v<version>`, APK `<id>-<version>.apk`, `--latest=false`, et paquet `dev.netrunner.<id>` (sinon, l'ajouter à `DeckApps.PACKAGES`).
