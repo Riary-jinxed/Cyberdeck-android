@@ -11,4 +11,11 @@ object GalleryPrefs {
 
     fun columns(context: Context) = prefs(context).getInt("columns", 4)
     fun setColumns(context: Context, n: Int) = prefs(context).edit().putInt("columns", n).apply()
+
+    /** MediaStore ids of the favourites, kept by the app (no system prompt each time). */
+    fun favorites(context: Context): Set<Long> =
+        prefs(context).getStringSet("favorites", emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
+
+    fun setFavorites(context: Context, ids: Set<Long>) =
+        prefs(context).edit().putStringSet("favorites", ids.map { it.toString() }.toSet()).apply()
 }

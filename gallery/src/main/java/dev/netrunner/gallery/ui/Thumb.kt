@@ -2,6 +2,7 @@ package dev.netrunner.gallery.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,7 +35,7 @@ fun holoFilter(): ColorFilter {
 }
 
 @Composable
-fun Thumb(media: MediaRepo.Media, holo: Boolean, modifier: Modifier = Modifier) {
+fun Thumb(media: MediaRepo.Media, holo: Boolean, modifier: Modifier = Modifier, favorite: Boolean = false, selected: Boolean = false) {
     val context = LocalContext.current
     val bitmap by produceState<ImageBitmap?>(null, media.id) {
         value = MediaRepo.thumbnail(context, media, 320)?.asImageBitmap()
@@ -50,6 +51,16 @@ fun Thumb(media: MediaRepo.Media, holo: Boolean, modifier: Modifier = Modifier) 
             Text(
                 "▶ " + duration(media.duration), color = Cp.Text, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 11.sp,
                 modifier = Modifier.align(Alignment.BottomStart).background(Cp.Background.copy(alpha = 0.6f)).padding(horizontal = 4.dp),
+            )
+        }
+        if (favorite) {
+            Text("★", color = Cp.Yellow, fontSize = 14.sp, modifier = Modifier.align(Alignment.TopEnd).padding(3.dp))
+        }
+        if (selected) {
+            Box(Modifier.fillMaxSize().background(Cp.Yellow.copy(alpha = 0.25f)).border(2.dp, Cp.Yellow))
+            Text(
+                "✓", color = Cp.Background, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(3.dp).background(Cp.Yellow).padding(horizontal = 4.dp),
             )
         }
     }

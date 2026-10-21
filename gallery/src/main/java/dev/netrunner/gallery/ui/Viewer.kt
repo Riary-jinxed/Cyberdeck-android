@@ -170,6 +170,10 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
                         }
                         Chip("MODIFIER", Cp.Cyan) { openExternal(context, current, Intent.ACTION_EDIT) }
                     }
+                    if (current.id >= 0) {
+                        val fav = current.id in state.favorites
+                        Chip(if (fav) "★ FAVORI" else "☆ FAVORI", if (fav) Cp.Yellow else Cp.Cyan) { state.toggleFavorite(listOf(current.id)) }
+                    }
                     Chip("INFOS", Cp.Cyan) { info = !info }
                     if (current.id >= 0) Chip("SUPPR.", Cp.Red) { delete(current) }
                 }

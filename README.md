@@ -108,6 +108,9 @@ Galerie dans le module `gallery/` (package `dev.netrunner.gallery`, même clé d
 - **Albums** : un dossier par album (Appareil photo, Captures, WhatsApp…), avec sa vignette et son nombre d'éléments.
 - **Visionneuse** : défilement de photo en photo, zoom au pincement, lecture des vidéos sur place avec barre de lecture, pause, ±10 s et vitesse (ou dans une autre appli), partage, ouverture dans l'éditeur du téléphone, infos (taille, date, dossier) et suppression avec la confirmation d'Android.
 - **Filtre holo** : teinte de la faction, décalage RGB, scanlines et vignettage, sur la grille et dans la visionneuse. « Export holo » enregistre une copie filtrée dans Pictures/Netrunner.
+- **Sélection multiple** : appui long sur une vignette, puis partager, mettre en favori ou supprimer plusieurs photos d'un coup.
+- **Favoris** ★ depuis la sélection ou la visionneuse, avec un filtre « FAVORIS ».
+- **Aller à une date** : bouton DATE pour sauter à un mois précis.
 - **Accès partiel** : fonctionne aussi si seules certaines photos sont autorisées (Android 14+).
 - **Mises à jour** : releases GitHub `gallery-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
