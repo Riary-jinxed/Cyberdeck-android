@@ -5,9 +5,9 @@ package dev.netrunner.gallery.ui
 import android.app.RecoverableSecurityException
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Build
 import android.provider.MediaStore
-import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
@@ -33,11 +33,14 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -70,6 +73,7 @@ import dev.netrunner.deck.scanlines
 import dev.netrunner.gallery.data.Holo
 import dev.netrunner.gallery.data.MediaRepo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -118,7 +122,7 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
             HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !zoomed, key = { items[it].id.let { id -> if (id >= 0) id else it.toLong() } }) { page ->
                 val active = page == pager.currentPage
                 Page(
-                    items[page], holo && !items[page].isVideo, active = active, playing = active && playing,
+                    items[page], holo && !items[page].isVideo, active = active, playing = active && playing, controls = chrome,
                     onPlay = { playing = it }, onZoom = { zoomed = it }, onTap = { chrome = !chrome },
                 )
             }
@@ -192,7 +196,7 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
 
 @Composable
 private fun Page(
-    media: MediaRepo.Media, holo: Boolean, active: Boolean, playing: Boolean,
+    media: MediaRepo.Media, holo: Boolean, active: Boolean, playing: Boolean, controls: Boolean,
     onPlay: (Boolean) -> Unit, onZoom: (Boolean) -> Unit, onTap: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -237,34 +241,118 @@ private fun Page(
             )
         }
         if (media.isVideo && playing) {
-            VideoPlayer(media, onEnd = { onPlay(false) })
+            VideoPlayer(media, controls, onEnd = { onPlay(false) })
         } else if (media.isVideo) {
             Text("▶", color = Cp.Yellow, fontSize = 64.sp)
         }
     }
 }
 
-/** Plays a video in place with the system's VideoView and its play/seek controls. */
+/** Plays a video in place: the system's VideoView with deck-styled controls (seek bar, ±10 s, pause, speed). */
 @Composable
-private fun VideoPlayer(media: MediaRepo.Media, onEnd: () -> Unit) {
-    AndroidView(
-        factory = { ctx ->
-            VideoView(ctx).apply {
-                val controls = MediaController(ctx)
-                controls.setAnchorView(this)
-                setMediaController(controls)
-                setOnPreparedListener { start(); controls.show(2500) }
-                setOnCompletionListener { onEnd() }
-                setOnErrorListener { _, _, _ ->
-                    Toast.makeText(ctx, "Lecture impossible, essaie « Ouvrir avec »", Toast.LENGTH_SHORT).show()
-                    onEnd()
-                    true
+private fun VideoPlayer(media: MediaRepo.Media, controls: Boolean, onEnd: () -> Unit) {
+    var view by remember { mutableStateOf<VideoView?>(null) }
+    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    var running by remember { mutableStateOf(true) }
+    var position by remember { mutableIntStateOf(0) }
+    var length by remember { mutableIntStateOf(media.duration.toInt()) }
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    var speed by remember { mutableFloatStateOf(1f) }
+
+    // VideoView has no callbacks for progress, so the bar follows it a few times a second.
+    LaunchedEffect(view) {
+        val v = view ?: return@LaunchedEffect
+        while (true) {
+            if (dragging == null) position = v.currentPosition
+            if (v.duration > 0) length = v.duration
+            running = v.isPlaying
+            delay(200)
+        }
+    }
+
+    fun seek(ms: Int) {
+        val v = view ?: return
+        val to = ms.coerceIn(0, length.coerceAtLeast(0))
+        v.seekTo(to)
+        position = to
+    }
+
+    fun applySpeed(v: Float) {
+        val p = player ?: return
+        val wasPlaying = view?.isPlaying == true
+        runCatching { p.playbackParams = p.playbackParams.setSpeed(v) }
+        // Changing the speed starts playback on some devices; keep a paused video paused.
+        if (!wasPlaying) view?.pause()
+        speed = v
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                VideoView(ctx).apply {
+                    setOnPreparedListener { mp ->
+                        player = mp
+                        start()
+                    }
+                    setOnCompletionListener { running = false; position = length }
+                    setOnErrorListener { _, _, _ ->
+                        Toast.makeText(ctx, "Lecture impossible, essaie « Ouvrir avec »", Toast.LENGTH_SHORT).show()
+                        onEnd()
+                        true
+                    }
+                    setVideoURI(media.uri)
+                    view = this
                 }
-                setVideoURI(media.uri)
+            },
+            onRelease = { it.stopPlayback() },
+            modifier = Modifier.fillMaxSize().align(Alignment.Center),
+        )
+
+        if (controls) {
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().systemBarsPadding()
+                    .padding(start = 12.dp, end = 12.dp, bottom = 64.dp)
+                    .background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val shown = dragging?.toInt() ?: position
+                    Text(duration(shown.toLong()), color = Cp.Text, fontFamily = MonoFont, fontSize = 12.sp)
+                    Slider(
+                        value = shown.toFloat().coerceIn(0f, length.coerceAtLeast(1).toFloat()),
+                        onValueChange = { dragging = it },
+                        onValueChangeFinished = { dragging?.let { seek(it.toInt()) }; dragging = null },
+                        valueRange = 0f..length.coerceAtLeast(1).toFloat(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Cp.Yellow, activeTrackColor = Cp.Yellow, inactiveTrackColor = Cp.Dim.copy(alpha = 0.4f),
+                        ),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Text(duration(length.toLong()), color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    PlayerKey("« 10") { seek(position - 10_000) }
+                    PlayerKey(if (running) "❚❚" else "▶", Cp.Yellow, big = true) {
+                        val v = view ?: return@PlayerKey
+                        if (v.isPlaying) v.pause() else v.start()
+                        running = v.isPlaying
+                    }
+                    PlayerKey("10 »") { seek(position + 10_000) }
+                    PlayerKey("×" + (if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()).replace('.', ',')) {
+                        applySpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.size])
+                    }
+                }
             }
-        },
-        onRelease = { it.stopPlayback() },
-        modifier = Modifier.fillMaxSize(),
+        }
+    }
+}
+
+private val speeds = listOf(1f, 1.5f, 2f, 0.5f)
+
+@Composable
+private fun PlayerKey(text: String, color: Color = Cp.Cyan, big: Boolean = false, onClick: () -> Unit) {
+    Text(
+        text, color = color, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = if (big) 24.sp else 15.sp,
+        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 6.dp),
     )
 }
 

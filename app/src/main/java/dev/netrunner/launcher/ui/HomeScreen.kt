@@ -374,6 +374,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             }
             Spacer(Modifier.height(12.dp))
             // Home pages: HUD (music, messages, zone, implants) then Android widgets.
+            // The quickhacks live on the deck hub (swipe left), leaving the room to the widgets.
             val pages = rememberPagerState { 2 }
             HorizontalPager(
                 state = pages,
@@ -403,17 +404,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 }
             }
             PageDots(count = 2, current = pages.currentPage, labels = listOf("HUD", "WIDGETS"))
-            Spacer(Modifier.height(8.dp))
-            QuickhackGrid(
-                slots = slots,
-                folders = folders,
-                onLaunch = viewModel::requestLaunch,
-                onUnpin = viewModel::toggleFavorite,
-                onInfo = viewModel::openAppInfo,
-                onMoveToFolder = viewModel::moveToFolder,
-                onOpenFolder = { openFolder = it },
-            )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HudButton("WI-FI", Cp.Cyan, Modifier.weight(1f), HudGlyph.Wifi) { viewModel.openPanel(Panel.Wifi) }
                 HudButton("SMS", Cp.Yellow, Modifier.weight(1f), HudGlyph.Message) { viewModel.openPanel(Panel.Messages) }
@@ -524,6 +515,20 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         ) {
             HubScreen(
                 apps = apps,
+                quickhacks = {
+                    QuickhackGrid(
+                        slots = slots,
+                        folders = folders,
+                        onLaunch = { app ->
+                            viewModel.openPanel(Panel.None)
+                            viewModel.requestLaunch(app)
+                        },
+                        onUnpin = viewModel::toggleFavorite,
+                        onInfo = viewModel::openAppInfo,
+                        onMoveToFolder = viewModel::moveToFolder,
+                        onOpenFolder = { openFolder = it },
+                    )
+                },
                 shortcuts = rememberHubShortcuts(
                     openAska = { viewModel.openPanel(Panel.Aska) },
                     openStats = { viewModel.openPanel(Panel.Stats) },
@@ -560,6 +565,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 dir = dir,
                 onLaunch = { app ->
                     openFolder = null
+                    viewModel.openPanel(Panel.None)
                     viewModel.requestLaunch(app)
                 },
                 onRemove = { app -> viewModel.removeFromFolder(dir.folder.id, app.key) },
@@ -744,49 +750,43 @@ private fun QuickhackGrid(
     onMoveToFolder: (String, String?) -> Unit,
     onOpenFolder: (String) -> Unit,
 ) {
-    // Two rows of four per page; more quickhacks spill onto further pages.
-    val pages = slots.chunked(8)
-    val pager = rememberPagerState { pages.size.coerceAtLeast(1) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "// QUICKHACKS",
-            color = Cp.Yellow,
-            fontFamily = HudFont,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f),
-        )
-        if (pages.size > 1) {
-            Text("${pager.currentPage + 1}/${pages.size}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+    // Rows of four, inside the hub's scrolling column.
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "// QUICKHACKS",
+                color = Cp.Yellow,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            Text("${slots.size}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
         }
-    }
-    Spacer(Modifier.height(8.dp))
-    if (slots.isEmpty()) {
-        Text(
-            "Aucun raccourci. Ouvre le réseau et fais un appui long sur une appli pour l'épingler.",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 12.sp,
-        )
-        return
-    }
-    HorizontalPager(state = pager, verticalAlignment = Alignment.Top) { page ->
-        Column {
-            pages[page].chunked(4).forEach { row ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    row.forEach { slot ->
-                        when (slot) {
-                            is QuickSlot.App -> QuickhackTile(slot.app, folders, onLaunch, onUnpin, onInfo, onMoveToFolder, Modifier.weight(1f))
-                            is QuickSlot.Dir -> FolderTile(slot, Modifier.weight(1f)) { onOpenFolder(slot.folder.id) }
-                        }
+        Spacer(Modifier.height(8.dp))
+        if (slots.isEmpty()) {
+            Text(
+                "Aucun raccourci. Ouvre le réseau et fais un appui long sur une appli pour l'épingler.",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+            )
+            return@Column
+        }
+        slots.chunked(4).forEach { row ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                row.forEach { slot ->
+                    when (slot) {
+                        is QuickSlot.App -> QuickhackTile(slot.app, folders, onLaunch, onUnpin, onInfo, onMoveToFolder, Modifier.weight(1f))
+                        is QuickSlot.Dir -> FolderTile(slot, Modifier.weight(1f)) { onOpenFolder(slot.folder.id) }
                     }
-                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
