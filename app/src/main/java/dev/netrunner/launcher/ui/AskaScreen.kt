@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.aska.AlarmAction
 import dev.netrunner.launcher.aska.AskaEars
 import dev.netrunner.launcher.aska.AskaBrain
+import dev.netrunner.launcher.aska.AskaDate
 import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
 import dev.netrunner.launcher.aska.AskaPet
@@ -73,8 +74,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val Prompts = listOf(
+    "Quoi de neuf ?",
+    "Mon programme du jour",
     "Prochaine alarme ?",
     "Réveille-moi à 7h30",
+    "Allume la lampe",
     "Minuteur 10 min",
     "Qui es-tu ?",
     "Que sais-tu sur moi ?",
@@ -109,6 +113,7 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
         Modifier
             .fillMaxSize()
             .dragonScales()
+            .dateSky(brain.date)
             .scanlines()
             .systemBarsPadding()
             .displayCutoutPadding()
@@ -166,11 +171,41 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                 .background(Brush.horizontalGradient(listOf(AskaColors.Pink, AskaColors.Magenta, Color.Transparent)))
         )
         when {
-            nest -> AskaNest(brain.pet, Modifier.weight(1f))
+            nest -> AskaNest(brain.pet, Modifier.weight(1f)) { scene ->
+                brain.startDate(scene)
+                nest = false
+            }
             reminders -> ReminderBay(Modifier.weight(1f))
             showModels || noModel -> ModelBay(brain, Modifier.weight(1f))
             else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true }, onReminders = { reminders = true })
         }
+    }
+}
+
+/** Over the chat during a rendez-vous: where they are, and the way home. */
+@Composable
+private fun DateBanner(scene: AskaDate.Scene, onEnd: () -> Unit) {
+    val glow = Color(scene.glow)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .hudPanel(borderColor = glow.copy(alpha = 0.7f), fill = Color(scene.sky).copy(alpha = 0.85f), cut = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("♥ RENDEZ-VOUS · ${scene.glyph} ${scene.label}", color = glow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(
+            "RENTRER ◂",
+            color = Cp.Text,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .hudPanel(borderColor = glow.copy(alpha = 0.6f), fill = Color.Transparent, cut = 5.dp)
+                .clickable(onClick = onEnd)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }
 
@@ -229,6 +264,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
     }
 
     Column(modifier) {
+        brain.date?.let { scene -> DateBanner(scene, onEnd = brain::endDate) }
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -271,7 +307,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Prompts.forEach { prompt ->
+                    (brain.date?.prompts ?: Prompts).forEach { prompt ->
                         Text(
                             prompt,
                             color = AskaColors.HotPink,

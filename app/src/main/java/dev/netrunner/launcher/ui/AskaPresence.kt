@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.R
+import dev.netrunner.launcher.aska.AskaDate
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -223,6 +224,28 @@ fun Modifier.dragonScales(): Modifier = drawWithCache {
             y += r
             row++
         }
+    }
+}
+
+/**
+ * During a rendez-vous, the scene's sky over her scales: its night color, a glow on the
+ * horizon and a few fixed lights. Drawn once into a cache, like the scales.
+ */
+fun Modifier.dateSky(scene: AskaDate.Scene?): Modifier = if (scene == null) this else drawWithCache {
+    val sky = Color(scene.sky)
+    val glow = Color(scene.glow)
+    val wash = Brush.verticalGradient(listOf(sky.copy(alpha = 0.92f), sky.copy(alpha = 0.55f), glow.copy(alpha = 0.18f)))
+    val horizon = Brush.radialGradient(
+        listOf(glow.copy(alpha = 0.32f), Color.Transparent),
+        center = Offset(size.width * 0.75f, size.height * 0.3f),
+        radius = size.width * 0.8f,
+    )
+    val random = java.util.Random(scene.ordinal * 31L)
+    val lights = List(40) { Offset(random.nextFloat() * size.width, random.nextFloat() * size.height * 0.6f) to random.nextFloat() }
+    onDrawBehind {
+        drawRect(wash)
+        drawRect(horizon)
+        lights.forEach { (at, a) -> drawCircle(glow.copy(alpha = 0.15f + a * 0.35f), radius = 1.dp.toPx() + a * 1.5f.dp.toPx(), center = at) }
     }
 }
 

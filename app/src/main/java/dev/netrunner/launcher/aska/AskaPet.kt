@@ -231,6 +231,20 @@ class AskaPet(context: Context) {
         react(Mood.Shy, PETTED.random())
     }
 
+    /** Back from a rendez-vous: the more they talked, the closer they got. */
+    fun dated(scene: AskaDate.Scene, messages: Int) {
+        val s = elapsed(stats)
+        val talked = messages.coerceAtMost(12)
+        stats = s.copy(bond = s.bond + 2f + talked * 0.5f, joy = s.joy + 10f, xp = s.xp + 4 + talked)
+        val place = scene.label.lowercase(java.util.Locale.FRENCH)
+        if (talked > 0) {
+            val firstDate = "date" !in prefs.getStringSet(KEY_FIRSTS, emptySet()).orEmpty()
+            if (firstDate) first("date", "Premier rendez-vous, $place. Elle a rougi tout du long.")
+            else remember("Rendez-vous : $place.")
+        }
+        react(Mood.Shy, if (talked > 0) "C'était… vraiment bien. On recommence quand tu veux ?" else "Déjà fini ? …La prochaine fois, on reste plus longtemps, hein ?")
+    }
+
     fun toggleSleep() {
         val s = elapsed(stats)
         stats = s.copy(asleep = !s.asleep)

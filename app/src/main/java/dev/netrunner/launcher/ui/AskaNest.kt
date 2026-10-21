@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.R
+import dev.netrunner.launcher.aska.AskaDate
 import dev.netrunner.launcher.aska.AskaPet
 import dev.netrunner.launcher.aska.AskaPet.Mood
 import kotlin.math.sin
@@ -83,7 +84,7 @@ private fun Mood.particle(): String? = when (this) {
  * nothing runs in the background).
  */
 @Composable
-fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier) {
+fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier, onDate: (AskaDate.Scene) -> Unit = {}) {
     val active = rememberScreenActive()
     // Time passes while the nest is open too, slowly: a check per minute is plenty.
     LaunchedEffect(active) {
@@ -156,6 +157,7 @@ fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier) {
             when (mode) {
                 NestMode.Shop -> Shop(pet)
                 NestMode.Wardrobe -> Wardrobe(pet)
+                NestMode.Date -> DateBay(pet, onDate)
                 else -> Journal(pet)
             }
             Spacer(Modifier.height(8.dp))
@@ -179,12 +181,19 @@ fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier) {
                 NestButton("✦ GARDE-ROBE", Cp.Yellow, Modifier.weight(1f)) { mode = NestMode.Wardrobe }
                 NestButton("▤ JOURNAL", Cp.Cyan, Modifier.weight(1f)) { mode = NestMode.Journal }
             }
+            Spacer(Modifier.height(8.dp))
+            val canDate = AskaDate.Scene.entries.first().unlocked(stats.bond)
+            NestButton(
+                if (canDate) "♡ RENDEZ-VOUS" else "♡ RENDEZ-VOUS · LIEN ${AskaDate.Scene.entries.first().bond}",
+                if (canDate) AskaColors.Pink else Cp.Dim,
+                Modifier.fillMaxWidth(),
+            ) { mode = NestMode.Date }
         }
         Spacer(Modifier.height(10.dp))
     }
 }
 
-private enum class NestMode { Nest, Game, Shop, Wardrobe, Journal }
+private enum class NestMode { Nest, Game, Shop, Wardrobe, Journal, Date }
 
 /** Her looks, unlocked as she grows, and whether she may call when neglected. */
 @Composable
@@ -235,6 +244,55 @@ private fun Wardrobe(pet: AskaPet) {
                 fontFamily = HudFont,
                 fontSize = 12.sp,
             )
+        }
+    }
+}
+
+/** Where to take her: each scene opens as their bond grows. */
+@Composable
+private fun DateBay(pet: AskaPet, onDate: (AskaDate.Scene) -> Unit) {
+    val bond = pet.stats.bond
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .height(190.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            if (AskaDate.Scene.entries.first().unlocked(bond)) "Où l'emmènes-tu ce soir ?"
+            else "Elle est encore trop timide… Câlins, macarons et parties la rapprocheront de toi.",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 12.sp,
+        )
+        AskaDate.Scene.entries.forEach { scene ->
+            val open = scene.unlocked(bond)
+            val glow = Color(scene.glow)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hudPanel(
+                        borderColor = if (open) glow.copy(alpha = 0.8f) else Cp.Dim.copy(alpha = 0.4f),
+                        fill = Color(scene.sky).copy(alpha = 0.9f),
+                        cut = 8.dp,
+                    )
+                    .clickable(enabled = open) { onDate(scene) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(scene.glyph, color = if (open) glow else Cp.Dim, fontFamily = MonoFont, fontSize = 16.sp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    scene.label,
+                    color = if (open) Cp.Text else Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(if (open) "◢ Y ALLER" else "◇ LIEN ${scene.bond}", color = if (open) glow else Cp.Dim, fontFamily = MonoFont, fontSize = 10.sp)
+            }
         }
     }
 }
