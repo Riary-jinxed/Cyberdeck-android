@@ -33,7 +33,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Messagerie SMS** : bouton « ✉ SMS » ou `sms`. Conversations façon messagerie du jeu (portraits, canaux, bulles angulaires), réponses rapides en options de dialogue et envoi par la SIM. L'appli SMS habituelle reste en place pour les MMS, le RCS et les notifications.
 - **Animation de démarrage** : styles BIOS, BREACH (matrice qui se résout en « accès autorisé ») ou CORPO (logo qui glitche), ou aucune ; affiche ton pseudo de runner. Dans Config.
 - **Fond d'écran système** : la grille de breach en fond d'écran animé Android, aussi sur l'écran verrouillé, aux couleurs de la faction et à 8 images/s.
-- **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons).
+- **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons). « Importer une musique » prend un morceau du téléphone : on choisit l'extrait (40 s max), on l'écoute, puis on le définit comme sonnerie ou notification. Le fichier découpé reste sur le téléphone, rien n'est envoyé ni inclus dans l'appli.
 - **Tuiles du volet** : mode furtif, verrou cyber, terminal et scan Wi-Fi dans les réglages rapides d'Android (ajout en un appui depuis Config).
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
 - **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
@@ -103,6 +103,7 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/FeedScreen.kt`, `ui/MediaWidget.kt`, `ui/QuickPanel.kt` | Flux, widget musique, réglages rapides |
 | `sms/SmsStore.kt`, `ui/MessagesScreen.kt` | Lecture et envoi des SMS, messagerie |
 | `system/Tones.kt` | Synthèse et installation des sonneries |
+| `system/MusicTone.kt` | Découpe d'une musique importée en sonnerie |
 | `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
 | `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 

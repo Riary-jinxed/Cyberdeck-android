@@ -35,6 +35,10 @@ import dev.netrunner.launcher.lock.CyberLock
 import dev.netrunner.launcher.system.Diagnostics
 import dev.netrunner.launcher.system.Ghost
 import dev.netrunner.launcher.system.Tones
+import dev.netrunner.launcher.system.MusicTone
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.SliderDefaults
 import dev.netrunner.launcher.system.ConfigBackup
 import dev.netrunner.launcher.system.Gestures
 import dev.netrunner.launcher.system.NightWatch
@@ -79,6 +83,13 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             } else {
                 Toast.makeText(context, "Fichier de config illisible", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+    var music by remember { mutableStateOf<MusicTone.Source?>(null) }
+    val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            music = MusicTone.probe(context, uri)
+            if (music == null) Toast.makeText(context, "Fichier audio illisible", Toast.LENGTH_SHORT).show()
         }
     }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -197,7 +208,20 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             fontFamily = HudFont,
             fontSize = 11.sp,
         )
-        DisposableEffect(Unit) { onDispose { Tones.stopPreview() } }
+        DisposableEffect(Unit) {
+            onDispose {
+                Tones.stopPreview()
+                MusicTone.stopPreview()
+            }
+        }
+        val source = music
+        if (source == null) {
+            Action("Importer une musique", "Un morceau du téléphone, coupé à l'extrait voulu, en sonnerie ou notification") {
+                pickMusic.launch(arrayOf("audio/*"))
+            }
+        } else {
+            MusicCutter(source, onClose = { music = null })
+        }
         Tones.Kind.entries.forEach { kind ->
             Label(kind.label)
             Tones.all.filter { it.kind == kind }.forEach { tone -> ToneRow(tone) { tick++ } }
@@ -391,6 +415,115 @@ private fun HandleField() {
             }.padding(start = 8.dp),
         )
     }
+}
+
+private fun clock(ms: Long): String = "%d:%02d".format(ms / 60_000, ms / 1000 % 60)
+
+/** Picks the excerpt of an imported song, then installs it as ringtone or notification sound. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MusicCutter(source: MusicTone.Source, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val total = source.durationMs.toFloat()
+    var range by remember(source) { mutableStateOf(0f..minOf(total, 30_000f)) }
+    var playing by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val start = range.start.toLong()
+    val end = range.endInclusive.toLong()
+
+    fun install(kind: Tones.Kind) {
+        if (!Tones.canSetDefault(context)) {
+            Toast.makeText(context, "Autorise « Modifier les paramètres système » puis réessaie", Toast.LENGTH_LONG).show()
+            context.startActivity(Tones.writeSettingsIntent(context))
+            return
+        }
+        MusicTone.stopPreview()
+        playing = false
+        busy = true
+        scope.launch {
+            val ok = MusicTone.install(context, source, start, end, kind)
+            busy = false
+            if (ok) {
+                UiSound.play(context, UiSound.Cue.Confirm)
+                Toast.makeText(context, "${kind.label} : ${source.title}", Toast.LENGTH_SHORT).show()
+                onClose()
+            } else {
+                Toast.makeText(context, "Impossible de découper ce fichier", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.7f), cut = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(source.title.uppercase(), color = Cp.Yellow, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "EXTRAIT ${clock(start)} → ${clock(end)} · ${(end - start) / 1000} s (max ${MusicTone.MAX_MS / 1000} s)",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 12.sp,
+        )
+        RangeSlider(
+            value = range,
+            onValueChange = { new ->
+                // Keep the excerpt between 1 s and the maximum, moving whichever end was not dragged.
+                val max = MusicTone.MAX_MS.toFloat()
+                range = when {
+                    new.endInclusive - new.start > max ->
+                        if (new.start != range.start) new.start..(new.start + max) else (new.endInclusive - max)..new.endInclusive
+                    new.endInclusive - new.start < 1_000f -> range
+                    else -> new
+                }
+                if (playing) {
+                    MusicTone.stopPreview()
+                    playing = false
+                }
+            },
+            valueRange = 0f..total,
+            colors = SliderDefaults.colors(
+                thumbColor = Cp.Yellow,
+                activeTrackColor = Cp.Yellow,
+                inactiveTrackColor = Cp.Dim.copy(alpha = 0.4f),
+            ),
+        )
+        if (busy) {
+            Text("DÉCOUPAGE EN COURS…", color = Cp.Cyan, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                CutterButton(if (playing) "■ STOP" else "▶ ÉCOUTER", Cp.Yellow) {
+                    if (playing) {
+                        MusicTone.stopPreview()
+                    } else {
+                        MusicTone.preview(context, source, start, end)
+                    }
+                    playing = !playing
+                }
+                CutterButton("SONNERIE ►", Cp.Cyan) { install(Tones.Kind.Ringtone) }
+                CutterButton("NOTIF ►", Cp.Cyan) { install(Tones.Kind.Notification) }
+                CutterButton("✕", Cp.Red) {
+                    MusicTone.stopPreview()
+                    onClose()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CutterButton(label: String, color: Color, onClick: () -> Unit) {
+    Text(
+        label,
+        color = color,
+        fontFamily = HudFont,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp),
+    )
 }
 
 @Composable
