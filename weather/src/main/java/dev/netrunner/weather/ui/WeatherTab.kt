@@ -213,8 +213,8 @@ private fun chibi(mood: String): Int = when (mood) {
     "storm" -> R.drawable.aska_weather_storm
     "snow" -> R.drawable.aska_weather_snow
     "rain" -> R.drawable.aska_weather_rain
-    "fog" -> R.drawable.aska_weather_cloudy // until her fog pose is ready
-    "wind" -> R.drawable.aska_weather_cloudy // until her wind pose is ready
+    "fog" -> R.drawable.aska_weather_fog
+    "wind" -> R.drawable.aska_weather_wind
     "heat" -> R.drawable.aska_weather_heat
     "cold" -> R.drawable.aska_weather_cold
     "night" -> R.drawable.aska_weather_night
