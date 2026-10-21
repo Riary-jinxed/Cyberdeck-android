@@ -75,6 +75,17 @@ Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK 
 - **Raccourci calculatrice** : l'appli répond au raccourci « calculatrice » d'Android.
 - **Mises à jour** : releases GitHub `calc-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
+## Fichiers Netrunner (appli à part)
+
+Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`, même clé de signature).
+
+- **Explorateur façon terminal** : invite `runner@deck:~/Download$`, raccourcis (interne, Download, DCIM, images, documents, musique, vidéos, carte SD ou clé USB), dossiers dépliables sur place avec les traits de `tree`, couleurs par type de fichier, tri par nom, date, taille ou type, fichiers cachés au choix.
+- **Actions** : appui long pour sélectionner, puis copier, couper et coller, renommer, supprimer (avec confirmation), infos (taille d'un dossier, droits), nouveau dossier, ouverture avec l'appli adaptée.
+- **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
+- **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
+- Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
+- **Mises à jour** : releases GitHub `files-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
