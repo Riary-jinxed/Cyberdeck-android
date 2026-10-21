@@ -102,13 +102,14 @@ class AskaEngine(private val context: Context) {
     }
 
     /** Starts a fresh conversation: her instructions and the recent exchanges. */
-    fun converse(system: String, history: List<Pair<Boolean, String>>, thinks: Boolean) {
+    fun converse(system: String, history: List<Pair<Boolean, String>>, thinks: Boolean, temperature: Float = 0.7f) {
         val target = service ?: return
         post(target, S.CONVERSE, Bundle().apply {
             putString(S.KEY_SYSTEM, system)
             putBooleanArray(S.KEY_ROLES, history.map { it.first }.toBooleanArray())
             putStringArrayList(S.KEY_TEXTS, ArrayList(history.map { it.second }))
             putBoolean(S.KEY_THINKS, thinks)
+            putFloat(S.KEY_TEMPERATURE, temperature)
         })
     }
 

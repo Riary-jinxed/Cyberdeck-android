@@ -58,6 +58,7 @@ class AskaEngineService : Service() {
         const val KEY_ROLES = "roles"
         const val KEY_TEXTS = "texts"
         const val KEY_THINKS = "thinks"
+        const val KEY_TEMPERATURE = "temperature"
         const val KEY_TEXT = "text"
     }
 
@@ -141,7 +142,7 @@ class AskaEngineService : Service() {
                 ConversationConfig(
                     systemInstruction = Contents.of(data.getString(KEY_SYSTEM).orEmpty()),
                     initialMessages = texts.mapIndexed { i, t -> if (roles.getOrElse(i) { true }) Message.user(t) else Message.model(t) },
-                    samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = 0.7),
+                    samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = data.getFloat(KEY_TEMPERATURE, 0.7f).toDouble()),
                     maxOutputToken = 768,
                     thinkingConfig = if (data.getBoolean(KEY_THINKS)) ThinkingConfig(enableThinking = false) else null,
                 )

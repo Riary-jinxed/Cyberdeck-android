@@ -40,6 +40,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val action: AlarmAction? = null,
         /** False while the answer is still streaming in. */
         val done: Boolean = true,
+        /** A photo she sends during a date (drawable). */
+        val photo: Int? = null,
     )
 
     private val talk = mutableStateListOf<Line>()
@@ -128,7 +130,11 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         if (text.isEmpty() || state == State.Thinking) return
         voice.stop()
         add(Line(nextId++, fromUser = true, text = text))
-        if (date != null) dateMessages++
+        date?.let { scene ->
+            dateMessages++
+            // Asked for a photo during a date: she sends hers, no model needed.
+            if (AskaDate.asksPhoto(text)) return say(AskaDate.photoLine(scene), photo = AskaDate.photo(scene))
+        }
 
         // Alarm and reminder requests are understood directly: instant, reliable, and they work without a model.
         when (val request = AskaAlarms.parse(context, text)) {
@@ -187,7 +193,10 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 // She starts speaking as soon as the first sentence is written.
                 voice.beginStream()
                 var shownAt = 0L
-                engine.send(text).collect { chunk ->
+                // During a date, a small event of the scene now and then, for her only.
+                val scene = date
+                val beat = scene?.let { AskaDate.beat(it, dateMessages) }
+                engine.send(if (beat == null) text else "$text\n\n[Indication de scène : $beat]").collect { chunk ->
                     buffer.append(chunk)
                     // The screen follows at most ten times a second: the model needs the CPU more.
                     val now = System.currentTimeMillis()
@@ -332,8 +341,9 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     }
 
     private fun resetConversation(keepHistory: Boolean = true) {
-        val recent = if (keepHistory) recentForContext() else emptyList()
-        engine.converse(systemPrompt(), recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()))
+        val recent = if (keepHistory || date != null) recentForContext() else emptyList()
+        // Warmer during a date: livelier, less predictable answers.
+        engine.converse(systemPrompt(), recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()), if (date != null) 0.9f else 0.7f)
     }
 
     /** The latest exchanges that fit in the model's context, oldest first. */
@@ -377,8 +387,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     // ---- Conversation on screen.
 
-    private fun say(text: String, action: AlarmAction? = null, speak: Boolean = true) {
-        add(Line(nextId++, fromUser = false, text = text, action = action))
+    private fun say(text: String, action: AlarmAction? = null, speak: Boolean = true, photo: Int? = null) {
+        add(Line(nextId++, fromUser = false, text = text, action = action, photo = photo))
         saveHistory()
         if (speak) voice.speak(text)
     }
@@ -398,6 +408,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         raw.replace(Regex("(?s)<think>.*?(</think>|$)"), "").trimStart()
 
     private fun systemPrompt(): String {
+        date?.let { return AskaDate.systemPrompt(it, DeckSettings.handle, pet.stats.bond, memory.facts) }
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.FRENCH))
         return """
             Tu es As//ka, un programme indépendant : une IA draconique qui a élu domicile dans le cyberdeck de ${DeckSettings.handle}.
@@ -408,7 +419,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Tes seules actions possibles sur le téléphone : les alarmes, les minuteurs et tes rappels. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
             [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur, [[RAPPEL HH:MM | texte]] ou [[RAPPEL demain HH:MM | texte]] pour un rappel.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
-        """.trimIndent() + memoryBlock() + pet.forPrompt() + (date?.let { AskaDate.prompt(it, DeckSettings.handle) } ?: "")
+        """.trimIndent() + memoryBlock() + pet.forPrompt()
     }
 
     private fun memoryBlock(): String =
