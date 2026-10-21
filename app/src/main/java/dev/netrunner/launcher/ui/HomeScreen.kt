@@ -365,9 +365,9 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             )
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                HudButton("((•)) WI-FI", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
-                HudButton("✉ SMS", Cp.Yellow, Modifier.weight(1f)) { viewModel.openPanel(Panel.Messages) }
-                HudButton("☎ APPELS", Cp.Red, Modifier.weight(1f)) {
+                HudButton("WI-FI", Cp.Cyan, Modifier.weight(1f), HudGlyph.Wifi) { viewModel.openPanel(Panel.Wifi) }
+                HudButton("SMS", Cp.Yellow, Modifier.weight(1f), HudGlyph.Message) { viewModel.openPanel(Panel.Messages) }
+                HudButton("APPELS", Cp.Red, Modifier.weight(1f), HudGlyph.Phone) {
                     context.startActivity(Intent(context, DialerActivity::class.java))
                 }
             }
@@ -891,14 +891,19 @@ private fun QuickhackTile(
 }
 
 @Composable
-private fun HudButton(label: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
+private fun HudButton(label: String, color: Color, modifier: Modifier = Modifier, glyph: HudGlyph? = null, onClick: () -> Unit) {
+    Row(
         modifier
             .hudPanel(borderColor = color, fill = color.copy(alpha = 0.12f), cut = 14.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        glyph?.let {
+            HudIcon(it, color, size = 16.dp)
+            Spacer(Modifier.width(7.dp))
+        }
         Text(
             label,
             color = color,
@@ -1067,7 +1072,7 @@ private fun AppDrawer(
             if (matchingContacts.isNotEmpty()) {
                 item { SearchHeader("CONTACTS") }
                 items(matchingContacts, key = { "contact:${it.name}:${it.number}" }) { c ->
-                    SearchRow("☎", Cp.Red, c.name, c.number) { onContact(c.number) }
+                    SearchRow("", Cp.Red, c.name, c.number, HudGlyph.Phone) { onContact(c.number) }
                 }
             }
             if (q.isNotEmpty() && filtered.isNotEmpty()) item { SearchHeader("APPLIS") }
@@ -1102,7 +1107,7 @@ private fun SearchHeader(title: String) {
 }
 
 @Composable
-private fun SearchRow(icon: String, color: Color, title: String, subtitle: String, onClick: () -> Unit) {
+private fun SearchRow(icon: String, color: Color, title: String, subtitle: String, glyph: HudGlyph? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -1111,7 +1116,11 @@ private fun SearchRow(icon: String, color: Color, title: String, subtitle: Strin
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(icon, color = color, fontFamily = HudFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+        if (glyph != null) {
+            Box(Modifier.width(36.dp)) { HudIcon(glyph, color, size = 18.dp) }
+        } else {
+            Text(icon, color = color, fontFamily = HudFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 1)
