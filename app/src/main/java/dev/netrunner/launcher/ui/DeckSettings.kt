@@ -16,9 +16,17 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.unit.Dp
 import dev.netrunner.launcher.AppEntry
 
+/** How the launcher boots when its process starts. */
+enum class BootStyle(val label: String) { Bios("BIOS"), Breach("BREACH"), Corpo("CORPO"), Off("AUCUNE") }
+
 /** Display preferences, held in Compose state so every screen updates when one changes. */
 object DeckSettings {
     var neonIcons by mutableStateOf(true)
+        private set
+    var bootStyle by mutableStateOf(BootStyle.Bios)
+        private set
+    /** The runner's handle, shown during boot and on the lock screen greeting. */
+    var handle by mutableStateOf("V")
         private set
     private var loaded = false
 
@@ -26,6 +34,19 @@ object DeckSettings {
         if (loaded) return
         loaded = true
         neonIcons = prefs(context).getBoolean("neon_icons", true)
+        bootStyle = BootStyle.entries.firstOrNull { it.name == prefs(context).getString("boot_style", null) } ?: BootStyle.Bios
+        handle = prefs(context).getString("handle", "V") ?: "V"
+    }
+
+    fun setBootStyle(context: Context, style: BootStyle) {
+        prefs(context).edit().putString("boot_style", style.name).apply()
+        bootStyle = style
+    }
+
+    fun setHandle(context: Context, value: String) {
+        val clean = value.trim().take(16).ifEmpty { "V" }
+        prefs(context).edit().putString("handle", clean).apply()
+        handle = clean
     }
 
     fun setNeonIcons(context: Context, on: Boolean) {

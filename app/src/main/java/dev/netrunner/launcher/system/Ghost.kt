@@ -21,7 +21,7 @@ object Ghost {
     fun isOn(context: Context) = prefs(context).getBoolean(KEY_ON, false)
 
     /** Returns the lines to print: what was done and what is left to the user. */
-    fun engage(context: Context): List<String> {
+    fun engage(context: Context, openRadios: Boolean = true): List<String> {
         val c = context.applicationContext
         val report = mutableListOf<String>()
         val audio = c.getSystemService(AudioManager::class.java)
@@ -44,8 +44,10 @@ object Ghost {
         prefs(c).edit().putBoolean(KEY_ON, true).apply()
         report += "> HUD : profil GHOST"
         report += "> radios : coupe Wi-Fi / données dans le panneau, Bluetooth et localisation dans le volet"
-        runCatching {
-            c.startActivity(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        if (openRadios) {
+            runCatching {
+                c.startActivity(Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
         }
         return report
     }

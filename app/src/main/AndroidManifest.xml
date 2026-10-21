@@ -30,7 +30,11 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Contracts (calendar), timer command. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
+    <uses-feature android:name="android.software.live_wallpaper" android:required="false" />
 
     <!-- Lets the launcher see every app that has a launcher icon. -->
     <queries>
@@ -132,6 +136,62 @@
             android:screenOrientation="portrait"
             android:showWhenLocked="true"
             android:taskAffinity="dev.netrunner.launcher.lock" />
+
+        <!-- Live wallpaper (also behind the lock screen). -->
+        <service
+            android:name=".wallpaper.BreachWallpaperService"
+            android:exported="true"
+            android:label="@string/wallpaper_name"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/breach_wallpaper" />
+        </service>
+
+        <!-- Quick settings tiles. -->
+        <service
+            android:name=".tiles.GhostTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_ghost"
+            android:label="Mode furtif"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".tiles.LockTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_lock"
+            android:label="Verrou cyber"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".tiles.TerminalTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_terminal"
+            android:label="Terminal"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".tiles.WifiScanTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_wifi"
+            android:label="Scan Wi-Fi"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- Cyberdeck keyboard. Turn it on in Settings > Keyboards. -->
         <service

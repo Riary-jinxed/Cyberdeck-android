@@ -150,6 +150,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
     // Pressing Home brings us back to the main HUD.
     LaunchedEffect(homePresses) {
+        if (homePresses == 0) return@LaunchedEffect
         drawerOpen = false
         viewModel.openPanel(Panel.None)
     }
@@ -272,9 +273,10 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 onInfo = viewModel::openAppInfo,
             )
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HudButton("[ WI-FI ] ((•))", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
-                HudButton("[ APPELS ] ☎", Cp.Red, Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HudButton("((•)) WI-FI", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
+                HudButton("✉ SMS", Cp.Yellow, Modifier.weight(1f)) { viewModel.openPanel(Panel.Messages) }
+                HudButton("☎ APPELS", Cp.Red, Modifier.weight(1f)) {
                     context.startActivity(Intent(context, DialerActivity::class.java))
                 }
             }
@@ -347,6 +349,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             SettingsScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Messages,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            MessagesScreen(onClose = { viewModel.openPanel(Panel.None) })
         }
 
         AnimatedVisibility(

@@ -34,7 +34,19 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.netrunner.launcher.lock.CyberLock
 import dev.netrunner.launcher.system.Diagnostics
 import dev.netrunner.launcher.system.Ghost
+import dev.netrunner.launcher.system.Tones
 import dev.netrunner.launcher.system.UiSound
+import dev.netrunner.launcher.tiles.DeckTiles
+import dev.netrunner.launcher.wallpaper.BreachWallpaperService
+import android.widget.Toast
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 
 /** Netrunner settings and the permission diagnostic, all in one place. */
 @Composable
@@ -75,12 +87,42 @@ fun SettingsScreen(onClose: () -> Unit) {
         Chips(WallpaperMode.entries.map { it.label }, WallpaperMode.entries.indexOf(Wallpaper.mode)) { i ->
             Wallpaper.select(context, WallpaperMode.entries[i])
         }
+        Action("Fond d'écran système", "Met la grille de breach animée partout, y compris sur l'écran verrouillé") {
+            runCatching { context.startActivity(BreachWallpaperService.pickerIntent(context)) }
+        }
+        Label("Animation de démarrage")
+        Chips(BootStyle.entries.map { it.label }, BootStyle.entries.indexOf(DeckSettings.bootStyle)) { i ->
+            DeckSettings.setBootStyle(context, BootStyle.entries[i])
+        }
+        HandleField()
         Toggle("Icônes néon", "Icônes des applis teintées à la couleur de la faction", DeckSettings.neonIcons) {
             DeckSettings.setNeonIcons(context, !DeckSettings.neonIcons)
         }
         Toggle("Sons d'interface", "Bips, glitchs et vibrations (muets en mode silencieux)", remember(tick) { UiSound.isEnabled(context) }) {
             UiSound.setEnabled(context, !UiSound.isEnabled(context))
             tick++
+        }
+
+        Section("SONNERIES ET SONS")
+        Text(
+            "▶ écoute · ► installe dans les sons du téléphone et l'active par défaut",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
+        DisposableEffect(Unit) { onDispose { Tones.stopPreview() } }
+        Tones.Kind.entries.forEach { kind ->
+            Label(kind.label)
+            Tones.all.filter { it.kind == kind }.forEach { tone -> ToneRow(tone) { tick++ } }
+        }
+
+        Section("TUILES DU VOLET")
+        DeckTiles.all.forEach { entry ->
+            Action(entry.label, "Ajouter la tuile dans le volet de réglages rapides") {
+                if (!DeckTiles.requestAdd(context, entry)) {
+                    Toast.makeText(context, "Ouvre le volet ▸ crayon ▸ ajoute la tuile Netrunner", Toast.LENGTH_LONG).show()
+                }
+            }
         }
 
         Section("SÉCURITÉ")
@@ -134,6 +176,84 @@ fun SettingsScreen(onClose: () -> Unit) {
             fontSize = 11.sp,
         )
         Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun HandleField() {
+    val context = LocalContext.current
+    var text by remember { mutableStateOf(DeckSettings.handle) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.6f), cut = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("PSEUDO  ", color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it.take(16) },
+            singleLine = true,
+            textStyle = TextStyle(color = Cp.Yellow, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            cursorBrush = SolidColor(Cp.Yellow),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { DeckSettings.setHandle(context, text) }),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "OK",
+            color = Cp.Cyan,
+            fontFamily = HudFont,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable {
+                DeckSettings.setHandle(context, text)
+                UiSound.play(context, UiSound.Cue.Confirm)
+            }.padding(start = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun ToneRow(tone: Tones.Tone, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.5f), cut = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "▶",
+            color = Cp.Yellow,
+            fontFamily = HudFont,
+            fontSize = 18.sp,
+            modifier = Modifier.clickable { Tones.preview(tone) }.padding(end = 12.dp, top = 4.dp, bottom = 4.dp),
+        )
+        Text(tone.title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(
+            "DÉFINIR ►",
+            color = Cp.Cyan,
+            fontFamily = HudFont,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clickable {
+                    if (!Tones.canSetDefault(context)) {
+                        Toast.makeText(context, "Autorise « Modifier les paramètres système » puis réessaie", Toast.LENGTH_LONG).show()
+                        context.startActivity(Tones.writeSettingsIntent(context))
+                    } else if (Tones.install(context, tone)) {
+                        UiSound.play(context, UiSound.Cue.Confirm)
+                        Toast.makeText(context, "${tone.kind.label} : ${tone.title}", Toast.LENGTH_SHORT).show()
+                        onChanged()
+                    } else {
+                        Toast.makeText(context, "Échec de l'installation du son", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .padding(vertical = 6.dp),
+        )
     }
 }
 

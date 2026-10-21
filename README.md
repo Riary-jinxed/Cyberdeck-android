@@ -29,6 +29,11 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Icônes néon** : icônes des applis recolorées à la couleur de la faction (désactivable).
 - **Réseau (tiroir)** : catégories COMMS, MÉDIA, JEUX, NAV, OUTILS, onglet FRÉQUENTS trié par usage, et recherche universelle (applis, contacts, commandes ; préfixe `>` pour lancer une commande).
 - **Config et diagnostic** : appui long sur l'horloge, bouton du panneau de contrôle ou `config`. Réglages du deck et vérification de chaque autorisation Android/HyperOS avec accès direct à la bonne page.
+- **Messagerie SMS** : bouton « ✉ SMS » ou `sms`. Conversations façon messagerie du jeu (portraits, canaux, bulles angulaires), réponses rapides en options de dialogue et envoi par la SIM. L'appli SMS habituelle reste en place pour les MMS, le RCS et les notifications.
+- **Animation de démarrage** : styles BIOS, BREACH (matrice qui se résout en « accès autorisé ») ou CORPO (logo qui glitche), ou aucune ; affiche ton pseudo de runner. Dans Config.
+- **Fond d'écran système** : la grille de breach en fond d'écran animé Android, aussi sur l'écran verrouillé, aux couleurs de la faction et à 8 images/s.
+- **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons).
+- **Tuiles du volet** : mode furtif, verrou cyber, terminal et scan Wi-Fi dans les réglages rapides d'Android (ajout en un appui depuis Config).
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
@@ -82,10 +87,12 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `notify/` | Service d'écoute des notifications et réponses rapides |
 | `media/MediaWatcher.kt` | Suivi et contrôle du lecteur audio actif |
 | `ui/FeedScreen.kt`, `ui/MediaWidget.kt`, `ui/QuickPanel.kt` | Flux, widget musique, réglages rapides |
+| `sms/SmsStore.kt`, `ui/MessagesScreen.kt` | Lecture et envoi des SMS, messagerie |
+| `system/Tones.kt` | Synthèse et installation des sonneries |
+| `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
+| `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 
 ## Idées pour la suite
 
 - Widgets Android (météo, musique) dans un cadre HUD
 - Pack d'icônes monochromes jaune/cyan
-- Police Rajdhani/Orbitron embarquée
-- Fond d'écran animé (pluie néon)

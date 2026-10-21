@@ -99,7 +99,8 @@ class Terminal(
             "clear", "cls" -> lines.clear()
             "exit", "quit" -> openPanel(Panel.None)
             "wifi", "wardrive" -> openPanel(Panel.Wifi)
-            "notifs", "feed", "messages" -> openPanel(Panel.Feed)
+            "notifs", "feed" -> openPanel(Panel.Feed)
+            "sms", "messages", "msg" -> openPanel(Panel.Messages)
             "control", "settings", "cc" -> openPanel(Panel.Quick)
             "config", "reglages", "diag", "diagnostic" -> openPanel(Panel.Settings)
             "claude", "glitch", "chat", "ai", "ia" -> openClaude()
@@ -400,6 +401,7 @@ class Terminal(
             "open <appli>    lance une appli (ex : open spotify)",
             "wifi            scanner Wi-Fi et traque de borne",
             "notifs          flux des notifications (SMS, WhatsApp, mails)",
+            "sms             messagerie SMS façon jeu",
             "control         panneau de réglages rapides",
             "config / diag   réglages Netrunner et diagnostic des autorisations",
             "call [numéro]   ouvre la holo-liaison (appels)",
