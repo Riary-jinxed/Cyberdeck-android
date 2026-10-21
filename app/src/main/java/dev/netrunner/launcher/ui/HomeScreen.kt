@@ -373,8 +373,9 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            // Home pages: HUD (music, messages, zone, implants), quickhacks, then Android widgets.
-            val pages = rememberPagerState { 3 }
+            // Home pages: HUD (music, messages, zone, implants) then Android widgets.
+            // The quickhacks live on the deck hub (swipe left), leaving the room to the widgets.
+            val pages = rememberPagerState { 2 }
             HorizontalPager(
                 state = pages,
                 modifier = Modifier.weight(1f),
@@ -398,21 +399,11 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         ZoneWidget()
                         ImplantHud()
                     }
-                } else if (page == 1) {
-                    QuickhackGrid(
-                        slots = slots,
-                        folders = folders,
-                        onLaunch = viewModel::requestLaunch,
-                        onUnpin = viewModel::toggleFavorite,
-                        onInfo = viewModel::openAppInfo,
-                        onMoveToFolder = viewModel::moveToFolder,
-                        onOpenFolder = { openFolder = it },
-                    )
                 } else {
                     WidgetsPage(Modifier.fillMaxSize())
                 }
             }
-            PageDots(count = 3, current = pages.currentPage, labels = listOf("HUD", "QUICKHACKS", "WIDGETS"))
+            PageDots(count = 2, current = pages.currentPage, labels = listOf("HUD", "WIDGETS"))
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HudButton("WI-FI", Cp.Cyan, Modifier.weight(1f), HudGlyph.Wifi) { viewModel.openPanel(Panel.Wifi) }
@@ -524,6 +515,20 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         ) {
             HubScreen(
                 apps = apps,
+                quickhacks = {
+                    QuickhackGrid(
+                        slots = slots,
+                        folders = folders,
+                        onLaunch = { app ->
+                            viewModel.openPanel(Panel.None)
+                            viewModel.requestLaunch(app)
+                        },
+                        onUnpin = viewModel::toggleFavorite,
+                        onInfo = viewModel::openAppInfo,
+                        onMoveToFolder = viewModel::moveToFolder,
+                        onOpenFolder = { openFolder = it },
+                    )
+                },
                 shortcuts = rememberHubShortcuts(
                     openAska = { viewModel.openPanel(Panel.Aska) },
                     openStats = { viewModel.openPanel(Panel.Stats) },
@@ -560,6 +565,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 dir = dir,
                 onLaunch = { app ->
                     openFolder = null
+                    viewModel.openPanel(Panel.None)
                     viewModel.requestLaunch(app)
                 },
                 onRemove = { app -> viewModel.removeFromFolder(dir.folder.id, app.key) },
@@ -744,12 +750,8 @@ private fun QuickhackGrid(
     onMoveToFolder: (String, String?) -> Unit,
     onOpenFolder: (String) -> Unit,
 ) {
-    // A home page of its own: rows of four, scrolling when there are many.
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
+    // Rows of four, inside the hub's scrolling column.
+    Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "// QUICKHACKS",

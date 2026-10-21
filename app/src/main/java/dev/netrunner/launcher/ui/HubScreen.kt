@@ -43,12 +43,13 @@ import kotlinx.coroutines.launch
 data class HubShortcut(val label: String, val glyph: String, val color: @Composable () -> Color, val onClick: () -> Unit)
 
 /**
- * The deck's app hub (swipe left by default): every Netrunner app installed from the repository,
- * the ones still to install, and shortcuts (Claude, As//ka, stats…).
+ * The deck's app hub (swipe left by default): the quickhacks, shortcuts (Claude, As//ka, stats…),
+ * every Netrunner app installed from the repository and the ones still to install.
  */
 @Composable
 fun HubScreen(
     apps: List<AppEntry>,
+    quickhacks: @Composable () -> Unit,
     shortcuts: List<HubShortcut>,
     onLaunch: (AppEntry) -> Unit,
     onClose: () -> Unit,
@@ -96,6 +97,8 @@ fun HubScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PanelHeader(title = "// APPLIS DU DECK", accent = Cp.Yellow, onClose = onClose)
+
+        quickhacks()
 
         HubLabel("RACCOURCIS")
         shortcuts.chunked(3).forEach { row ->
