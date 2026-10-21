@@ -65,7 +65,7 @@ fun BreachOverlay(app: AppEntry, onDone: () -> Unit) {
             .padding(28.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Image(app.icon, contentDescription = null, modifier = Modifier.size(56.dp))
+        AppIcon(app, 56.dp, tint = Cp.Cyan)
         Spacer(Modifier.height(20.dp))
         steps.take(shown).forEachIndexed { index, (text, color) ->
             Text(

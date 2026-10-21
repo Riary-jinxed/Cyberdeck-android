@@ -61,7 +61,7 @@ private fun Context.open(intent: Intent) {
  * ringer, rotation and Do Not Disturb are driven from here.
  */
 @Composable
-fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
+fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit, onSettings: () -> Unit) {
     val context = LocalContext.current
     val audio = remember { context.getSystemService(AudioManager::class.java) }
     val notifications = remember { context.getSystemService(NotificationManager::class.java) }
@@ -223,6 +223,7 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmallHudButton("[ VOLET SYSTÈME ]", Cp.Cyan, onSystemShade)
+            SmallHudButton("[ CONFIG NETRUNNER ]", Cp.Yellow, onSettings)
         }
     }
 }

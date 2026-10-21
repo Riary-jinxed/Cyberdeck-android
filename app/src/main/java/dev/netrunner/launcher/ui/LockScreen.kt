@@ -123,7 +123,7 @@ fun LockScreen(onUnlock: () -> Unit) {
             Spacer(Modifier.height(40.dp))
             GlitchText(
                 text = now.format(LockTime),
-                style = TextStyle(fontFamily = HudFont, fontSize = 96.sp, fontWeight = FontWeight.Black),
+                style = TextStyle(fontFamily = DisplayFont, fontSize = 72.sp, fontWeight = FontWeight.Black),
                 color = Cp.Yellow,
             )
             Text(

@@ -25,6 +25,10 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Sons d'interface** : bips et glitchs synthétisés + vibrations, coupés si le téléphone est en silencieux (`sound off` pour les désactiver).
 - **Interface de piratage** : fond « breach protocol » (grille de codes hexadécimaux balayée par un curseur) ou pluie de code, effet cathodique (vignettage, bande défilante, scintillement) et glitchs ponctuels de l'écran. Le fond vire au rouge sous 20 % de batterie et accélère en charge. 10 à 12 images/s, à l'arrêt dès que l'écran n'est pas visible.
 - **Terminal** : aussi `torch`, `timer`, `calc`, `qr`, `speedtest`, `ghost`, `theme`, `wallpaper`, `sound`.
+- **Polices HUD** : Rajdhani pour l'interface, Orbitron pour l'horloge, Share Tech Mono pour le terminal (licence SIL OFL, voir `licenses/`).
+- **Icônes néon** : icônes des applis recolorées à la couleur de la faction (désactivable).
+- **Réseau (tiroir)** : catégories COMMS, MÉDIA, JEUX, NAV, OUTILS, onglet FRÉQUENTS trié par usage, et recherche universelle (applis, contacts, commandes ; préfixe `>` pour lancer une commande).
+- **Config et diagnostic** : appui long sur l'horloge, bouton du panneau de contrôle ou `config`. Réglages du deck et vérification de chaque autorisation Android/HyperOS avec accès direct à la bonne page.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
@@ -68,6 +72,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/WifiScreen.kt` | Liste des bornes et mode traque |
 | `system/ClaudeApp.kt` | Ouvre l'appli Claude |
 | `ui/DeckChrome.kt` | Cadre HUD, barre RAM, séquence de démarrage |
+| `ui/SettingsScreen.kt`, `system/Diagnostics.kt` | Réglages et diagnostic des autorisations |
+| `ui/DeckSettings.kt` | Icônes néon, préférences d'affichage |
 | `ui/LiveWallpaper.kt` | Fond breach / pluie de code, effet cathodique et glitchs |
 | `lock/`, `ui/LockScreen.kt` | Verrou cyber |
 | `call/` | Service d'appel (InCallService), notifications d'appel, contacts, journal |

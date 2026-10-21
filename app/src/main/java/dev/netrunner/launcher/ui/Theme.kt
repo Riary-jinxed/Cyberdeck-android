@@ -9,7 +9,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+import dev.netrunner.launcher.R
 
 data class Palette(
     val yellow: Color,
@@ -88,7 +93,25 @@ object Cp {
     private const val KEY = "faction"
 }
 
-val HudFont: FontFamily = FontFamily.Monospace
+/** Body and labels: Rajdhani, the narrow technical sans close to the game's HUD. */
+val HudFont: FontFamily = FontFamily(
+    Font(R.font.rajdhani_medium, FontWeight.Normal),
+    Font(R.font.rajdhani_medium, FontWeight.Medium),
+    Font(R.font.rajdhani_semibold, FontWeight.SemiBold),
+    Font(R.font.rajdhani_bold, FontWeight.Bold),
+    Font(R.font.rajdhani_bold, FontWeight.Black),
+)
+
+/** Big numbers and titles: Orbitron (variable font). */
+@OptIn(ExperimentalTextApi::class)
+val DisplayFont: FontFamily = FontFamily(
+    Font(R.font.orbitron, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.orbitron, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    Font(R.font.orbitron, FontWeight.Black, variationSettings = FontVariation.Settings(FontVariation.weight(900))),
+)
+
+/** Terminal and aligned columns: Share Tech Mono. */
+val MonoFont: FontFamily = FontFamily(Font(R.font.share_tech_mono, FontWeight.Normal))
 
 @Composable
 fun NetrunnerTheme(content: @Composable () -> Unit) {

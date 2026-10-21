@@ -108,7 +108,7 @@ fun DeckRamBar() {
 }
 
 private val BootLines = listOf(
-    "NETRUNNER BIOS v0.6 // CYBERDECK MK.V",
+    "NETRUNNER BIOS v0.8 // CYBERDECK MK.V",
     "> MONTAGE DU CYBERDECK............ OK",
     "> SLOTS RAM....................... OK",
     "> DAEMONS QUICKHACK............... CHARGÉS",

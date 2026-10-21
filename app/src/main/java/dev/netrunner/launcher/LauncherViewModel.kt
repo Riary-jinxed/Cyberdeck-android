@@ -21,6 +21,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
 
+    private val _usage = MutableStateFlow(repo.usage())
+    val usage: StateFlow<Map<String, Int>> = _usage.asStateFlow()
+
     private val _favorites = MutableStateFlow(repo.favorites())
     val favorites: StateFlow<List<String>> = _favorites.asStateFlow()
 
@@ -29,7 +32,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
 
     /** Full-screen panel shown over the home HUD. */
-    enum class Panel { None, Terminal, Wifi, Feed, Quick }
+    enum class Panel { None, Terminal, Wifi, Feed, Quick, Settings }
 
     /** The boot log plays once per launcher process, not on every return home. */
     var booted = false
@@ -81,6 +84,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     fun completeLaunch() {
         _launching.value?.let(repo::launch)
+        _usage.value = repo.usage()
         _launching.value = null
     }
 

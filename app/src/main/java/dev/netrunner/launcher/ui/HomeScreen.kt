@@ -5,42 +5,47 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -58,7 +63,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -72,24 +76,27 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.netrunner.launcher.AppEntry
-import dev.netrunner.launcher.LauncherViewModel
-import dev.netrunner.launcher.LauncherViewModel.Panel
-import dev.netrunner.launcher.media.MediaWatcher
-import dev.netrunner.launcher.notify.NotificationHub
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import dev.netrunner.launcher.call.DialerActivity
-import dev.netrunner.launcher.system.BatteryState
-import dev.netrunner.launcher.system.HomeRole
-import dev.netrunner.launcher.system.ClaudeApp
-import dev.netrunner.launcher.system.Ghost
-import dev.netrunner.launcher.system.SystemInfo
-import dev.netrunner.launcher.system.UiSound
-import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import dev.netrunner.launcher.AppCategory
+import dev.netrunner.launcher.AppEntry
+import dev.netrunner.launcher.LauncherViewModel
+import dev.netrunner.launcher.LauncherViewModel.Panel
+import dev.netrunner.launcher.call.Contacts
+import dev.netrunner.launcher.call.DialerActivity
+import dev.netrunner.launcher.call.PhoneContact
+import dev.netrunner.launcher.media.MediaWatcher
+import dev.netrunner.launcher.notify.NotificationHub
+import dev.netrunner.launcher.system.BatteryState
+import dev.netrunner.launcher.system.ClaudeApp
+import dev.netrunner.launcher.system.Ghost
+import dev.netrunner.launcher.system.HomeRole
+import dev.netrunner.launcher.system.SystemInfo
+import dev.netrunner.launcher.system.UiSound
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val SecondsFormat = DateTimeFormatter.ofPattern("ss")
@@ -109,6 +116,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val favoriteKeys by viewModel.favorites.collectAsStateWithLifecycle()
     val launching by viewModel.launching.collectAsStateWithLifecycle()
+    val usage by viewModel.usage.collectAsStateWithLifecycle()
     val panel by viewModel.panel.collectAsStateWithLifecycle()
     var drawerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -158,6 +166,11 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
     var booting by remember { mutableStateOf(!viewModel.booted) }
     remember { Wallpaper.load(context.applicationContext) }
+    remember { DeckSettings.load(context.applicationContext) }
+    // Glitch burst whenever a panel or the drawer opens.
+    LaunchedEffect(panel, drawerOpen) {
+        if (panel != Panel.None || drawerOpen) GlitchBus.trigger()
+    }
     val power = rememberBattery()
 
     Box(
@@ -218,10 +231,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             // Double tap on the clock: ghost mode on or off.
             Box(
                 Modifier.pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = {
-                        UiSound.play(context, UiSound.Cue.Glitch)
-                        Ghost.toggle(context)
-                    })
+                    detectTapGestures(
+                        onDoubleTap = {
+                            UiSound.play(context, UiSound.Cue.Glitch)
+                            Ghost.toggle(context)
+                        },
+                        // Long press on the clock: Netrunner settings.
+                        onLongPress = { viewModel.openPanel(Panel.Settings) },
+                    )
                 }
             ) { ClockBlock() }
             Spacer(Modifier.height(20.dp))
@@ -267,12 +284,24 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             AppDrawer(
                 apps = apps,
                 favoriteKeys = favoriteKeys,
+                usage = usage,
                 onLaunch = { app ->
                     viewModel.requestLaunch(app)
                     drawerOpen = false
                 },
                 onTogglePin = viewModel::toggleFavorite,
                 onInfo = viewModel::openAppInfo,
+                onCommand = { command ->
+                    drawerOpen = false
+                    viewModel.openPanel(Panel.Terminal)
+                    viewModel.terminal.submit(command)
+                },
+                onContact = { number ->
+                    drawerOpen = false
+                    context.startActivity(
+                        Intent(context, DialerActivity::class.java).setData(Uri.fromParts("tel", number, null))
+                    )
+                },
                 onClose = { drawerOpen = false },
             )
         }
@@ -304,7 +333,16 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                     viewModel.openPanel(Panel.None)
                     expandNotifications(context)
                 },
+                onSettings = { viewModel.openPanel(Panel.Settings) },
             )
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Settings,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            SettingsScreen(onClose = { viewModel.openPanel(Panel.None) })
         }
 
         AnimatedVisibility(
@@ -410,7 +448,7 @@ private fun ClockBlock() {
     Row(verticalAlignment = Alignment.Bottom) {
         GlitchText(
             text = now.format(TimeFormat),
-            style = TextStyle(fontFamily = HudFont, fontSize = 84.sp, fontWeight = FontWeight.Black),
+            style = TextStyle(fontFamily = DisplayFont, fontSize = 64.sp, fontWeight = FontWeight.Black),
             color = Cp.Yellow,
         )
         Text(
@@ -527,7 +565,7 @@ private fun QuickhackTile(
                 .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(app.icon, contentDescription = app.label, modifier = Modifier.size(40.dp))
+            AppIcon(app, 40.dp)
             Spacer(Modifier.height(6.dp))
             Text(
                 app.label.uppercase(),
@@ -570,20 +608,49 @@ private fun HudButton(label: String, color: Color, modifier: Modifier = Modifier
     }
 }
 
+private val SearchCommands = listOf(
+    "scan", "ports", "ping", "ip", "wifi", "speedtest", "ghost", "theme", "wallpaper", "sound", "torch",
+    "timer", "calc", "qr", "lock", "keyboard", "call", "claude", "sysinfo", "battery", "notifs", "help",
+)
+
+private const val FrequentTab = -1
+private const val AllTab = -2
+
+/**
+ * The "network": every app, by category or by use, with a universal search that also finds
+ * contacts and terminal commands.
+ */
 @Composable
 private fun AppDrawer(
     apps: List<AppEntry>,
     favoriteKeys: List<String>,
+    usage: Map<String, Int>,
     onLaunch: (AppEntry) -> Unit,
     onTogglePin: (AppEntry) -> Unit,
     onInfo: (AppEntry) -> Unit,
+    onCommand: (String) -> Unit,
+    onContact: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     var query by remember { mutableStateOf("") }
+    var tab by remember { mutableIntStateOf(AllTab) }
     val focus = LocalFocusManager.current
-    val filtered = remember(apps, query) {
-        if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
+    val contacts by produceState(emptyList<PhoneContact>()) {
+        value = withContext(Dispatchers.IO) { Contacts.all(context) }
     }
+    val q = query.trim()
+    val filtered = remember(apps, q, tab, usage) {
+        when {
+            q.isNotEmpty() -> apps.filter { it.label.contains(q, ignoreCase = true) }
+                .sortedWith(compareByDescending<AppEntry> { it.label.startsWith(q, ignoreCase = true) }.thenByDescending { usage[it.key] ?: 0 })
+            tab == FrequentTab -> apps.filter { (usage[it.key] ?: 0) > 0 }.sortedByDescending { usage[it.key] ?: 0 }
+            tab == AllTab -> apps
+            else -> apps.filter { it.category.ordinal == tab }
+        }
+    }
+    val matchingCommands = if (q.isEmpty()) emptyList() else SearchCommands.filter { it.startsWith(q.removePrefix(">").trim().substringBefore(' '), true) }.take(4)
+    val matchingContacts = if (q.length < 2) emptyList() else contacts.filter { it.name.contains(q, true) || it.number.filter(Char::isDigit).contains(q.filter(Char::isDigit).ifEmpty { "\u0000" }) }.take(5)
 
     Column(
         Modifier
@@ -597,10 +664,10 @@ private fun AppDrawer(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "// RÉSEAU : ${filtered.size} NŒUDS",
+                "// RÉSEAU : ${apps.size} NŒUDS",
                 color = Cp.Yellow,
                 fontFamily = HudFont,
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
@@ -608,7 +675,7 @@ private fun AppDrawer(
                 "[ X ]",
                 color = Cp.Red,
                 fontFamily = HudFont,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .clickable(onClick = onClose)
@@ -620,11 +687,16 @@ private fun AppDrawer(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
-            textStyle = TextStyle(color = Cp.Cyan, fontFamily = HudFont, fontSize = 16.sp),
+            textStyle = TextStyle(color = Cp.Cyan, fontFamily = HudFont, fontSize = 17.sp),
             cursorBrush = SolidColor(Cp.Yellow),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = {
-                filtered.firstOrNull()?.let(onLaunch)
+                when {
+                    q.startsWith(">") -> onCommand(q.removePrefix(">").trim())
+                    filtered.isNotEmpty() -> onLaunch(filtered.first())
+                    matchingContacts.isNotEmpty() -> onContact(matchingContacts.first().number)
+                    matchingCommands.isNotEmpty() -> onCommand(q)
+                }
                 focus.clearFocus()
             }),
             modifier = Modifier.fillMaxWidth(),
@@ -636,10 +708,10 @@ private fun AppDrawer(
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("> ", color = Cp.Yellow, fontFamily = HudFont, fontSize = 16.sp)
+                    Text("> ", color = Cp.Yellow, fontFamily = HudFont, fontSize = 17.sp)
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty()) {
-                            Text("RECHERCHER_", color = Cp.Dim, fontFamily = HudFont, fontSize = 16.sp)
+                            Text("APPLIS, CONTACTS, COMMANDES_", color = Cp.Dim, fontFamily = HudFont, fontSize = 17.sp)
                         }
                         inner()
                     }
@@ -647,10 +719,55 @@ private fun AppDrawer(
             },
         )
         Spacer(Modifier.height(10.dp))
+        if (q.isEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val tabs = listOf(AllTab to "TOUT", FrequentTab to "★ FRÉQUENTS") +
+                    AppCategory.entries.map { it.ordinal to it.label }
+                tabs.forEach { (id, label) ->
+                    val selected = tab == id
+                    val count = when (id) {
+                        AllTab -> apps.size
+                        FrequentTab -> apps.count { (usage[it.key] ?: 0) > 0 }
+                        else -> apps.count { it.category.ordinal == id }
+                    }
+                    if (count == 0 && id >= 0) return@forEach
+                    Text(
+                        "$label $count",
+                        color = if (selected) Cp.Background else Cp.Cyan,
+                        fontFamily = HudFont,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.7f), fill = if (selected) Cp.Cyan else Cp.Panel, cut = 6.dp)
+                            .clickable { tab = id }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
         LazyColumn(
             Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (matchingCommands.isNotEmpty()) {
+                item { SearchHeader("COMMANDES") }
+                items(matchingCommands, key = { "cmd:$it" }) { command ->
+                    SearchRow(">_", Cp.Yellow, command, "lancer dans le terminal") { onCommand(command) }
+                }
+            }
+            if (matchingContacts.isNotEmpty()) {
+                item { SearchHeader("CONTACTS") }
+                items(matchingContacts, key = { "contact:${it.name}:${it.number}" }) { c ->
+                    SearchRow("☎", Cp.Red, c.name, c.number) { onContact(c.number) }
+                }
+            }
+            if (q.isNotEmpty() && filtered.isNotEmpty()) item { SearchHeader("APPLIS") }
             items(filtered, key = { it.key }) { app ->
                 DrawerRow(
                     app = app,
@@ -660,6 +777,41 @@ private fun AppDrawer(
                     onInfo = onInfo,
                 )
             }
+            if (q.isNotEmpty() && filtered.isEmpty() && matchingContacts.isEmpty() && matchingCommands.isEmpty()) {
+                item {
+                    Text("Aucun nœud. Préfixe par « > » pour lancer une commande.", color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchHeader(title: String) {
+    Text(
+        "// $title",
+        color = Cp.Yellow,
+        fontFamily = HudFont,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+@Composable
+private fun SearchRow(icon: String, color: Color, title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = color.copy(alpha = 0.5f), cut = 8.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(icon, color = color, fontFamily = HudFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 1)
         }
     }
 }
@@ -693,7 +845,7 @@ private fun DrawerRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(app.icon, contentDescription = null, modifier = Modifier.size(36.dp))
+            AppIcon(app, 36.dp, tint = Cp.Cyan)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

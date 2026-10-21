@@ -76,7 +76,7 @@ class Terminal(
     private var torchOn = false
 
     init {
-        out("CYBERDECK OS v0.7 — Netrunner", Tone.Ok)
+        out("CYBERDECK OS v0.8 — Netrunner", Tone.Ok)
         out("Tape « help » pour la liste des commandes.", Tone.Dim)
     }
 
@@ -101,6 +101,7 @@ class Terminal(
             "wifi", "wardrive" -> openPanel(Panel.Wifi)
             "notifs", "feed", "messages" -> openPanel(Panel.Feed)
             "control", "settings", "cc" -> openPanel(Panel.Quick)
+            "config", "reglages", "diag", "diagnostic" -> openPanel(Panel.Settings)
             "claude", "glitch", "chat", "ai", "ia" -> openClaude()
             "call", "dial", "tel" -> dial(args.joinToString(""))
             "keyboard", "kb", "clavier" -> keyboard()
@@ -400,6 +401,7 @@ class Terminal(
             "wifi            scanner Wi-Fi et traque de borne",
             "notifs          flux des notifications (SMS, WhatsApp, mails)",
             "control         panneau de réglages rapides",
+            "config / diag   réglages Netrunner et diagnostic des autorisations",
             "call [numéro]   ouvre la holo-liaison (appels)",
             "keyboard        active / choisit le clavier Netrunner",
             "lock [on|off]   écran de verrouillage cyberdeck",

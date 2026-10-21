@@ -73,18 +73,18 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
             Text(
                 "// TERMINAL — CYBERDECK",
                 color = Cp.Yellow,
-                fontFamily = HudFont,
+                fontFamily = MonoFont,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
             if (terminal.busy) {
-                Text("● EXEC", color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp)
+                Text("● EXEC", color = Cp.Red, fontFamily = MonoFont, fontSize = 12.sp)
             }
             Text(
                 "[ X ]",
                 color = Cp.Red,
-                fontFamily = HudFont,
+                fontFamily = MonoFont,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
@@ -116,7 +116,7 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
                         Tone.Dim -> Cp.Dim
                         Tone.Normal -> Cp.Text
                     },
-                    fontFamily = HudFont,
+                    fontFamily = MonoFont,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                 )
@@ -133,7 +133,7 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
                 Text(
                     command,
                     color = Cp.Cyan,
-                    fontFamily = HudFont,
+                    fontFamily = MonoFont,
                     fontSize = 12.sp,
                     modifier = Modifier
                         .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.6f), cut = 6.dp)
@@ -146,7 +146,7 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
             value = input,
             onValueChange = { input = it },
             singleLine = true,
-            textStyle = TextStyle(color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp),
+            textStyle = TextStyle(color = Cp.Text, fontFamily = MonoFont, fontSize = 14.sp),
             cursorBrush = SolidColor(Cp.Yellow),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
@@ -163,10 +163,10 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("$ ", color = Cp.Yellow, fontFamily = HudFont, fontSize = 14.sp)
+                    Text("$ ", color = Cp.Yellow, fontFamily = MonoFont, fontSize = 14.sp)
                     Box(Modifier.weight(1f)) {
                         if (input.isEmpty()) {
-                            Text("commande_", color = Cp.Dim, fontFamily = HudFont, fontSize = 14.sp)
+                            Text("commande_", color = Cp.Dim, fontFamily = MonoFont, fontSize = 14.sp)
                         }
                         inner()
                     }

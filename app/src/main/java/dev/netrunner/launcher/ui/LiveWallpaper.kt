@@ -193,6 +193,19 @@ fun Modifier.crtGlitch(): Modifier = composed {
             tears = emptyList()
         }
     }
+    // Short burst on demand (panel opening).
+    LaunchedEffect(GlitchBus.pulse) {
+        if (GlitchBus.pulse == 0) return@LaunchedEffect
+        repeat(3) {
+            jitter = Random.nextFloat() * 18f - 9f
+            tears = List(Random.nextInt(2, 5)) {
+                Triple(Random.nextFloat(), 0.004f + Random.nextFloat() * 0.04f, Random.nextBoolean())
+            }
+            delay(45)
+        }
+        jitter = 0f
+        tears = emptyList()
+    }
     this
         .graphicsLayer { translationX = jitter * density }
         .drawWithContent {
