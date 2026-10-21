@@ -1,7 +1,10 @@
 package dev.netrunner.launcher.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.text.format.DateUtils
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -30,6 +33,7 @@ import dev.netrunner.launcher.data.Agenda
 import dev.netrunner.launcher.data.Contract
 import dev.netrunner.launcher.data.Weather
 import dev.netrunner.launcher.data.ZoneConditions
+import dev.netrunner.launcher.system.UiSound
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -62,6 +66,11 @@ fun ZoneWidget() {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Tapping the conditions opens the Netrunner weather app.
+        Column(
+            Modifier.fillMaxWidth().clickable { openWeather(context) },
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
         Text("// CONDITIONS DE ZONE", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         val z = zone
         when {
@@ -82,6 +91,7 @@ fun ZoneWidget() {
             }
             else -> Text("> en attente d'une position…", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
         }
+        }
 
         Spacer(Modifier.padding(top = 2.dp))
         Text("// CONTRATS", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -92,6 +102,18 @@ fun ZoneWidget() {
             contracts.isEmpty() -> Text("> aucun contrat dans les 48 h", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
             else -> contracts.forEach { c -> ContractRow(c) { Agenda.open(context, c) } }
         }
+    }
+}
+
+private const val WEATHER_PACKAGE = "dev.netrunner.weather"
+
+private fun openWeather(context: Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage(WEATHER_PACKAGE)
+    if (intent != null) {
+        UiSound.play(context, UiSound.Cue.Tap)
+        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } else {
+        Toast.makeText(context, "Installe Météo depuis Applis du deck (glisser à gauche)", Toast.LENGTH_LONG).show()
     }
 }
 
