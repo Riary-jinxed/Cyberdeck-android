@@ -32,13 +32,15 @@ class AgendaState(context: Context) {
     /** The editor: a draft to create, or an existing contract to edit. */
     var editing by mutableStateOf<Contract?>(null)
 
-    // Reloads when Google sync or another app changes the calendar.
+    // Reloads when Google sync or another app changes the calendar, or As//ka's reminders change.
     private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean) { version++ }
     }
 
     fun start() {
         runCatching { app.contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, observer) }
+        // As//ka's reminders, notified by the launcher's provider.
+        runCatching { app.contentResolver.registerContentObserver(android.net.Uri.parse("content://dev.netrunner.launcher.reminders"), true, observer) }
         version++
     }
 
