@@ -145,6 +145,16 @@ Lecteur de QR codes et codes-barres dans le module `scanner/` (package `dev.netr
 - **Historique** des 100 derniers scans, vibration réglable.
 - **Mises à jour** : releases GitHub `scanner-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## Météo Netrunner (appli à part)
+
+Prévisions dans le module `weather/` (package `dev.netrunner.weather`, même clé de signature), au style terminal, données Open-Meteo (sans clé ni compte).
+
+- **Rapport de mission** : conditions actuelles (température, ressenti, vent, humidité, pression), conseil du jour.
+- **24 h** en courbe de température avec risque de pluie, et **7 jours** en barres min/max.
+- **Lieux** : position du téléphone (localisation approximative) ou villes recherchées et enregistrées.
+- **Hors ligne** : la dernière prévision reste affichée.
+- **Mises à jour** : releases GitHub `weather-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
