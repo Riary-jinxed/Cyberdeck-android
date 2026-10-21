@@ -144,22 +144,15 @@ object AskaDate {
         return PHOTO.containsMatchIn(t)
     }
 
-    fun photo(scene: Scene): Int = when (scene) {
-        Scene.Cafe -> R.drawable.aska_date_cafe
-        Scene.Roof -> R.drawable.aska_date_roof
-        Scene.Arcade -> R.drawable.aska_date_arcade
+    /** Her photo for the scene, when she has one. */
+    fun photo(scene: Scene): Int? = when (scene) {
         Scene.Home -> R.drawable.aska_date_home
-        Scene.Market -> R.drawable.aska_date_market
-        Scene.Beach -> R.drawable.aska_date_beach
+        else -> null
     }
 
     fun photoLine(scene: Scene): String = when (scene) {
-        Scene.Cafe -> "*te tend son téléphone* Je me suis prise en photo avec mon macaron… pour me souvenir de ce soir. Tu la gardes ?"
-        Scene.Roof -> "*bzzt* Une photo pour toi. Sous la pluie, avec la ville… et un peu de moi au milieu. Héhé."
-        Scene.Arcade -> "*te montre l'écran, toute fière* Regarde ! Moi et ma nouvelle peluche. On est jolies toutes les deux, non ?"
-        Scene.Home -> "*cache à moitié son visage derrière son téléphone* Je… je nous ai pris en photo. Enfin, surtout moi dans ton plaid. Ne te moque pas."
-        Scene.Market -> "*t'envoie une photo, la bouche encore pleine* Preuve que ce mochi en forme de cœur a existé !"
-        Scene.Beach -> "*doucement* Je voulais garder cet instant. Alors je l'ai pris en photo. Pour toi."
+        Scene.Home -> "*cache à moitié son visage derrière son téléphone* Je… je me suis prise en photo dans ton plaid. Ne te moque pas, d'accord ?"
+        else -> "*rougit et cache son téléphone* Pas de photo ici… je ne suis pas prête. Une autre fois, promis !"
     }
 
     fun goodbye(scene: Scene): String = when (scene) {
