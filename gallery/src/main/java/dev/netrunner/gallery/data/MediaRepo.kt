@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.MediaStore.Files.FileColumns as f
 import android.util.LruCache
 import android.util.Size
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +62,6 @@ object MediaRepo {
     /** Everything, newest first. */
     suspend fun all(context: Context): List<Media> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        val f = MediaStore.Files.FileColumns
         val out = mutableListOf<Media>()
         context.contentResolver.query(
             collection,

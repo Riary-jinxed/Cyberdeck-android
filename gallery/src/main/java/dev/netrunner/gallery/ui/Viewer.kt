@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalFoundationApi::class)
+
 package dev.netrunner.gallery.ui
 
 import android.app.RecoverableSecurityException
@@ -71,7 +73,6 @@ import java.util.Date
 import java.util.Locale
 
 /** Full-screen viewer: swipe between photos, pinch or double-tap to zoom, holo filter, share, export, delete. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClose: () -> Unit) {
     val context = LocalContext.current
