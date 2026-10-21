@@ -166,6 +166,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             .cyberGrid()
             .scanlines()
             .hudFrame()
+            .crtGlitch()
     ) {
         LiveWallpaper(batteryLevel = power.level, charging = power.charging)
         Column(
@@ -224,15 +225,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 }
             ) { ClockBlock() }
             Spacer(Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Mascot(
-                    mood = MascotMood.Idle,
-                    size = 64.dp,
-                    modifier = Modifier.clickable { ClaudeApp.open(context) },
-                )
-                Spacer(Modifier.width(12.dp))
-                Box(Modifier.weight(1f)) { LiveFeed() }
-            }
+            LiveFeed()
             Spacer(Modifier.height(12.dp))
             // Music and incoming messages scroll between the clock and the shortcuts.
             Column(
@@ -264,8 +257,6 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                     context.startActivity(Intent(context, DialerActivity::class.java))
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            GestureCompass()
         }
 
         AnimatedVisibility(

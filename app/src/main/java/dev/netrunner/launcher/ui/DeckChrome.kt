@@ -107,16 +107,6 @@ fun DeckRamBar() {
     }
 }
 
-/** Reminder of the four home gestures. */
-@Composable
-fun GestureCompass() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf("◄ CLAUDE" to Cp.Red, "▲ RÉSEAU" to Cp.Yellow, "▼ NOTIFS" to Cp.Cyan, "TERMINAL ►" to Cp.Cyan).forEach { (label, color) ->
-            Text(label, color = color.copy(alpha = 0.7f), fontFamily = HudFont, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
 private val BootLines = listOf(
     "NETRUNNER BIOS v0.6 // CYBERDECK MK.V",
     "> MONTAGE DU CYBERDECK............ OK",

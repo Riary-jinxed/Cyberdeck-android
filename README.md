@@ -10,7 +10,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Lancement en ligne de commande** : chaque appli s'ouvre après une courte séquence « jack-in » façon terminal.
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
 - **Scanner Wi-Fi** : toutes les bornes à portée (SSID, BSSID, dBm, canal, bande, sécurité, norme Wi-Fi, distance estimée) et un mode « traque » avec radar, tendance et bip type compteur Geiger pour retrouver une borne physiquement.
-- **Claude** : glisser vers la gauche (ou toucher la mascotte GLITCH) ouvre l'appli Claude officielle, connectée à ton compte. Commande terminal : `claude`.
+- **Claude** : glisser vers la gauche ouvre l'appli Claude officielle, connectée à ton compte. Commande terminal : `claude`.
 - **Holo-liaison (appels)** : Netrunner peut devenir l'appli Téléphone. Appels entrants et sortants façon holo-appel du jeu (portrait hologramme, décrocher/refuser, micro, haut-parleur, clavier DTMF, mise en attente, raccrocher), écran d'appel au-dessus de l'écran verrouillé, clavier, journal et contacts.
 - **Clavier Netrunner** : clavier AZERTY néon (majuscules, verrouillage, chiffres et symboles, accents par appui long, effacement continu, flèches de curseur). À activer dans Paramètres › Clavier, ou avec la commande `keyboard`.
 - **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
@@ -23,7 +23,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Mode furtif** : double-tap sur l'horloge, tuile « MODE FURTIF » ou `ghost`. Silence (alarmes conservées), HUD GHOST sombre, puis panneau système pour couper les radios (Android interdit aux applis de couper Wi-Fi et Bluetooth elles-mêmes).
 - **Conditions de zone et contrats** : météo Open-Meteo (sans compte, mise en cache 30 min) et prochains rendez-vous de l'agenda.
 - **Sons d'interface** : bips et glitchs synthétisés + vibrations, coupés si le téléphone est en silencieux (`sound off` pour les désactiver).
-- **Fond animé** : pluie de code ou skyline de Night City, qui vire au rouge sous 20 % de batterie, accélère en charge et change entre jour et nuit. 10 images/s, à l'arrêt dès que l'écran n'est pas visible.
+- **Interface de piratage** : fond « breach protocol » (grille de codes hexadécimaux balayée par un curseur) ou pluie de code, effet cathodique (vignettage, bande défilante, scintillement) et glitchs ponctuels de l'écran. Le fond vire au rouge sous 20 % de batterie et accélère en charge. 10 à 12 images/s, à l'arrêt dès que l'écran n'est pas visible.
 - **Terminal** : aussi `torch`, `timer`, `calc`, `qr`, `speedtest`, `ghost`, `theme`, `wallpaper`, `sound`.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
@@ -67,8 +67,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `wifi/WifiScanner.kt` | Scan des bornes Wi-Fi, estimation de distance |
 | `ui/WifiScreen.kt` | Liste des bornes et mode traque |
 | `system/ClaudeApp.kt` | Ouvre l'appli Claude |
-| `ui/Mascot.kt` | Mascotte GLITCH animée |
 | `ui/DeckChrome.kt` | Cadre HUD, barre RAM, séquence de démarrage |
+| `ui/LiveWallpaper.kt` | Fond breach / pluie de code, effet cathodique et glitchs |
 | `lock/`, `ui/LockScreen.kt` | Verrou cyber |
 | `call/` | Service d'appel (InCallService), notifications d'appel, contacts, journal |
 | `ui/HoloCallScreen.kt`, `ui/DialerScreen.kt` | Écran d'holo-appel et clavier téléphonique |

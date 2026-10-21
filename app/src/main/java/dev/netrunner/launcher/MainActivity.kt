@@ -37,4 +37,10 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideSystemBars(this)
     }
+
+    // HyperOS sometimes brings the status bar back when focus returns (after the shade, a dialog…).
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars(this)
+    }
 }

@@ -84,6 +84,7 @@ fun LockScreen(onUnlock: () -> Unit) {
             .cyberGrid()
             .scanlines()
             .hudFrame()
+            .crtGlitch()
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = { drag = 0f },
@@ -175,14 +176,15 @@ fun LockScreen(onUnlock: () -> Unit) {
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Mascot(mood = MascotMood.Idle, size = 52.dp)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("▲ GLISSE VERS LE HAUT", color = Cp.Yellow, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                    Text("POUR LE JACK-IN", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
-                }
-            }
+            Text(
+                "▲ JACK-IN",
+                color = Cp.Yellow.copy(alpha = 0.6f),
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 4.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
     }
 }

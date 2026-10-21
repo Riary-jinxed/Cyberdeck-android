@@ -348,7 +348,7 @@ class Terminal(
         val mode = WallpaperMode.entries.firstOrNull { it.id == arg?.lowercase(Locale.ROOT) }
         if (mode == null) {
             out("fond actuel : ${Wallpaper.mode.label}", Tone.Ok)
-            out("usage : wallpaper rain | city | off", Tone.Dim)
+            out("usage : wallpaper breach | rain | off", Tone.Dim)
             return
         }
         Wallpaper.select(context, mode)
@@ -405,7 +405,7 @@ class Terminal(
             "lock [on|off]   écran de verrouillage cyberdeck",
             "ghost [off]     mode furtif (silence, HUD sombre, radios)",
             "theme <faction> netrunner, arasaka, militech, netwatch",
-            "wallpaper <m>   fond animé : rain, city, off",
+            "wallpaper <m>   fond animé : breach, rain, off",
             "sound [on|off]  sons et vibrations d'interface",
             "torch [on|off]  lampe torche",
             "timer <durée>   minuteur (ex : timer 5m, timer 1h30, timer 90s)",
