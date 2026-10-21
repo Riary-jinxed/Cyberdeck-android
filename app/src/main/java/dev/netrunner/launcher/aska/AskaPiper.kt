@@ -10,14 +10,14 @@ import java.io.FilterInputStream
 import java.io.InputStream
 
 /**
- * Her neural voice: a Piper model (French, "siwis", CC BY 4.0) run offline by sherpa-onnx.
+ * Her neural voice: a Piper model (French, "upmc", speaker Jessica, CC BY-SA 4.0) run offline by sherpa-onnx.
  * Downloaded once from the sherpa-onnx releases, then unpacked next to the language models.
  */
 object AskaPiper {
 
-    private const val NAME = "vits-piper-fr_FR-siwis-medium"
+    private const val NAME = "vits-piper-fr_FR-upmc-medium"
     private const val URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$NAME.tar.bz2"
-    const val SIZE_MB = 67
+    const val SIZE_MB = 80
 
     fun dir(context: Context): File =
         (context.getExternalFilesDir("voices") ?: File(context.filesDir, "voices")).apply { mkdirs() }
@@ -26,7 +26,10 @@ object AskaPiper {
     private fun archive(context: Context) = File(dir(context), "$NAME.tar.bz2")
     private fun marker(context: Context) = File(home(context), ".installed")
 
-    fun model(context: Context) = File(home(context), "fr_FR-siwis-medium.onnx")
+    /** Jessica, the first of the model's two speakers. */
+    const val SPEAKER = 0
+
+    fun model(context: Context) = File(home(context), "fr_FR-upmc-medium.onnx")
     fun tokens(context: Context) = File(home(context), "tokens.txt")
     fun espeakData(context: Context) = File(home(context), "espeak-ng-data")
 

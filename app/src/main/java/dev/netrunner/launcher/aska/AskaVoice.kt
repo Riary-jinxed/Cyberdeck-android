@@ -263,7 +263,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         // Her expressions, softened: the neural voice already has its own intonation.
         val up = NEURAL_PITCH * (1f + (pitch - 1f) * 0.5f)
         val pace = 1f + (rate - 1f) * 0.5f
-        val audio = runCatching { engine.generate(sentence, sid = 0, speed = pace / up) }.getOrNull() ?: return null
+        val audio = runCatching { engine.generate(sentence, sid = AskaPiper.SPEAKER, speed = pace / up) }.getOrNull() ?: return null
         if (audio.samples.isEmpty()) return null
         val clip = encode(process(Pcm(audio.samples, audio.sampleRate), NEURAL_FX))
         return Clip(clip.bytes, clip.frames, (audio.sampleRate * up).toInt())
