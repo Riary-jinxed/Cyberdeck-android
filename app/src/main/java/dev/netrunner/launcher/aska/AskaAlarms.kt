@@ -30,6 +30,15 @@ sealed class AlarmAction {
     data class Remind(val at: Long, val text: String) : AlarmAction() {
         override val ask = "Je le note ? Valide et je te le rappellerai à l'heure."
     }
+    data class OpenApp(val label: String, val packageName: String) : AlarmAction() {
+        override val ask = "J'ouvre $label ? Valide."
+    }
+    data class Torch(val on: Boolean) : AlarmAction() {
+        override val ask = if (on) "J'allume la lampe ? Valide." else "J'éteins la lampe ? Valide."
+    }
+    object GhostMode : AlarmAction() {
+        override val ask = "Je bascule le mode furtif ? Valide."
+    }
     data class Forget(val reminders: List<Reminder>) : AlarmAction() {
         override val ask = if (reminders.size > 1) "Je les efface tous ? Valide." else "J'efface ce rappel ? Valide."
     }
@@ -42,6 +51,9 @@ sealed class AlarmAction {
             Show -> "OUVRIR L'HORLOGE"
             is Remind -> "RAPPEL ${Reminder(0, at, text).whenLabel.uppercase(Locale.FRENCH)} · « $text »"
             is Forget -> if (reminders.size == 1) "EFFACER LE RAPPEL « ${reminders[0].text} »" else "EFFACER ${reminders.size} RAPPELS"
+            is OpenApp -> "OUVRIR ${label.uppercase()}"
+            is Torch -> if (on) "ALLUMER LA LAMPE" else "ÉTEINDRE LA LAMPE"
+            GhostMode -> "BASCULER LE MODE FURTIF"
         }
 }
 
@@ -58,6 +70,7 @@ object AskaAlarms {
                 action.reminders.forEach { AskaReminders.remove(context, it.id) }
                 return if (action.reminders.size == 1) "Rappel effacé." else "Rappels effacés."
             }
+            is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> return AskaActions.run(context, action)
             else -> Unit
         }
         val intent = when (action) {
@@ -76,7 +89,7 @@ object AskaAlarms {
                 .putExtra(AlarmClock.EXTRA_MESSAGE, "As//ka")
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             AlarmAction.Show -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
-            is AlarmAction.Remind, is AlarmAction.Forget -> error("handled above")
+            is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> error("handled above")
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(intent)
@@ -85,7 +98,7 @@ object AskaAlarms {
                 is AlarmAction.Dismiss -> "Je transmets à l'horloge. Confirme-lui si elle te le demande."
                 is AlarmAction.Timer -> "Minuteur lancé : ${durationLabel(action.seconds)}."
                 AlarmAction.Show -> "J'ouvre l'horloge."
-                is AlarmAction.Remind, is AlarmAction.Forget -> ""
+                is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> ""
             }
         } catch (_: ActivityNotFoundException) {
             "Aucune appli d'horloge ne répond à mes signaux."
@@ -208,7 +221,7 @@ object AskaAlarms {
         parseReminder(context, input, t)?.let { return it }
         val alarm = ALARM_WORDS.containsMatchIn(t)
         val timer = TIMER_WORDS.containsMatchIn(t)
-        if (!alarm && !timer) return null
+        if (!alarm && !timer) return AskaActions.parse(context, input)?.let { Request.Act(it) }
 
         if (alarm && NEXT_WORDS.containsMatchIn(t)) return Request.Next
         if (timer) duration(t)?.let { return Request.Act(AlarmAction.Timer(it)) }

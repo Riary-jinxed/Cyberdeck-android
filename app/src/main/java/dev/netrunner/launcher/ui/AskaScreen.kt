@@ -2,7 +2,9 @@ package dev.netrunner.launcher.ui
 
 import android.Manifest
 import android.app.DownloadManager
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.aska.AlarmAction
+import dev.netrunner.launcher.aska.AskaEars
 import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
@@ -211,6 +214,20 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
         input = ""
     }
 
+    // Her ears: hold a conversation out loud.
+    val context = LocalContext.current
+    val ears = remember { AskaEars(context) }
+    DisposableEffect(Unit) { onDispose { ears.stop() } }
+    var earsError by remember { mutableStateOf<String?>(null) }
+    fun listen() {
+        earsError = null
+        brain.voice.stop()
+        ears.listen(onResult = { send(it) }, onError = { earsError = it })
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) listen() else earsError = "Sans accès au micro, je ne t'entends pas."
+    }
+
     Column(modifier) {
         LazyColumn(
             state = listState,
@@ -283,10 +300,42 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
                             .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.6f), fill = AskaColors.Panel, cut = 8.dp)
                             .padding(horizontal = 10.dp, vertical = 10.dp),
                         decorationBox = { field ->
-                            if (input.isEmpty()) Text("Parle à As//ka…", color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
-                            field()
+                            when {
+                                ears.listening -> Text(
+                                    ears.heard.ifEmpty { "◉ Je t'écoute…" },
+                                    color = AskaColors.HotPink,
+                                    fontFamily = HudFont,
+                                    fontSize = 15.sp,
+                                )
+                                input.isEmpty() -> Text(earsError ?: "Parle à As//ka…", color = if (earsError != null) Cp.Red else Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
+                            }
+                            if (!ears.listening) field()
                         },
                     )
+                    if (ears.available && !thinking) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (ears.listening) "■" else "◉",
+                            color = if (ears.listening) AskaColors.Void else AskaColors.Pink,
+                            fontFamily = MonoFont,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .hudPanel(
+                                    borderColor = AskaColors.Pink,
+                                    fill = if (ears.listening) AskaColors.HotPink else AskaColors.Panel,
+                                    cut = 8.dp,
+                                )
+                                .clickable {
+                                    when {
+                                        ears.listening -> ears.finish()
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> listen()
+                                        else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                }
+                                .padding(horizontal = 11.dp, vertical = 10.dp),
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                     Text(
                         if (thinking) "■ STOP" else "◢ ENVOI",

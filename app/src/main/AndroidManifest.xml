@@ -63,6 +63,10 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="com.anthropic.claude" />
+        <!-- As//ka's ears: lets the app find the speech recognizer (Android 11+). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <!-- As//ka's voice: lets the app find the speech engine (Android 11+). -->
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
