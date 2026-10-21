@@ -147,7 +147,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
 
     private suspend fun engine(): TextToSpeech? {
         tts?.let { if (ready) return it }
-        val engine = suspendCancellableCoroutine { cont ->
+        val engine = suspendCancellableCoroutine<TextToSpeech?> { cont ->
             var created: TextToSpeech? = null
             created = TextToSpeech(context.applicationContext) { status ->
                 if (cont.isActive) cont.resume(if (status == TextToSpeech.SUCCESS) created else null)
