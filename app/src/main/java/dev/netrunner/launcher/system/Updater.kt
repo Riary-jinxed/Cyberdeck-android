@@ -65,10 +65,15 @@ object Updater {
     }
 
     /** Downloads the APK into the app's cache, reporting progress from 0 to 1. */
-    suspend fun download(context: Context, release: Release, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
+    suspend fun download(
+        context: Context,
+        release: Release,
+        name: String = "netrunner",
+        onProgress: (Float) -> Unit,
+    ): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
-        val file = File(dir, "netrunner-${release.version}.apk")
+        val file = File(dir, "$name-${release.version}.apk")
         val conn = (URL(release.apkUrl).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 20_000
