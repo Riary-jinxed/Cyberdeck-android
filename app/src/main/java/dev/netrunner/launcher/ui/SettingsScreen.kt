@@ -181,6 +181,20 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             Box(Modifier.weight(1f)) { Action("Fin : ${NightWatch.endHour}h", "+1 h") { NightWatch.shiftEnd(context) } }
         }
 
+        Section("MODE ÉCO RIPPERDOC")
+        Text(
+            "Coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur. Auto : sous ${dev.netrunner.launcher.system.Ripperdoc.LOW_BATTERY} % ou avec l'économiseur d'Android.",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
+        Chips(
+            dev.netrunner.launcher.system.Ripperdoc.Mode.entries.map { it.label },
+            dev.netrunner.launcher.system.Ripperdoc.Mode.entries.indexOf(dev.netrunner.launcher.system.Ripperdoc.mode),
+        ) { i ->
+            dev.netrunner.launcher.system.Ripperdoc.setMode(context, dev.netrunner.launcher.system.Ripperdoc.Mode.entries[i])
+        }
+
         Section("MUSIQUE")
         val micOn = remember(tick) {
             context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED

@@ -115,7 +115,7 @@ fun MediaWidget(track: NowPlaying, watcher: MediaWatcher) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        SpectrumBars(playing = track.playing && active, accent = accent)
+        SpectrumBars(playing = track.playing && active && !dev.netrunner.launcher.system.Ripperdoc.active, accent = accent)
         Spacer(Modifier.height(6.dp))
         if (track.durationMs > 0) {
             // Tap anywhere on the bar to seek.

@@ -38,6 +38,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
 - **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
 - **Gestes personnalisables** : chaque glisser et le double-tap / appui long sur l'horloge se règlent dans Config › Gestes.
+- **Mode éco Ripperdoc** : coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur, et fige le fond d'écran animé. En Auto, il s'active sous 20 % de batterie (hors charge) ou avec l'économiseur d'Android ; il peut aussi rester toujours actif (Config › Mode éco Ripperdoc). Le HUD affiche alors RIPPERDOC://ÉCO.
 - **Profils Boulot / Perso** : chacun garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.
 - **Mode nuit Netwatch** : interface assombrie, sans fond animé ni glitchs, sur une plage horaire choisie.
 - **Spectre audio** : barres de visualiseur dans le widget musique (vrai son avec l'accès micro, animation sinon).
@@ -104,6 +105,7 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `sms/SmsStore.kt`, `ui/MessagesScreen.kt` | Lecture et envoi des SMS, messagerie |
 | `system/Tones.kt` | Synthèse et installation des sonneries |
 | `system/MusicTone.kt` | Découpe d'une musique importée en sonnerie |
+| `system/Ripperdoc.kt` | Mode éco (animations coupées) |
 | `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
 | `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 

@@ -1,5 +1,6 @@
 package dev.netrunner.launcher.ui
 
+import android.os.PowerManager
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -101,6 +102,7 @@ import dev.netrunner.launcher.system.UiSound
 import dev.netrunner.launcher.Folder
 import dev.netrunner.launcher.system.Gestures
 import dev.netrunner.launcher.system.NightWatch
+import dev.netrunner.launcher.system.Ripperdoc
 import dev.netrunner.launcher.system.Profiles
 import dev.netrunner.launcher.system.Updater
 import androidx.compose.foundation.pager.HorizontalPager
@@ -195,6 +197,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     remember { Gestures.load(context.applicationContext) }
     remember { Profiles.load(context.applicationContext) }
     remember { NightWatch.load(context.applicationContext) }
+    remember { Ripperdoc.load(context.applicationContext) }
     // Night window check once a minute while the home screen is visible.
     val screenActive = rememberScreenActive()
     LaunchedEffect(screenActive) {
@@ -567,6 +570,7 @@ private fun StatusStrip(onMenu: () -> Unit) {
             when {
                 Cp.faction == Faction.Ghost -> "GHOST://FURTIF"
                 NightWatch.active -> "NETWATCH://NUIT"
+                Ripperdoc.active -> "RIPPERDOC://ÉCO"
                 else -> "${Cp.faction.label}://${Profiles.current.label}"
             },
             color = Cp.Yellow,
@@ -665,8 +669,9 @@ private fun ClockBlock() {
 private fun LiveFeed() {
     var index by remember { mutableIntStateOf(0) }
     var shown by remember { mutableIntStateOf(0) }
-    val active = rememberScreenActive()
+    val active = rememberScreenActive() && !Ripperdoc.active
     LaunchedEffect(active) {
+        if (!active) shown = FeedLines[index].length
         while (active) {
             val line = FeedLines[index]
             for (i in 1..line.length) {
@@ -1311,6 +1316,7 @@ private fun rememberBattery(): BatteryState {
     LaunchedEffect(active) {
         while (active) {
             state = SystemInfo.battery(context)
+            Ripperdoc.refresh(context, state)
             delay(20_000)
         }
     }
@@ -1318,12 +1324,14 @@ private fun rememberBattery(): BatteryState {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
                 state = SystemInfo.battery(context)
+                Ripperdoc.refresh(context, state)
             }
         }
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(Intent.ACTION_POWER_CONNECTED)
             addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
         }
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         onDispose { runCatching { context.unregisterReceiver(receiver) } }
