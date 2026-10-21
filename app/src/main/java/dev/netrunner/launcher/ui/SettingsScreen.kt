@@ -280,6 +280,15 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
         Action("Claviers", "Activer ou choisir le clavier Netrunner") {
             context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+        val autocorrect = remember(tick) { dev.netrunner.launcher.keyboard.KeyboardPrefs.autocorrect(context) }
+        Toggle(
+            "Correction automatique",
+            "Le clavier corrige une faute évidente à l'espace (⌫ juste après annule). Les suggestions restent affichées dans tous les cas.",
+            autocorrect,
+        ) {
+            dev.netrunner.launcher.keyboard.KeyboardPrefs.setAutocorrect(context, !autocorrect)
+            tick++
+        }
 
         Section(if (missing == 0) "DIAGNOSTIC : SYSTÈMES NOMINAUX" else "DIAGNOSTIC : $missing POINT(S) À CORRIGER")
         checks.forEach { check ->
