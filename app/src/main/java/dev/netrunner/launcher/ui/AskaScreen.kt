@@ -1,0 +1,522 @@
+package dev.netrunner.launcher.ui
+
+import android.app.DownloadManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.netrunner.launcher.aska.AskaBrain
+import dev.netrunner.launcher.aska.AskaModels
+import dev.netrunner.launcher.system.SystemInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private val Prompts = listOf(
+    "Prochaine alarme ?",
+    "Réveille-moi à 7h30",
+    "Minuteur 10 min",
+    "Qui es-tu ?",
+    "Raconte-moi Night City",
+)
+
+@Composable
+fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
+    // The model only stays in memory while this panel is open (and a short while after).
+    DisposableEffect(Unit) {
+        brain.wake()
+        onDispose { brain.sleepSoon() }
+    }
+    var showModels by remember { mutableStateOf(false) }
+    val noModel = brain.state == AskaBrain.State.NoModel
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(AskaColors.Void.copy(alpha = 0.985f))
+            .scanlines()
+            .systemBarsPadding()
+            .displayCutoutPadding()
+            .imePadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AskaSigil(Modifier.size(52.dp), intensity = if (brain.state == AskaBrain.State.Thinking) 2.5f else 1f)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                GlitchText(
+                    "AS//KA",
+                    style = TextStyle(fontFamily = DisplayFont, fontSize = 22.sp, fontWeight = FontWeight.Black),
+                    color = AskaColors.Pink,
+                )
+                Text(
+                    statusLabel(brain),
+                    color = if (brain.state == AskaBrain.State.NoModel) Cp.Red else AskaColors.HotPink.copy(alpha = 0.8f),
+                    fontFamily = MonoFont,
+                    fontSize = 11.sp,
+                )
+            }
+            HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
+            if (!showModels && !noModel) HeaderButton("PURGER", Cp.Dim) { brain.purge() }
+            Text(
+                "[ X ]",
+                color = Cp.Red,
+                fontFamily = MonoFont,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable(onClick = onClose)
+                    .padding(8.dp),
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AskaColors.Pink.copy(alpha = 0.6f))
+        )
+        if (showModels || noModel) {
+            ModelBay(brain, Modifier.weight(1f))
+        } else {
+            Chat(brain, Modifier.weight(1f))
+        }
+    }
+}
+
+private fun statusLabel(brain: AskaBrain): String = when (brain.state) {
+    AskaBrain.State.NoModel -> "NOYAU ABSENT · INSTALLE UN MODÈLE"
+    AskaBrain.State.Asleep -> "EN VEILLE · 100 % LOCAL"
+    AskaBrain.State.Waking -> "ÉVEIL DU NOYAU…"
+    AskaBrain.State.Ready -> "EN LIGNE · ${brain.backend ?: "CPU"} · 100 % LOCAL"
+    AskaBrain.State.Thinking -> "CALCUL EN COURS…"
+}
+
+@Composable
+private fun HeaderButton(label: String, color: Color, onClick: () -> Unit) {
+    Text(
+        label,
+        color = color,
+        fontFamily = HudFont,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .hudPanel(borderColor = color.copy(alpha = 0.7f), fill = Color.Transparent, cut = 6.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+private fun Chat(brain: AskaBrain, modifier: Modifier) {
+    var input by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    val lines = brain.lines
+    val last = lines.lastOrNull()
+    LaunchedEffect(lines.size, last?.text?.length) {
+        if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex, scrollOffset = Int.MAX_VALUE / 2)
+    }
+    val thinking = brain.state == AskaBrain.State.Thinking
+
+    fun send(text: String) {
+        brain.send(text)
+        input = ""
+    }
+
+    Column(modifier) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(lines, key = { it.id }) { line -> Bubble(brain, line) }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Prompts.forEach { prompt ->
+                Text(
+                    prompt,
+                    color = AskaColors.HotPink,
+                    fontFamily = HudFont,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.5f), fill = AskaColors.Panel, cut = 6.dp)
+                        .clickable(enabled = !thinking) { send(prompt) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("▸", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 16.sp)
+            Spacer(Modifier.width(6.dp))
+            BasicTextField(
+                value = input,
+                onValueChange = { input = it },
+                maxLines = 4,
+                textStyle = TextStyle(color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp),
+                cursorBrush = SolidColor(AskaColors.Pink),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { send(input) }),
+                modifier = Modifier
+                    .weight(1f)
+                    .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.6f), fill = AskaColors.Panel, cut = 8.dp)
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                decorationBox = { field ->
+                    if (input.isEmpty()) Text("Parle à As//ka…", color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
+                    field()
+                },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (thinking) "■ STOP" else "◢ ENVOI",
+                color = AskaColors.Void,
+                fontFamily = HudFont,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .hudPanel(borderColor = AskaColors.Pink, fill = if (thinking) Cp.Red else AskaColors.Pink, cut = 8.dp)
+                    .clickable { if (thinking) brain.stop() else send(input) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (line.fromUser) Alignment.CenterEnd else Alignment.CenterStart) {
+        Column(
+            Modifier
+                .widthIn(max = 320.dp)
+                .hudPanel(
+                    borderColor = if (line.fromUser) Cp.Cyan.copy(alpha = 0.5f) else AskaColors.Pink.copy(alpha = 0.7f),
+                    fill = if (line.fromUser) Cp.Panel else AskaColors.Panel,
+                    cut = 8.dp,
+                )
+                .padding(10.dp),
+        ) {
+            Text(
+                if (line.fromUser) "${DeckSettings.handle.uppercase()} //" else "AS//KA //",
+                color = if (line.fromUser) Cp.Cyan else AskaColors.Pink,
+                fontFamily = MonoFont,
+                fontSize = 10.sp,
+            )
+            Text(
+                when {
+                    line.text.isNotEmpty() -> line.text + if (line.done) "" else " ▌"
+                    else -> "▌"
+                },
+                color = Cp.Text,
+                fontFamily = HudFont,
+                fontSize = 15.sp,
+                lineHeight = 19.sp,
+            )
+            line.action?.let { action ->
+                Spacer(Modifier.height(8.dp))
+                Text(action.summary, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 12.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "◢ EXÉCUTER",
+                        color = AskaColors.Void,
+                        fontFamily = HudFont,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .hudPanel(borderColor = AskaColors.Pink, fill = AskaColors.Pink, cut = 6.dp)
+                            .clickable { brain.confirm(line) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                    Text(
+                        "ANNULER",
+                        color = Cp.Dim,
+                        fontFamily = HudFont,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .hudPanel(borderColor = Cp.Dim, fill = Color.Transparent, cut = 6.dp)
+                            .clickable { brain.decline(line) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Install, pick or delete As//ka's model. */
+@Composable
+private fun ModelBay(brain: AskaBrain, modifier: Modifier) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Bumped to re-read what is on disk after a change.
+    var revision by remember { mutableIntStateOf(0) }
+    var download by remember { mutableStateOf(AskaModels.pollDownload(context)) }
+    var importProgress by remember { mutableStateOf<Float?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var mobileData by remember { mutableStateOf(false) }
+    val ramGb = remember { (SystemInfo.memory(context).totalBytes / 1_000_000_000.0).let { Math.round(it).toInt() } }
+
+    fun changed() {
+        revision++
+        brain.modelChanged()
+    }
+
+    // Progress, once a second, only while this screen is shown and a download runs.
+    LaunchedEffect(download != null) {
+        while (download != null) {
+            delay(1000)
+            val now = AskaModels.pollDownload(context)
+            if (now?.status == DownloadManager.STATUS_SUCCESSFUL) {
+                message = "Noyau installé. As//ka s'éveille."
+                download = null
+                changed()
+            } else if (now?.status == DownloadManager.STATUS_FAILED) {
+                message = "Téléchargement échoué. Vérifie la connexion et l'espace libre, puis réessaie."
+                AskaModels.cancelDownload(context)
+                download = null
+            } else {
+                download = now
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importProgress = 0f
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { AskaModels.import(context, uri) { importProgress = it } }
+            }
+            importProgress = null
+            message = result.fold({ "Modèle importé et activé." }, { "Import impossible : ${it.message}" })
+            if (result.isSuccess) changed()
+        }
+    }
+
+    // Re-read on each revision.
+    val active = remember(revision) { AskaModels.active(context) }
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "As//ka pense directement sur ton téléphone : rien ne part sur internet, c'est gratuit, et le modèle n'est chargé " +
+                "que pendant que tu lui parles. Il faut d'abord télécharger son noyau (une fois). Ton téléphone : $ramGb Go de RAM.",
+            color = Cp.Text,
+            fontFamily = HudFont,
+            fontSize = 13.sp,
+        )
+        message?.let { Text(it, color = AskaColors.HotPink, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+
+        AskaModels.catalog.forEach { model ->
+            val installed = remember(revision) { AskaModels.isInstalled(context, model.id) }
+            val downloading = download?.takeIf { it.modelId == model.id }
+            val tight = ramGb < model.minRamGb
+            ModelCard(
+                title = model.label,
+                detail = "${model.tagline}\n${model.sizeMb} Mo" + if (tight) " · ⚠ un peu lourd pour $ramGb Go de RAM" else "",
+                active = active == model.id,
+                progress = downloading?.let { if (it.total > 0) it.done.toFloat() / it.total else 0f },
+                progressLabel = downloading?.let {
+                    when (it.status) {
+                        DownloadManager.STATUS_PAUSED -> "EN PAUSE (attente du Wi-Fi ou du réseau)"
+                        DownloadManager.STATUS_PENDING -> "EN ATTENTE…"
+                        else -> "${it.done / 1_000_000} / ${it.total.coerceAtLeast(0) / 1_000_000} Mo"
+                    }
+                },
+            ) {
+                when {
+                    downloading != null -> BayButton("ANNULER", Cp.Red) {
+                        AskaModels.cancelDownload(context)
+                        download = null
+                    }
+                    installed -> {
+                        if (active != model.id) BayButton("UTILISER", AskaColors.Pink) {
+                            AskaModels.select(context, model.id)
+                            changed()
+                        }
+                        BayButton("SUPPRIMER", Cp.Dim) {
+                            AskaModels.delete(context, model.id)
+                            changed()
+                        }
+                    }
+                    download == null -> BayButton("TÉLÉCHARGER", AskaColors.Pink) {
+                        message = null
+                        AskaModels.startDownload(context, model, mobileData)
+                        download = AskaModels.pollDownload(context)
+                    }
+                }
+            }
+        }
+
+        if (remember(revision) { AskaModels.isInstalled(context, AskaModels.CUSTOM_ID) }) {
+            ModelCard(
+                title = AskaModels.labelOf(context, AskaModels.CUSTOM_ID),
+                detail = "Fichier importé depuis le téléphone.",
+                active = active == AskaModels.CUSTOM_ID,
+            ) {
+                if (active != AskaModels.CUSTOM_ID) BayButton("UTILISER", AskaColors.Pink) {
+                    AskaModels.select(context, AskaModels.CUSTOM_ID)
+                    changed()
+                }
+                BayButton("SUPPRIMER", Cp.Dim) {
+                    AskaModels.delete(context, AskaModels.CUSTOM_ID)
+                    changed()
+                }
+            }
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { mobileData = !mobileData }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(if (mobileData) "[■]" else "[ ]", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 14.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Autoriser le téléchargement en données mobiles (sinon Wi-Fi uniquement)",
+                color = Cp.Text,
+                fontFamily = HudFont,
+                fontSize = 13.sp,
+            )
+        }
+
+        if (importProgress != null) {
+            Text(
+                "IMPORT… ${((importProgress ?: 0f) * 100).toInt()} %",
+                color = AskaColors.HotPink,
+                fontFamily = MonoFont,
+                fontSize = 12.sp,
+            )
+        } else {
+            BayButton("IMPORTER UN FICHIER .litertlm", Cp.Cyan) { picker.launch(arrayOf("*/*")) }
+        }
+        Text(
+            "Autres modèles compatibles : huggingface.co/litert-community (fichiers .litertlm).",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
+    }
+}
+
+@Composable
+private fun ModelCard(
+    title: String,
+    detail: String,
+    active: Boolean,
+    progress: Float? = null,
+    progressLabel: String? = null,
+    actions: @Composable () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(
+                borderColor = if (active) AskaColors.Pink else AskaColors.Pink.copy(alpha = 0.35f),
+                fill = AskaColors.Panel,
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (active) Text("● ACTIF", color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 11.sp)
+        }
+        Text(detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
+        if (progress != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(AskaColors.Magenta.copy(alpha = 0.3f))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .height(6.dp)
+                        .background(AskaColors.Pink)
+                )
+            }
+            progressLabel?.let { Text(it, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 11.sp) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+    }
+}
+
+@Composable
+private fun BayButton(label: String, color: Color, onClick: () -> Unit) {
+    Text(
+        label,
+        color = color,
+        fontFamily = HudFont,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .hudPanel(borderColor = color.copy(alpha = 0.8f), fill = Color.Transparent, cut = 6.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
+}

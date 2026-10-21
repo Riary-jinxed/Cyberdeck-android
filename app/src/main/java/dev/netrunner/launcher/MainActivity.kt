@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
             "wifi" -> LauncherViewModel.Panel.Wifi
             "settings" -> LauncherViewModel.Panel.Settings
             "messages" -> LauncherViewModel.Panel.Messages
+            "aska" -> LauncherViewModel.Panel.Aska
             else -> return false
         }
         intent.removeExtra(EXTRA_PANEL)

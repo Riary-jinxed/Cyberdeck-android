@@ -20,6 +20,7 @@ object Gestures {
         Quick("Contrôle du deck"),
         Terminal("Terminal"),
         Claude("Appli Claude"),
+        Aska("As//ka (IA locale)"),
         Messages("SMS"),
         Feed("Flux entrant"),
         Dialer("Appels"),
