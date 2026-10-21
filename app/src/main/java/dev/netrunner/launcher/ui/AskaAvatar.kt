@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import kotlin.math.sin
 
-/** As//ka's portrait, imported by the user (made in ComfyUI or elsewhere). Without one, the sigil stands in. */
+/** As//ka's portrait: the user's own import, else the bundled one, else the sigil stands in. */
 object AskaPortrait {
     var image by mutableStateOf<ImageBitmap?>(null)
         private set
@@ -41,7 +41,15 @@ object AskaPortrait {
         if (loaded) return
         loaded = true
         image = runCatching { BitmapFactory.decodeFile(file(context).path)?.asImageBitmap() }.getOrNull()
+            ?: bundled(context)
     }
+
+    /** The portrait shipped with the launcher, used until the user imports their own. */
+    @android.annotation.SuppressLint("DiscouragedApi")
+    private fun bundled(context: Context): ImageBitmap? = runCatching {
+        val id = context.resources.getIdentifier("aska_portrait", "drawable", context.packageName)
+        if (id == 0) null else BitmapFactory.decodeResource(context.resources, id)?.asImageBitmap()
+    }.getOrNull()
 
     /** Decodes, crops to a centred square and scales to 512 px, so drawing it stays cheap. */
     fun import(context: Context, uri: Uri) {
@@ -62,7 +70,7 @@ object AskaPortrait {
 
     fun clear(context: Context) {
         file(context).delete()
-        image = null
+        image = bundled(context)
     }
 
     private const val SIZE = 512

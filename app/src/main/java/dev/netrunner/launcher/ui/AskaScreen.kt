@@ -191,58 +191,69 @@ private fun Chat(brain: AskaBrain, modifier: Modifier) {
         ) {
             items(lines, key = { it.id }) { line -> Bubble(brain, line) }
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Prompts.forEach { prompt ->
-                Text(
-                    prompt,
-                    color = AskaColors.HotPink,
-                    fontFamily = HudFont,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.5f), fill = AskaColors.Panel, cut = 6.dp)
-                        .clickable(enabled = !thinking) { send(prompt) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                )
+        Row(verticalAlignment = Alignment.Bottom) {
+            AskaChibi(
+                brain,
+                Modifier
+                    .size(84.dp)
+                    .padding(end = 6.dp, bottom = 2.dp),
+                animated = rememberScreenActive(),
+            )
+            Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Prompts.forEach { prompt ->
+                        Text(
+                            prompt,
+                            color = AskaColors.HotPink,
+                            fontFamily = HudFont,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.5f), fill = AskaColors.Panel, cut = 6.dp)
+                                .clickable(enabled = !thinking) { send(prompt) }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("▸", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 16.sp)
+                    Spacer(Modifier.width(6.dp))
+                    BasicTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        maxLines = 4,
+                        textStyle = TextStyle(color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp),
+                        cursorBrush = SolidColor(AskaColors.Pink),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { send(input) }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.6f), fill = AskaColors.Panel, cut = 8.dp)
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                        decorationBox = { field ->
+                            if (input.isEmpty()) Text("Parle à As//ka…", color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
+                            field()
+                        },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (thinking) "■ STOP" else "◢ ENVOI",
+                        color = AskaColors.Void,
+                        fontFamily = HudFont,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .hudPanel(borderColor = AskaColors.Pink, fill = if (thinking) Cp.Red else AskaColors.Pink, cut = 8.dp)
+                            .clickable { if (thinking) brain.stop() else send(input) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("▸", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 16.sp)
-            Spacer(Modifier.width(6.dp))
-            BasicTextField(
-                value = input,
-                onValueChange = { input = it },
-                maxLines = 4,
-                textStyle = TextStyle(color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp),
-                cursorBrush = SolidColor(AskaColors.Pink),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send(input) }),
-                modifier = Modifier
-                    .weight(1f)
-                    .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.6f), fill = AskaColors.Panel, cut = 8.dp)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                decorationBox = { field ->
-                    if (input.isEmpty()) Text("Parle à As//ka…", color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
-                    field()
-                },
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (thinking) "■ STOP" else "◢ ENVOI",
-                color = AskaColors.Void,
-                fontFamily = HudFont,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .hudPanel(borderColor = AskaColors.Pink, fill = if (thinking) Cp.Red else AskaColors.Pink, cut = 8.dp)
-                    .clickable { if (thinking) brain.stop() else send(input) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            )
         }
     }
 }
