@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cut-corner frame, as on the launcher icon -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FCEE0A"
+        android:strokeWidth="3"
+        android:pathData="M36,34 L66,34 L74,42 L74,74 L42,74 L34,66 L34,36 Z" />
+    <!-- Tree branches -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="square"
+        android:pathData="M44,42 L44,64 M44,52 L52,52 M44,64 L52,64" />
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M40,39 L48,39 L48,45 L40,45 Z M54,49 L66,49 L66,55 L54,55 Z" />
+    <path
+        android:fillColor="#FF003C"
+        android:pathData="M54,61 L66,61 L66,67 L54,67 Z" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replaces the deck kit's paths: updates, plus every file the app can browse, for opening and sharing. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+    <external-path name="storage" path="." />
+    <root-path name="root" path="/" />
+</paths>
