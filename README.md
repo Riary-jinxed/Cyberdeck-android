@@ -125,6 +125,16 @@ Bloc-notes dans le module `notes/` (package `dev.netrunner.notes`, même clé de
 - **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire et ajouter des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste.
 - **Mises à jour** : releases GitHub `notes-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## Dictaphone Netrunner (appli à part)
+
+Enregistreur vocal dans le module `recorder/` (package `dev.netrunner.recorder`, même clé de signature), au style terminal.
+
+- **REC** : enregistrement AAC (.m4a) avec forme d'onde en direct, chrono, pause et reprise.
+- **Écran éteint** : l'enregistrement continue en arrière-plan avec une notification (bouton ARRÊTER).
+- **Archives** : lecteur avec forme d'onde (touche pour se déplacer), ±10 s et vitesse de lecture ; partager, renommer, supprimer.
+- **Qualité** : réglage haute qualité (48 kHz / 192 kb/s) ou économe (44,1 kHz / 96 kb/s) dans CONFIG.
+- **Mises à jour** : releases GitHub `recorder-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
