@@ -98,7 +98,7 @@ fun ExplorerTab(explorer: Explorer) {
             Chip("+ DOSSIER", Cp.Cyan) { naming = "NOUVEAU DOSSIER" to null }
             Chip("TRI : ${explorer.sort.label} ${if (explorer.descending) "▼" else "▲"}", Cp.Cyan) {
                 val all = FileOps.Sort.entries
-                explorer.setSort(all[(all.indexOf(explorer.sort) + 1) % all.size])
+                explorer.sortBy(all[(all.indexOf(explorer.sort) + 1) % all.size])
             }
             Chip(if (explorer.showHidden) "CACHÉS ✓" else "CACHÉS", if (explorer.showHidden) Cp.Yellow else Cp.Dim) { explorer.toggleHidden() }
         }

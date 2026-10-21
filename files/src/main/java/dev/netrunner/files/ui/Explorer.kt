@@ -57,7 +57,7 @@ class Explorer(context: Context) {
         selection = if (file in selection) selection - file else selection + file
     }
 
-    fun setSort(s: FileOps.Sort) {
+    fun sortBy(s: FileOps.Sort) {
         // Same column again flips the order.
         descending = if (s == sort) !descending else s == FileOps.Sort.DATE || s == FileOps.Sort.SIZE
         sort = s
