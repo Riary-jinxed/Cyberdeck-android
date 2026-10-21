@@ -33,6 +33,14 @@ object CalcPrefs {
 
     fun setProgBase(context: Context, base: ProgCalc.Base) = prefs(context).edit().putString("base", base.name).apply()
 
+    fun convertCategory(context: Context) = prefs(context).getInt("convert_category", 1)
+    fun setConvertCategory(context: Context, index: Int) = prefs(context).edit().putInt("convert_category", index).apply()
+
+    /** The unit (or currency) the input is typed in, per category. */
+    fun convertSource(context: Context, category: String): String? = prefs(context).getString("convert_from_$category", null)
+    fun setConvertSource(context: Context, category: String, symbol: String) =
+        prefs(context).edit().putString("convert_from_$category", symbol).apply()
+
     /** Newest first. */
     fun history(context: Context): List<Entry> = runCatching {
         val json = JSONArray(prefs(context).getString("history", "[]"))

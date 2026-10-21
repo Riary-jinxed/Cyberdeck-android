@@ -40,6 +40,7 @@ import dev.netrunner.deck.HudFont
 import dev.netrunner.deck.MonoFont
 import dev.netrunner.deck.hudPanel
 import dev.netrunner.files.data.FileOps
+import dev.netrunner.files.data.Zip
 import dev.netrunner.files.system.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,6 +63,7 @@ fun ExplorerTab(explorer: Explorer) {
     var naming by remember { mutableStateOf<Pair<String, File?>?>(null) } // title, file to rename (null = new folder)
     var deleting by remember { mutableStateOf<List<File>?>(null) }
     var info by remember { mutableStateOf<File?>(null) }
+    var preview by remember { mutableStateOf<Pair<File, PreviewType>?>(null) }
 
     val rows by produceState<List<Explorer.Row>?>(
         emptyList(), explorer.dir, explorer.expanded, explorer.sort, explorer.descending, explorer.showHidden, explorer.version,
@@ -131,7 +133,7 @@ fun ExplorerTab(explorer: Explorer) {
                                         when {
                                             selecting -> explorer.toggleSelected(f)
                                             f.isDirectory -> explorer.go(f)
-                                            else -> Storage.open(context, f)
+                                            else -> previewType(f)?.let { preview = f to it } ?: Storage.open(context, f)
                                         }
                                     },
                                 )
@@ -174,6 +176,17 @@ fun ExplorerTab(explorer: Explorer) {
                     Chip("COPIER", Cp.Cyan) { explorer.clipboard = sel; explorer.cut = false; explorer.selection = emptySet() }
                     Chip("COUPER", Cp.Cyan) { explorer.clipboard = sel; explorer.cut = true; explorer.selection = emptySet() }
                     Chip("PARTAGER", Cp.Cyan) { Storage.share(context, sel) }
+                    Chip("COMPRESSER", Cp.Cyan) {
+                        val target = explorer.dir
+                        explorer.selection = emptySet()
+                        scope.fileOp(context, explorer, "Archive créée") { Zip.compress(sel, target) }
+                    }
+                    if (sel.size == 1 && Zip.isZip(sel[0])) {
+                        Chip("EXTRAIRE", Cp.Cyan) {
+                            explorer.selection = emptySet()
+                            scope.fileOp(context, explorer, "Archive extraite") { Zip.extract(sel[0], sel[0].parentFile!!) }
+                        }
+                    }
                     if (sel.size == 1) {
                         Chip("RENOMMER", Cp.Cyan) { naming = "RENOMMER" to sel[0] }
                         Chip("INFOS", Cp.Cyan) { info = sel[0] }
@@ -217,6 +230,12 @@ fun ExplorerTab(explorer: Explorer) {
         }
     }
     info?.let { InfoDialog(it) { info = null } }
+    preview?.let { (file, type) ->
+        PreviewDialog(file, type, onDismiss = { preview = null }) {
+            preview = null
+            scope.fileOp(context, explorer, "Archive extraite") { Zip.extract(file, file.parentFile!!) }
+        }
+    }
 }
 
 @Composable

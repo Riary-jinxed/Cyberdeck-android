@@ -34,10 +34,11 @@ class MainActivity : ComponentActivity() {
                                 TAB_SCI -> SciTab()
                                 TAB_PROG -> ProgTab()
                                 TAB_NET -> NetTab()
+                                TAB_CONVERT -> ConvertTab()
                                 else -> SettingsTab()
                             }
                         }
-                        TabBar(listOf("SCIENTIFIQUE", "PROG", "RÉSEAU", "CONFIG"), tab) {
+                        TabBar(listOf("SCI", "PROG", "RÉSEAU", "CONVERT", "CONFIG"), tab) {
                             tab = it
                             CalcPrefs.setTab(this@MainActivity, it)
                         }
@@ -51,5 +52,6 @@ class MainActivity : ComponentActivity() {
         const val TAB_SCI = 0
         const val TAB_PROG = 1
         const val TAB_NET = 2
+        const val TAB_CONVERT = 3
     }
 }

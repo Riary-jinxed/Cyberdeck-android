@@ -72,6 +72,7 @@ Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK 
 - **Scientifique** : priorités, parenthèses (fermées toutes seules), trigonométrie en degrés ou radians et fonctions inverses (touche 2ND), ln, log, eˣ, 10ˣ, puissances, racines, factorielle, pourcentage, mod, π, e, notation EE, ANS et multiplication implicite (`2π`, `3(4+1)`). Résultat en direct pendant la saisie, historique des 50 derniers calculs, appui long pour copier.
 - **Programmeur** : entiers 8, 16, 32 ou 64 bits, signés ou non, saisie en HEX, DEC, OCT ou BIN avec les quatre bases affichées en même temps, AND, OR, XOR, NOT, NAND, NOR, décalages, MOD, et grille de bits à toucher pour les inverser.
 - **Réseau** : calcul de sous-réseau IPv4 (masque, wildcard, réseau, broadcast, plage d'hôtes, type d'adresse), vue binaire, découpage en sous-réseaux et préfixe pour un nombre d'hôtes. Tout est calculé sur le téléphone.
+- **Conversion** : longueur, masse, température, volume, surface, vitesse, données, temps, énergie, pression et angle, plus les devises (taux de la BCE, gardés hors connexion). La valeur s'affiche dans toutes les unités à la fois et peut être un calcul (`12*3`).
 - **Raccourci calculatrice** : l'appli répond au raccourci « calculatrice » d'Android.
 - **Mises à jour** : releases GitHub `calc-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
@@ -81,6 +82,8 @@ Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`,
 
 - **Explorateur façon terminal** : invite `runner@deck:~/Download$`, raccourcis (interne, Download, DCIM, images, documents, musique, vidéos, carte SD ou clé USB), dossiers dépliables sur place avec les traits de `tree`, couleurs par type de fichier, tri par nom, date, taille ou type, fichiers cachés au choix.
 - **Actions** : appui long pour sélectionner, puis copier, couper et coller, renommer, supprimer (avec confirmation), infos (taille d'un dossier, droits), nouveau dossier, ouverture avec l'appli adaptée.
+- **Aperçu intégré** des images, des fichiers texte et du contenu des zip, avec « Ouvrir avec » et partage.
+- **Zip** : compresser la sélection en archive, extraire une archive dans un nouveau dossier (les chemins qui sortent du dossier sont refusés).
 - **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
 - **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
 - Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
@@ -105,8 +108,52 @@ Galerie dans le module `gallery/` (package `dev.netrunner.gallery`, même clé d
 - **Albums** : un dossier par album (Appareil photo, Captures, WhatsApp…), avec sa vignette et son nombre d'éléments.
 - **Visionneuse** : défilement de photo en photo, zoom au pincement, lecture des vidéos sur place avec barre de lecture, pause, ±10 s et vitesse (ou dans une autre appli), partage, ouverture dans l'éditeur du téléphone, infos (taille, date, dossier) et suppression avec la confirmation d'Android.
 - **Filtre holo** : teinte de la faction, décalage RGB, scanlines et vignettage, sur la grille et dans la visionneuse. « Export holo » enregistre une copie filtrée dans Pictures/Netrunner.
+- **Sélection multiple** : appui long sur une vignette, puis partager, mettre en favori ou supprimer plusieurs photos d'un coup.
+- **Favoris** ★ depuis la sélection ou la visionneuse, avec un filtre « FAVORIS ».
+- **Aller à une date** : bouton DATE pour sauter à un mois précis.
 - **Accès partiel** : fonctionne aussi si seules certaines photos sont autorisées (Android 14+).
 - **Mises à jour** : releases GitHub `gallery-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
+## Notes Netrunner (appli à part)
+
+Bloc-notes dans le module `notes/` (package `dev.netrunner.notes`, même clé de signature), au style terminal.
+
+- **Notes et listes** : texte libre ou liste à cocher (les cases cochées descendent), passage de l'un à l'autre sans perte, titre, couleur néon par note.
+- **Épinglage** : appui long sur une carte pour l'épingler en haut ; les autres sont triées par dernière modification.
+- **Recherche** dans les titres et le contenu, sans tenir compte des accents ni des majuscules.
+- **Partage** : une note se partage en texte, et du texte partagé depuis n'importe quelle appli devient une nouvelle note.
+- **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire et ajouter des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste.
+- **Mises à jour** : releases GitHub `notes-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
+## Dictaphone Netrunner (appli à part)
+
+Enregistreur vocal dans le module `recorder/` (package `dev.netrunner.recorder`, même clé de signature), au style terminal.
+
+- **REC** : enregistrement AAC (.m4a) avec forme d'onde en direct, chrono, pause et reprise.
+- **Écran éteint** : l'enregistrement continue en arrière-plan avec une notification (bouton ARRÊTER).
+- **Archives** : lecteur avec forme d'onde (touche pour se déplacer), ±10 s et vitesse de lecture ; partager, renommer, supprimer.
+- **Qualité** : réglage haute qualité (48 kHz / 192 kb/s) ou économe (44,1 kHz / 96 kb/s) dans CONFIG.
+- **Mises à jour** : releases GitHub `recorder-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
+## Scanner Netrunner (appli à part)
+
+Lecteur de QR codes et codes-barres dans le module `scanner/` (package `dev.netrunner.scanner`, même clé de signature), au style terminal.
+
+- **Scan** : caméra en direct avec réticule, lampe, et lecture depuis une image de la galerie (ML Kit, hors ligne).
+- **Décodage** : liens, Wi-Fi (connexion en un geste), téléphone, SMS, e-mail, position GPS, carte de visite, code produit, texte.
+- **Actions** : ouvrir, se connecter, appeler, copier, partager ; ouverture automatique des liens en option.
+- **Historique** des 100 derniers scans, vibration réglable.
+- **Mises à jour** : releases GitHub `scanner-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
+## Météo Netrunner (appli à part)
+
+Prévisions dans le module `weather/` (package `dev.netrunner.weather`, même clé de signature), au style terminal, données Open-Meteo (sans clé ni compte).
+
+- **Rapport de mission** : conditions actuelles (température, ressenti, vent, humidité, pression), conseil du jour.
+- **24 h** en courbe de température avec risque de pluie, et **7 jours** en barres min/max.
+- **Lieux** : position du téléphone (localisation approximative) ou villes recherchées et enregistrées.
+- **Hors ligne** : la dernière prévision reste affichée.
+- **Mises à jour** : releases GitHub `weather-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Installer sur le téléphone
 

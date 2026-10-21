@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Only apps signed with the deck's key (the launcher and As//ka) may read or add notes. -->
+    <permission
+        android:name="dev.netrunner.permission.READ_NOTES"
+        android:label="Lire les notes Netrunner"
+        android:protectionLevel="signature" />
+    <permission
+        android:name="dev.netrunner.permission.WRITE_NOTES"
+        android:label="Écrire des notes Netrunner"
+        android:protectionLevel="signature" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Notes">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "Share" a text from any app to turn it into a note. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name=".data.NotesProvider"
+            android:authorities="dev.netrunner.notes.provider"
+            android:exported="true"
+            android:readPermission="dev.netrunner.permission.READ_NOTES"
+            android:writePermission="dev.netrunner.permission.WRITE_NOTES" />
+    </application>
+</manifest>

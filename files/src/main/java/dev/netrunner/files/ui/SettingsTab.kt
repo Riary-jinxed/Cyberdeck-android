@@ -31,7 +31,9 @@ fun SettingsTab() {
                 "• Appui long sur un élément pour le sélectionner, puis touche les autres.\n" +
                 "• COPIER ou COUPER, va dans le dossier voulu, puis COLLER ICI.\n" +
                 "• Retour remonte d'un dossier.\n" +
-                "• La recherche part du dossier ouvert dans l'explorateur.",
+                "• La recherche part du dossier ouvert dans l'explorateur.\n" +
+                "• Les images, les textes et les zip s'ouvrent en aperçu ; « Ouvrir avec » pour une autre appli.\n" +
+                "• COMPRESSER crée un zip de la sélection, EXTRAIRE le décompresse dans un nouveau dossier.",
             color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(vertical = 6.dp),
         )
         Spacer(Modifier.height(18.dp))
