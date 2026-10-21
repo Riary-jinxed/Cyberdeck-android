@@ -5,6 +5,7 @@ import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.netrunner.launcher.chat.ChatSession
 import dev.netrunner.launcher.terminal.Terminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,16 +28,21 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val _launching = MutableStateFlow<AppEntry?>(null)
     val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
 
-    private val _terminalOpen = MutableStateFlow(false)
-    val terminalOpen: StateFlow<Boolean> = _terminalOpen.asStateFlow()
+    /** Full-screen panel shown over the home HUD. */
+    enum class Panel { None, Terminal, Wifi, Chat }
+
+    private val _panel = MutableStateFlow(Panel.None)
+    val panel: StateFlow<Panel> = _panel.asStateFlow()
 
     val terminal = Terminal(
         context = app,
         scope = viewModelScope,
         apps = { _apps.value },
         launch = ::requestLaunch,
-        close = { _terminalOpen.value = false },
+        openPanel = { _panel.value = it },
     )
+
+    val chat = ChatSession(app, viewModelScope)
 
     // Keeps the app list in sync when something is installed, updated or removed.
     private val packageCallback = object : LauncherApps.Callback() {
@@ -76,8 +82,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         _launching.value = null
     }
 
-    fun setTerminalOpen(open: Boolean) {
-        _terminalOpen.value = open
+    fun openPanel(panel: Panel) {
+        _panel.value = panel
     }
 
     fun openAppInfo(app: AppEntry) = repo.openAppInfo(app)

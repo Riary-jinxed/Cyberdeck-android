@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.netrunner.launcher.AppEntry
+import dev.netrunner.launcher.LauncherViewModel.Panel
 import dev.netrunner.launcher.system.SystemInfo
 import dev.netrunner.launcher.system.toGb
 import kotlinx.coroutines.CancellationException
@@ -39,7 +40,7 @@ class Terminal(
     private val scope: CoroutineScope,
     private val apps: () -> List<AppEntry>,
     private val launch: (AppEntry) -> Unit,
-    private val close: () -> Unit,
+    private val openPanel: (Panel) -> Unit,
 ) {
     val lines = mutableStateListOf<TermLine>()
 
@@ -72,7 +73,9 @@ class Terminal(
         when (name) {
             "help", "aide", "?" -> help()
             "clear", "cls" -> lines.clear()
-            "exit", "quit" -> close()
+            "exit", "quit" -> openPanel(Panel.None)
+            "wifi", "wardrive" -> openPanel(Panel.Wifi)
+            "glitch", "chat", "ai", "ia" -> openPanel(Panel.Chat)
             "stop" -> stop()
             "whoami" -> out(prompt.removeSuffix(":~$"), Tone.Ok)
             "date" -> out(LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss", Locale.getDefault())))
@@ -133,6 +136,8 @@ class Terminal(
             "battery         niveau, charge et température",
             "apps [filtre]   liste les applis installées",
             "open <appli>    lance une appli (ex : open spotify)",
+            "wifi            scanner Wi-Fi et traque de borne",
+            "glitch          parle à GLITCH, l'IA du cyberdeck",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",
         ).forEach { out(it) }

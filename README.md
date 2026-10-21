@@ -9,6 +9,8 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Accès réseau** : tiroir de toutes les applis avec recherche (Entrée lance le premier résultat).
 - **Lancement en ligne de commande** : chaque appli s'ouvre après une courte séquence « jack-in » façon terminal.
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
+- **Scanner Wi-Fi** : toutes les bornes à portée (SSID, BSSID, dBm, canal, bande, sécurité, norme Wi-Fi, distance estimée) et un mode « traque » avec radar, tendance et bip type compteur Geiger pour retrouver une borne physiquement.
+- **GLITCH, l'IA du cyberdeck** : glisser vers la gauche ouvre un chat avec Claude (Claude Opus 5.5 via l'API Anthropic, clé API à fournir), avec une mascotte animée qui réagit pendant qu'elle réfléchit et répond.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
@@ -46,6 +48,11 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `terminal/NetTools.kt` | Scan réseau, scan de ports, infos réseau |
 | `system/SystemInfo.kt` | Batterie, mémoire, stockage, appareil |
 | `system/HomeRole.kt` | Demande à devenir l'écran d'accueil |
+| `wifi/WifiScanner.kt` | Scan des bornes Wi-Fi, estimation de distance |
+| `ui/WifiScreen.kt` | Liste des bornes et mode traque |
+| `chat/ChatSession.kt` | Conversation avec Claude (SDK Java Anthropic, streaming) |
+| `ui/ChatScreen.kt` | Interface de chat GLITCH |
+| `ui/Mascot.kt` | Mascotte GLITCH animée |
 
 ## Idées pour la suite
 

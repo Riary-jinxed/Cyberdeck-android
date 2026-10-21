@@ -12,14 +12,14 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Off: the Anthropic SDK relies on Jackson reflection, which R8 would strip.
+            isMinifyEnabled = false
             // Signed with the debug key so the APK installs directly; use your own key to publish.
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -35,6 +35,18 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "META-INF/INDEX.LIST",
+                "META-INF/versions/9/module-info.class",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -47,4 +59,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("com.anthropic:anthropic-java:2.75.0")
+    // Keep kotlin-reflect (pulled by the SDK's Jackson module) on the same version as the compiler.
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.0.21")
 }

@@ -18,6 +18,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +72,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel
+import dev.netrunner.launcher.LauncherViewModel.Panel
 import dev.netrunner.launcher.system.BatteryState
 import dev.netrunner.launcher.system.HomeRole
 import dev.netrunner.launcher.system.SystemInfo
@@ -95,7 +99,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val favoriteKeys by viewModel.favorites.collectAsStateWithLifecycle()
     val launching by viewModel.launching.collectAsStateWithLifecycle()
-    val terminalOpen by viewModel.terminalOpen.collectAsStateWithLifecycle()
+    val panel by viewModel.panel.collectAsStateWithLifecycle()
     var drawerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -118,13 +122,13 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     // Pressing Home brings us back to the main HUD.
     LaunchedEffect(homePresses) {
         drawerOpen = false
-        viewModel.setTerminalOpen(false)
+        viewModel.openPanel(Panel.None)
     }
 
     // A launcher must never close on Back.
     BackHandler {
         drawerOpen = false
-        viewModel.setTerminalOpen(false)
+        viewModel.openPanel(Panel.None)
     }
 
     val favorites = remember(apps, favoriteKeys) {
@@ -154,6 +158,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         },
                     ) { _, dragAmount -> total += dragAmount }
                 }
+                // Swipe left: GLITCH slides in from the right edge.
+                .pointerInput(Unit) {
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { total = 0f },
+                        onDragEnd = { if (total < -120f) viewModel.openPanel(Panel.Chat) },
+                    ) { _, dragAmount -> total += dragAmount }
+                }
         ) {
             StatusStrip()
             if (!isDefaultHome) {
@@ -163,7 +175,22 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Spacer(Modifier.height(28.dp))
             ClockBlock()
             Spacer(Modifier.height(20.dp))
-            LiveFeed()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Mascot(
+                    mood = viewModel.chat.mood,
+                    size = 64.dp,
+                    modifier = Modifier.clickable { viewModel.openPanel(Panel.Chat) },
+                )
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.weight(1f)) { LiveFeed() }
+            }
+            Text(
+                "◄ GLISSE À GAUCHE POUR PARLER À GLITCH",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
             Spacer(Modifier.weight(1f))
             QuickhackGrid(
                 favorites = favorites,
@@ -174,7 +201,12 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HudButton("[ RÉSEAU ] ▲", Cp.Yellow, Modifier.weight(1f)) { drawerOpen = true }
-                HudButton("[ TERMINAL ] >_", Cp.Cyan, Modifier.weight(1f)) { viewModel.setTerminalOpen(true) }
+                HudButton("[ TERMINAL ] >_", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Terminal) }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HudButton("[ SCAN WI-FI ] ((•))", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
+                HudButton("[ GLITCH ] ◄", Cp.Red, Modifier.weight(1f)) { viewModel.openPanel(Panel.Chat) }
             }
         }
 
@@ -197,11 +229,27 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         }
 
         AnimatedVisibility(
-            visible = terminalOpen,
+            visible = panel == Panel.Terminal,
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
-            TerminalScreen(terminal = viewModel.terminal, onClose = { viewModel.setTerminalOpen(false) })
+            TerminalScreen(terminal = viewModel.terminal, onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Wifi,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            WifiScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Chat,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            ChatScreen(session = viewModel.chat, onClose = { viewModel.openPanel(Panel.None) })
         }
 
         launching?.let { app ->
