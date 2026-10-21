@@ -39,7 +39,7 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 /** A falling thing: a macaron to catch, or a virus to dodge. Positions from 0 to 1. */
-private class Drop(var x: Float, var y: Float, val speed: Float, val virus: Boolean)
+private class FallingTreat(var x: Float, var y: Float, val speed: Float, val virus: Boolean)
 
 /**
  * Her mini-game, "attrape les macarons": twenty seconds of macarons (and a few viruses)
@@ -48,7 +48,7 @@ private class Drop(var x: Float, var y: Float, val speed: Float, val virus: Bool
  */
 @Composable
 fun MacaronGame(modifier: Modifier = Modifier, onEnd: (Int) -> Unit) {
-    val drops = remember { ArrayList<Drop>() }
+    val drops = remember { ArrayList<FallingTreat>() }
     var player by remember { mutableFloatStateOf(0.5f) }
     var score by remember { mutableIntStateOf(0) }
     var secondsLeft by remember { mutableIntStateOf(ROUND_SECONDS) }
@@ -72,7 +72,7 @@ fun MacaronGame(modifier: Modifier = Modifier, onEnd: (Int) -> Unit) {
             val pace = 1f + elapsed / ROUND_SECONDS
             spawnIn -= dt
             if (spawnIn <= 0f) {
-                drops += Drop(Random.nextFloat() * 0.84f + 0.08f, -0.05f, (0.32f + Random.nextFloat() * 0.18f) * pace, Random.nextFloat() < 0.18f)
+                drops += FallingTreat(Random.nextFloat() * 0.84f + 0.08f, -0.05f, (0.32f + Random.nextFloat() * 0.18f) * pace, Random.nextFloat() < 0.18f)
                 spawnIn = 0.62f / pace
             }
             val iterator = drops.iterator()
