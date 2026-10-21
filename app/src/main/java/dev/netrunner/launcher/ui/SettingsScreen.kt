@@ -219,6 +219,13 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             if (!lockOn) CyberLock.missingStep(context)?.let { context.startActivity(it) }
             tick++
         }
+        if (lockOn) {
+            val handoffOn = remember(tick) { CyberLock.handoff(context) }
+            Toggle("Passer la main au visage", "À l'allumage, rend la main au verrou système : visage ou empreinte, sans glisser", handoffOn) {
+                CyberLock.setHandoff(context, !handoffOn)
+                tick++
+            }
+        }
         val ghostOn = remember(tick) { Ghost.isOn(context) }
         Toggle("Mode furtif", "Silence, HUD GHOST, radios à couper (aussi : double-tap sur l'horloge)", ghostOn) {
             Ghost.toggle(context)

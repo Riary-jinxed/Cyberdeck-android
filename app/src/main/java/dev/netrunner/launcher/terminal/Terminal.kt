@@ -402,7 +402,12 @@ class Terminal(
                     out("autorisation requise : accorde-la puis éteins l'écran", Tone.Warn)
                 }
             }
-            else -> out("usage : lock [on|off]", Tone.Error)
+            "face" -> {
+                val on = !CyberLock.handoff(context)
+                CyberLock.setHandoff(context, on)
+                out(if (on) "passage au visage actif : le verrou système prend la main à l'allumage" else "passage au visage désactivé", Tone.Ok)
+            }
+            else -> out("usage : lock [on|off|face]", Tone.Error)
         }
     }
 
@@ -435,7 +440,7 @@ class Terminal(
             "config / diag   réglages Netrunner et diagnostic des autorisations",
             "call [numéro]   ouvre la holo-liaison (appels)",
             "keyboard        active / choisit le clavier Netrunner",
-            "lock [on|off]   écran de verrouillage cyberdeck",
+            "lock [on|off|face] verrou cyberdeck, face : visage à l'allumage",
             "ghost [off]     mode furtif (silence, HUD sombre, radios)",
             "theme <faction> netrunner, arasaka, militech, netwatch",
             "wallpaper <m>   fond animé : breach, rain, off",
