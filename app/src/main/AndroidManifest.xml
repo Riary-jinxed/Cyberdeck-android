@@ -109,6 +109,9 @@
             android:name=".aska.AskaReminderReceiver"
             android:exported="false" />
         <receiver
+            android:name=".aska.AskaPetCallReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".aska.AskaReminderBootReceiver"
             android:exported="true">
             <intent-filter>

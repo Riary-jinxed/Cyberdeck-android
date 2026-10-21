@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +73,8 @@ fun AskaWidget(pet: AskaPet, onOpen: () -> Unit) {
             AskaPad(
                 Modifier
                     .fillMaxWidth()
-                    .height(14.dp)
+                    .height(14.dp),
+                color = Color(pet.looks.getValue(AskaPet.Slot.Pad).argb),
             )
             Image(
                 painterResource(mood.drawable()),

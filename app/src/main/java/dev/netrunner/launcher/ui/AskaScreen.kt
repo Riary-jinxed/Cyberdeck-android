@@ -59,6 +59,8 @@ import dev.netrunner.launcher.aska.AlarmAction
 import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
+import dev.netrunner.launcher.aska.AskaPet
+import dev.netrunner.launcher.aska.AskaPetCalls
 import dev.netrunner.launcher.aska.AskaPiper
 import dev.netrunner.launcher.aska.AskaVoice
 import dev.netrunner.launcher.system.SystemInfo
@@ -89,6 +91,13 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
     var showModels by remember { mutableStateOf(false) }
     // Her nest (Tamagotchi), opened by touching her chibi.
     var nest by remember { mutableStateOf(false) }
+    // Her notification was touched: straight to her nest.
+    LaunchedEffect(AskaPetCalls.openNest) {
+        if (AskaPetCalls.openNest) {
+            nest = true
+            AskaPetCalls.openNest = false
+        }
+    }
     // Her reminders, opened from the strip above the chat's input.
     var reminders by remember { mutableStateOf(false) }
     val noModel = brain.state == AskaBrain.State.NoModel
@@ -226,7 +235,8 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(18.dp)
+                        .height(18.dp),
+                    color = Color(brain.pet.looks.getValue(AskaPet.Slot.Pad).argb),
                 )
                 AskaChibi(
                     brain,

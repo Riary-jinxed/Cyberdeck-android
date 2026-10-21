@@ -43,11 +43,11 @@ private fun presenceClock(animated: Boolean, fps: Int): State<Long> =
 
 /** The soft pink glow she stands on, like a projector pad on the deck. */
 @Composable
-private fun HoloPad(modifier: Modifier, strength: Float = 1f) {
+private fun HoloPad(modifier: Modifier, strength: Float = 1f, color: Color = AskaColors.Pink) {
     Canvas(modifier) {
         drawOval(
             Brush.radialGradient(
-                listOf(AskaColors.Pink.copy(alpha = 0.35f * strength), Color.Transparent),
+                listOf(color.copy(alpha = 0.35f * strength), Color.Transparent),
                 center = Offset(size.width / 2, size.height / 2),
                 radius = size.width / 2,
             ),
@@ -236,6 +236,6 @@ fun TypingDots(animated: Boolean = true) {
     }
 }
 
-/** Her little holo pad, for the chibi in the chat. */
+/** Her little holo pad, for the chibi in the chat (in the color of the socle she wears). */
 @Composable
-fun AskaPad(modifier: Modifier) = HoloPad(modifier)
+fun AskaPad(modifier: Modifier, color: Color = AskaColors.Pink) = HoloPad(modifier, color = color)
