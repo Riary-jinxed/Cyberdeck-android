@@ -103,6 +103,7 @@ import dev.netrunner.launcher.Folder
 import dev.netrunner.launcher.system.Gestures
 import dev.netrunner.launcher.system.NightWatch
 import dev.netrunner.launcher.system.Ripperdoc
+import dev.netrunner.launcher.system.BatteryLog
 import dev.netrunner.launcher.system.Profiles
 import dev.netrunner.launcher.system.Updater
 import androidx.compose.foundation.pager.HorizontalPager
@@ -225,6 +226,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Gestures.Action.Dialer -> context.startActivity(Intent(context, DialerActivity::class.java))
             Gestures.Action.Wifi -> viewModel.openPanel(Panel.Wifi)
             Gestures.Action.Kit -> viewModel.openPanel(Panel.Kit)
+            Gestures.Action.Stats -> viewModel.openPanel(Panel.Stats)
             Gestures.Action.Ghost -> {
                 UiSound.play(context, UiSound.Cue.Glitch)
                 Ghost.toggle(context)
@@ -500,6 +502,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             KitScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Stats,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            StatsScreen(onClose = { viewModel.openPanel(Panel.None) })
         }
 
         AnimatedVisibility(
@@ -1326,6 +1336,7 @@ private fun rememberBattery(): BatteryState {
             override fun onReceive(c: Context, intent: Intent) {
                 state = SystemInfo.battery(context)
                 Ripperdoc.refresh(context, state)
+                BatteryLog.record(context, state)
             }
         }
         val filter = IntentFilter().apply {

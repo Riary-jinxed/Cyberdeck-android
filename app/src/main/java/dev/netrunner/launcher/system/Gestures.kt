@@ -26,6 +26,7 @@ object Gestures {
         Dialer("Appels"),
         Wifi("Scanner Wi-Fi"),
         Kit("Kit de terrain"),
+        Stats("Statistiques"),
         Ghost("Mode furtif"),
         Torch("Lampe"),
         Settings("Config"),

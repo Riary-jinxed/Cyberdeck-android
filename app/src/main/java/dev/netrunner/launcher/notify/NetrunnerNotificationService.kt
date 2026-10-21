@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import dev.netrunner.launcher.lock.CyberLock
+import dev.netrunner.launcher.system.BatteryLog
+import dev.netrunner.launcher.system.Ice
 
 /**
  * Mirrors the phone's notifications into the HUD. Being an enabled listener is also
@@ -19,10 +21,13 @@ class NetrunnerNotificationService : NotificationListenerService() {
     private val icons = mutableMapOf<String, ImageBitmap?>()
 
     private var screenOff: BroadcastReceiver? = null
+    private var battery: BroadcastReceiver? = null
 
     override fun onListenerConnected() {
         NotificationHub.attach(this)
         if (screenOff == null) screenOff = CyberLock.register(this)
+        if (battery == null) battery = BatteryLog.register(this)
+        Ice.start(this)
         refresh()
     }
 
@@ -30,6 +35,9 @@ class NetrunnerNotificationService : NotificationListenerService() {
         NotificationHub.detach(this)
         screenOff?.let { runCatching { unregisterReceiver(it) } }
         screenOff = null
+        battery?.let { runCatching { unregisterReceiver(it) } }
+        battery = null
+        Ice.stop()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = refresh()

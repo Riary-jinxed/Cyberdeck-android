@@ -15,3 +15,6 @@ dependencyResolutionManagement {
 rootProject.name = "CyberpunkLauncher"
 include(":app")
 include(":clock")
+include(":deck")
+include(":calc")
+include(":files")

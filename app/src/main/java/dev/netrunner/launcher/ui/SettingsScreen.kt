@@ -44,6 +44,7 @@ import dev.netrunner.launcher.system.Gestures
 import dev.netrunner.launcher.system.NightWatch
 import dev.netrunner.launcher.system.Profiles
 import dev.netrunner.launcher.system.Updater
+import dev.netrunner.launcher.system.DeckApps
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -318,6 +319,9 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             Text(it, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 6)
         }
 
+        Section("APPLIS DU DECK")
+        DeckAppsSection()
+
         Section("SYSTÈME")
         Action("Applis par défaut", "Écran d'accueil, téléphone, SMS") {
             context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -538,6 +542,89 @@ private fun CutterButton(label: String, color: Color, onClick: () -> Unit) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier.clickable(onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp),
     )
+}
+
+/** Companion apps from the same repository: install, update or open them from here. */
+@Composable
+private fun DeckAppsSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var apps by remember { mutableStateOf<List<DeckApps.App>?>(null) }
+    var state by remember { mutableStateOf<String?>(null) }
+    var downloading by remember { mutableStateOf<Pair<String, Float>?>(null) }
+    fun refresh() {
+        state = "Recherche…"
+        scope.launch {
+            runCatching { DeckApps.list(context) }.fold(
+                onSuccess = {
+                    apps = it
+                    state = if (it.isEmpty()) "Aucune appli publiée pour l'instant" else null
+                },
+                onFailure = { state = "Réseau injoignable" },
+            )
+        }
+    }
+    // Back from Android's installer: the installed versions changed.
+    LifecycleResumeEffect(Unit) {
+        if (apps != null) refresh()
+        onPauseOrDispose { }
+    }
+    val list = apps
+    if (list == null) {
+        Action("Voir les applis du deck", state ?: "Horloge, calculatrice, fichiers… et les prochaines") { refresh() }
+        return
+    }
+    state?.let { Text("> $it", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp) }
+    list.forEach { app ->
+        val progress = downloading?.takeIf { it.first == app.id }?.second
+        val detail = when {
+            progress != null -> "Téléchargement ${(progress * 100).toInt()} %"
+            app.updatable -> "v${app.installedVersion} → v${app.release.version}"
+            app.installed -> "v${app.installedVersion} · à jour"
+            else -> "v${app.release.version} · ${"%.1f".format(app.release.size / 1_048_576f)} Mo"
+        }
+        val verb = when {
+            app.updatable -> "METTRE À JOUR ►"
+            app.installed -> "OUVRIR ►"
+            else -> "INSTALLER ►"
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .hudPanel(borderColor = (if (app.updatable) Cp.Yellow else Cp.Cyan).copy(alpha = 0.6f), cut = 8.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(app.title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
+            }
+            Text(
+                verb,
+                color = if (app.installed && !app.updatable) Cp.Cyan else Cp.Yellow,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable(enabled = downloading == null) {
+                        when {
+                            app.installed && !app.updatable -> DeckApps.open(context, app)
+                            !Updater.canInstall(context) -> {
+                                Toast.makeText(context, "Autorise Netrunner à installer des applis, puis réessaie", Toast.LENGTH_LONG).show()
+                                context.startActivity(Updater.installPermissionIntent(context))
+                            }
+                            else -> scope.launch {
+                                downloading = app.id to 0f
+                                val file = runCatching { DeckApps.download(context, app) { downloading = app.id to it } }.getOrNull()
+                                downloading = null
+                                if (file != null) Updater.install(context, file) else state = "Échec du téléchargement"
+                            }
+                        }
+                    }
+                    .padding(vertical = 6.dp),
+            )
+        }
+    }
 }
 
 @Composable

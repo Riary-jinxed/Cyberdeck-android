@@ -38,6 +38,8 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
 - **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
 - **Gestes personnalisables** : chaque glisser et le double-tap / appui long sur l'horloge se règlent dans Config › Gestes.
+- **Stats du deck** : temps d'écran, déverrouillages, ouvertures et applis les plus utilisées (aujourd'hui ou sur 7 jours, en barres segmentées façon HUD), plus la batterie consommée et rechargée par jour. Il faut activer « Accès aux données d'utilisation ». Tout est calculé sur le téléphone, et l'historique batterie reste dans les fichiers privés de l'appli. On y voit aussi la data consommée (mobile et Wi-Fi, par jour et par appli). **Limites ICE** : touche une appli dans les stats pour lui fixer un temps max par jour. Une fois ce temps écoulé, un écran d'intrusion Netwatch la recouvre (bouton Déconnexion ou +5 min). Il faut « Afficher par-dessus les autres applis », sinon c'est une notification. À ouvrir avec `stats` dans le terminal ou via un geste.
+- **Applis du deck** : Config › Applis du deck liste les autres applis Netrunner du dépôt (horloge, calculatrice, fichiers…) pour les installer, les mettre à jour ou les ouvrir. Une nouvelle appli y apparaît dès sa première release, si elle respecte la convention : tag `<id>-v<version>`, APK `<id>-<version>.apk`, `--latest=false`, et paquet `dev.netrunner.<id>` (sinon, l'ajouter à `DeckApps.PACKAGES`).
 - **Mode éco Ripperdoc** : coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur, et fige le fond d'écran animé. En Auto, il s'active sous 20 % de batterie (hors charge) ou avec l'économiseur d'Android ; il peut aussi rester toujours actif (Config › Mode éco Ripperdoc). Le HUD affiche alors RIPPERDOC://ÉCO.
 - **Profils Boulot / Perso** : chacun garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.
 - **Mode nuit Netwatch** : interface assombrie, sans fond animé ni glitchs, sur une plage horaire choisie.
@@ -62,6 +64,27 @@ Une deuxième appli, dans le module `clock/` (package `dev.netrunner.clock`, APK
 - **Compatible As//ka** : l'appli répond aux intents Android standard de l'horloge, donc « réveille-moi à 7h30 », « minuteur 10 min » ou « prochaine alarme ? » marchent avec elle. La première fois, choisis Horloge Netrunner puis « Toujours ».
 - **Sobre en batterie** : rien ne tourne en fond ; un service ne démarre que pendant qu'une alarme sonne.
 - **Mises à jour** : releases GitHub `horloge-vX.Y.Z` (jamais marquées « latest », pour ne pas gêner la mise à jour du launcher), installables depuis CONFIG › Mise à jour.
+
+## Calcul Netrunner (appli à part)
+
+Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK séparé signé avec la même clé). Elle partage avec les futures applis du deck le module `deck/` (factions, polices, widgets HUD, mises à jour).
+
+- **Scientifique** : priorités, parenthèses (fermées toutes seules), trigonométrie en degrés ou radians et fonctions inverses (touche 2ND), ln, log, eˣ, 10ˣ, puissances, racines, factorielle, pourcentage, mod, π, e, notation EE, ANS et multiplication implicite (`2π`, `3(4+1)`). Résultat en direct pendant la saisie, historique des 50 derniers calculs, appui long pour copier.
+- **Programmeur** : entiers 8, 16, 32 ou 64 bits, signés ou non, saisie en HEX, DEC, OCT ou BIN avec les quatre bases affichées en même temps, AND, OR, XOR, NOT, NAND, NOR, décalages, MOD, et grille de bits à toucher pour les inverser.
+- **Réseau** : calcul de sous-réseau IPv4 (masque, wildcard, réseau, broadcast, plage d'hôtes, type d'adresse), vue binaire, découpage en sous-réseaux et préfixe pour un nombre d'hôtes. Tout est calculé sur le téléphone.
+- **Raccourci calculatrice** : l'appli répond au raccourci « calculatrice » d'Android.
+- **Mises à jour** : releases GitHub `calc-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
+
+## Fichiers Netrunner (appli à part)
+
+Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`, même clé de signature).
+
+- **Explorateur façon terminal** : invite `runner@deck:~/Download$`, raccourcis (interne, Download, DCIM, images, documents, musique, vidéos, carte SD ou clé USB), dossiers dépliables sur place avec les traits de `tree`, couleurs par type de fichier, tri par nom, date, taille ou type, fichiers cachés au choix.
+- **Actions** : appui long pour sélectionner, puis copier, couper et coller, renommer, supprimer (avec confirmation), infos (taille d'un dossier, droits), nouveau dossier, ouverture avec l'appli adaptée.
+- **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
+- **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
+- Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
+- **Mises à jour** : releases GitHub `files-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
 ## Installer sur le téléphone
 
@@ -120,6 +143,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `system/Tones.kt` | Synthèse et installation des sonneries |
 | `system/MusicTone.kt` | Découpe d'une musique importée en sonnerie |
 | `system/Ripperdoc.kt` | Mode éco (animations coupées) |
+| `system/UsageReport.kt`, `system/BatteryLog.kt`, `system/DataUsage.kt`, `ui/StatsScreen.kt` | Statistiques d'usage, de data et de batterie |
+| `system/Ice.kt`, `ui/IceActivity.kt` | Limites ICE par appli |
 | `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
 | `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 
