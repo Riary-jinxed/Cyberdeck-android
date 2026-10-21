@@ -4,6 +4,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// As//ka's neural voice runtime (sherpa-onnx, Apache 2.0) is not on Maven Central: its release
+// AAR is fetched once from GitHub and checked against a known hash.
+val sherpaVersion = "1.13.7"
+val sherpaAar = file("libs/sherpa-onnx-$sherpaVersion.aar")
+if (!sherpaAar.exists()) {
+    sherpaAar.parentFile.mkdirs()
+    val part = File(sherpaAar.path + ".part")
+    uri("https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaVersion/sherpa-onnx-$sherpaVersion.aar")
+        .toURL().openStream().use { input -> part.outputStream().use { input.copyTo(it) } }
+    val sha = java.security.MessageDigest.getInstance("SHA-256").digest(part.readBytes()).joinToString("") { "%02x".format(it) }
+    check(sha == "c4ef49e309f24fcee5c106b8a279481aaecaabb078cd37b2cd6e9a62cc8a73c8") { "sherpa-onnx AAR: unexpected hash $sha" }
+    part.renameTo(sherpaAar)
+}
+
 android {
     namespace = "dev.netrunner.launcher"
     compileSdk = 35
@@ -12,8 +26,8 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.2.6"
+        versionCode = 23
+        versionName = "1.2.7"
 
         // As//ka's model runtime ships native code: phones only, which keeps the APK small.
         ndk {
@@ -51,6 +65,10 @@ android {
         compose = true
     }
     packaging {
+        jniLibs {
+            // The neural voice only needs the JNI bridge and onnxruntime.
+            excludes += setOf("**/libsherpa-onnx-c-api.so", "**/libsherpa-onnx-cxx-api.so")
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
@@ -86,4 +104,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     // As//ka: on-device language model runtime (Gemma, Qwen… in .litertlm format).
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
+    // As//ka's neural voice (Piper models through sherpa-onnx), and the unpacking of the voice archive.
+    implementation(files(sherpaAar))
+    implementation("org.apache.commons:commons-compress:1.27.1")
 }

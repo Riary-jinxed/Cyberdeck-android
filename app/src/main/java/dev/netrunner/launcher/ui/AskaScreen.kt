@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.aska.AskaModels
+import dev.netrunner.launcher.aska.AskaPiper
 import dev.netrunner.launcher.aska.AskaVoice
 import dev.netrunner.launcher.system.SystemInfo
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +82,8 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
         onDispose { if (onScreen) brain.sleepSoon() }
     }
     var showModels by remember { mutableStateOf(false) }
+    // Her nest (Tamagotchi), opened by touching her chibi.
+    var nest by remember { mutableStateOf(false) }
     val noModel = brain.state == AskaBrain.State.NoModel
 
     Column(
@@ -112,8 +115,12 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                     fontSize = 11.sp,
                 )
             }
-            HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
-            if (!showModels && !noModel) {
+            if (nest) {
+                HeaderButton("◂ CHAT", Cp.Cyan) { nest = false }
+            } else {
+                HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
+            }
+            if (!nest && !showModels && !noModel) {
                 HeaderButton(if (brain.voice.enabled) "VOIX ●" else "VOIX ○", if (brain.voice.enabled) AskaColors.Pink else Cp.Dim) {
                     brain.voice.toggle()
                 }
@@ -136,10 +143,10 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                 .height(1.dp)
                 .background(Brush.horizontalGradient(listOf(AskaColors.Pink, AskaColors.Magenta, Color.Transparent)))
         )
-        if (showModels || noModel) {
-            ModelBay(brain, Modifier.weight(1f))
-        } else {
-            Chat(brain, Modifier.weight(1f))
+        when {
+            nest -> AskaNest(brain.pet, Modifier.weight(1f))
+            showModels || noModel -> ModelBay(brain, Modifier.weight(1f))
+            else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true })
         }
     }
 }
@@ -169,7 +176,7 @@ private fun HeaderButton(label: String, color: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Chat(brain: AskaBrain, modifier: Modifier) {
+private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val lines = brain.lines
@@ -196,7 +203,13 @@ private fun Chat(brain: AskaBrain, modifier: Modifier) {
             items(lines, key = { it.id }) { line -> Bubble(brain, line) }
         }
         Row(verticalAlignment = Alignment.Bottom) {
-            Box(Modifier.size(width = 92.dp, height = 104.dp).padding(end = 6.dp)) {
+            // Touching her chibi opens her nest.
+            Box(
+                Modifier
+                    .size(width = 92.dp, height = 104.dp)
+                    .clickable(onClick = onChibi)
+                    .padding(end = 6.dp)
+            ) {
                 AskaPad(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -414,7 +427,7 @@ private fun ModelBay(brain: AskaBrain, modifier: Modifier) {
         )
         message?.let { Text(it, color = AskaColors.HotPink, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
 
-        VoiceBay(brain.voice)
+        VoiceBay(brain.voice, mobileData)
         PortraitBay()
 
         AskaModels.catalog.forEach { model ->
@@ -572,7 +585,7 @@ private fun BayButton(label: String, color: Color, onClick: () -> Unit) {
 
 /** Voice packs: system speech run through As//ka's effects. */
 @Composable
-private fun VoiceBay(voice: AskaVoice) {
+private fun VoiceBay(voice: AskaVoice, mobileData: Boolean) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -584,6 +597,7 @@ private fun VoiceBay(voice: AskaVoice) {
             Text("VOIX", color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             BayButton(if (voice.enabled) "LECTURE AUTO ●" else "LECTURE AUTO ○", if (voice.enabled) AskaColors.Pink else Cp.Dim) { voice.toggle() }
         }
+        NeuralVoice(voice, mobileData)
         AskaVoice.Pack.entries.forEach { pack ->
             val selected = pack == voice.pack
             Row(
@@ -615,11 +629,130 @@ private fun VoiceBay(voice: AskaVoice) {
         }
         voice.problem?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
         Text(
-            "Synthèse vocale du téléphone, hors ligne, filtrée façon IA. Touche une réponse d'As//ka pour la réentendre.",
+            "Hors ligne, filtrée façon IA. Les autres voix utilisent la synthèse vocale du téléphone. Touche une réponse d'As//ka pour la réentendre.",
             color = Cp.Dim,
             fontFamily = HudFont,
             fontSize = 11.sp,
         )
+    }
+}
+
+/** Her neural voice: download (once), unpack, delete. */
+@Composable
+private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
+    val context = LocalContext.current
+    var download by remember { mutableStateOf(AskaPiper.pollDownload(context)) }
+    var unpacking by remember { mutableStateOf<Float?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    suspend fun unpack() {
+        unpacking = 0f
+        val result = withContext(Dispatchers.IO) { runCatching { AskaPiper.install(context) { unpacking = it } } }
+        unpacking = null
+        error = result.exceptionOrNull()?.let { "Installation impossible : ${it.message}" }
+        if (result.isFailure) AskaPiper.delete(context)
+        voice.neuralChanged()
+        if (result.isSuccess) {
+            voice.select(AskaVoice.Pack.Ashka)
+            voice.speak("Voilà ma vraie voix. Tu me reconnais, runner ?", force = true)
+        }
+    }
+
+    // A download finished while the panel was closed: unpack it now.
+    LaunchedEffect(Unit) {
+        if (download == null && !voice.neural && AskaPiper.hasArchive(context)) unpack()
+    }
+    LaunchedEffect(download != null) {
+        while (download != null) {
+            delay(1000)
+            val now = AskaPiper.pollDownload(context)
+            when (now?.third) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    AskaPiper.clearDownload(context)
+                    download = null
+                    unpack()
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    error = "Téléchargement échoué. Vérifie la connexion et l'espace libre, puis réessaie."
+                    AskaPiper.cancelDownload(context)
+                    download = null
+                }
+                else -> download = now
+            }
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = AskaColors.HotPink.copy(alpha = 0.6f), fill = AskaColors.Void.copy(alpha = 0.6f), cut = 8.dp)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (voice.neural) "VOIX NEURONALE ● ACTIVE" else "VOIX NEURONALE",
+                    color = AskaColors.HotPink,
+                    fontFamily = HudFont,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    if (voice.neural) "Sa vraie voix, pour le pack AS//KA. Hors ligne."
+                    else "Une vraie voix française, naturelle, hors ligne. ${AskaPiper.SIZE_MB} Mo, une seule fois.",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 12.sp,
+                )
+            }
+            val d = download
+            when {
+                unpacking != null -> Unit
+                d != null -> BayButton("ANNULER", Cp.Red) {
+                    AskaPiper.cancelDownload(context)
+                    download = null
+                }
+                voice.neural -> BayButton("SUPPRIMER", Cp.Dim) {
+                    AskaPiper.delete(context)
+                    voice.neuralChanged()
+                }
+                else -> BayButton("TÉLÉCHARGER", AskaColors.Pink) {
+                    error = null
+                    AskaPiper.startDownload(context, mobileData)
+                    download = AskaPiper.pollDownload(context)
+                }
+            }
+        }
+        val d = download
+        val progress = unpacking ?: d?.let { if (it.second > 0) it.first.toFloat() / it.second else 0f }
+        if (progress != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(AskaColors.Pink.copy(alpha = 0.15f))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(progress.coerceIn(0f, 1f))
+                        .height(4.dp)
+                        .background(AskaColors.HotPink)
+                )
+            }
+            Text(
+                when {
+                    unpacking != null -> "INSTALLATION… ${((unpacking ?: 0f) * 100).toInt()} %"
+                    d?.third == DownloadManager.STATUS_PAUSED -> "EN PAUSE (attente du Wi-Fi ou du réseau)"
+                    d?.third == DownloadManager.STATUS_PENDING -> "EN ATTENTE…"
+                    else -> "${(d?.first ?: 0L) / 1_000_000} / ${(d?.second ?: 0L).coerceAtLeast(0L) / 1_000_000} Mo"
+                },
+                color = AskaColors.Pink,
+                fontFamily = MonoFont,
+                fontSize = 11.sp,
+            )
+        }
+        error?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
     }
 }
 
