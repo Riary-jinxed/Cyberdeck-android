@@ -94,6 +94,8 @@ fun LockScreen(onUnlock: () -> Unit) {
                 ) { _, amount -> drag = (drag + amount).coerceAtMost(0f) }
             }
     ) {
+        remember { Wallpaper.load(context.applicationContext) }
+        LiveWallpaper(batteryLevel = battery.level, charging = battery.charging)
         Column(
             Modifier
                 .fillMaxSize()

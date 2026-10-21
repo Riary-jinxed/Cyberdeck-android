@@ -2,6 +2,9 @@ package dev.netrunner.launcher.terminal
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.provider.AlarmClock
 import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
@@ -14,8 +17,14 @@ import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel.Panel
 import dev.netrunner.launcher.call.DialerActivity
 import dev.netrunner.launcher.lock.CyberLock
+import dev.netrunner.launcher.ui.Cp
+import dev.netrunner.launcher.ui.Faction
+import dev.netrunner.launcher.ui.Wallpaper
+import dev.netrunner.launcher.ui.WallpaperMode
 import dev.netrunner.launcher.system.ClaudeApp
+import dev.netrunner.launcher.system.Ghost
 import dev.netrunner.launcher.system.SystemInfo
+import dev.netrunner.launcher.system.UiSound
 import dev.netrunner.launcher.system.toGb
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +39,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -59,8 +70,13 @@ class Terminal(
 
     private var job: Job? = null
 
+    /** Text shown as a QR code over the terminal, or null. */
+    var qr by mutableStateOf<String?>(null)
+
+    private var torchOn = false
+
     init {
-        out("CYBERDECK OS v0.2 — Netrunner", Tone.Ok)
+        out("CYBERDECK OS v0.7 — Netrunner", Tone.Ok)
         out("Tape « help » pour la liste des commandes.", Tone.Dim)
     }
 
@@ -68,6 +84,7 @@ class Terminal(
         val text = input.trim()
         if (text.isEmpty()) return
         out("$prompt $text", Tone.Command)
+        UiSound.play(context, UiSound.Cue.Tap)
         val parts = text.split(Regex("\\s+"))
         val name = parts.first().lowercase(Locale.ROOT)
         val args = parts.drop(1)
@@ -88,6 +105,15 @@ class Terminal(
             "call", "dial", "tel" -> dial(args.joinToString(""))
             "keyboard", "kb", "clavier" -> keyboard()
             "lock", "verrou" -> lock(args.firstOrNull())
+            "torch", "lampe" -> torch(args.firstOrNull())
+            "timer", "minuteur" -> timer(args.joinToString(""))
+            "calc", "=" -> calc(args.joinToString(" "))
+            "qr" -> qrCode(args.joinToString(" "))
+            "speedtest", "speed" -> runJob { speedtest() }
+            "ghost", "furtif" -> ghost(args.firstOrNull())
+            "theme", "faction" -> theme(args.firstOrNull())
+            "sound", "son" -> sound(args.firstOrNull())
+            "wallpaper", "fond" -> wallpaper(args.firstOrNull())
             "stop" -> stop()
             "whoami" -> out(prompt.removeSuffix(":~$"), Tone.Ok)
             "date" -> out(LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss", Locale.getDefault())))
@@ -99,7 +125,10 @@ class Terminal(
             "scan", "nmap" -> runJob { scan() }
             "ports" -> runJob { ports(args.firstOrNull()) }
             "ping" -> runJob { ping(args.firstOrNull()) }
-            else -> out("commande inconnue : $name (tape « help »)", Tone.Error)
+            else -> {
+                UiSound.play(context, UiSound.Cue.Error)
+                out("commande inconnue : $name (tape « help »)", Tone.Error)
+            }
         }
     }
 
@@ -153,6 +182,179 @@ class Terminal(
         out("[holo] ouverture de la liaison ${number.ifBlank { "" }}".trimEnd(), Tone.Ok)
     }
 
+    private fun torch(arg: String?) {
+        val camera = context.getSystemService(CameraManager::class.java)
+        val id = camera?.cameraIdList?.firstOrNull {
+            camera.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        }
+        if (id == null) {
+            out("aucun flash détecté", Tone.Error)
+            return
+        }
+        val on = when (arg) {
+            "on" -> true
+            "off" -> false
+            else -> !torchOn
+        }
+        runCatching { camera.setTorchMode(id, on) }
+            .onSuccess {
+                torchOn = on
+                out(if (on) "lampe : ON" else "lampe : OFF", Tone.Ok)
+            }
+            .onFailure { out("lampe indisponible (caméra occupée ?)", Tone.Error) }
+    }
+
+    private fun timer(spec: String) {
+        val seconds = parseDuration(spec)
+        if (seconds == null || seconds <= 0) {
+            out("usage : timer 5m | timer 90s | timer 1h30", Tone.Error)
+            return
+        }
+        val intent = Intent(AlarmClock.ACTION_SET_TIMER)
+            .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+            .putExtra(AlarmClock.EXTRA_MESSAGE, "Netrunner")
+            .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(intent) }
+            .onSuccess { out("minuteur armé : ${formatDuration(seconds)}", Tone.Ok) }
+            .onFailure { out("aucune appli Horloge pour le minuteur", Tone.Error) }
+    }
+
+    private fun parseDuration(spec: String): Int? {
+        val s = spec.lowercase(Locale.ROOT).replace(" ", "")
+        s.toIntOrNull()?.let { return it * 60 } // bare number = minutes
+        Regex("^(\\d+)h(\\d+)$").find(s)?.let { return it.groupValues[1].toInt() * 3600 + it.groupValues[2].toInt() * 60 }
+        val match = Regex("^(?:(\\d+)h)?(?:(\\d+)(?:min|m))?(?:(\\d+)s)?$").find(s) ?: return null
+        val (h, m, sec) = match.destructured
+        if (h.isEmpty() && m.isEmpty() && sec.isEmpty()) return null
+        return (h.toIntOrNull() ?: 0) * 3600 + (m.toIntOrNull() ?: 0) * 60 + (sec.toIntOrNull() ?: 0)
+    }
+
+    private fun formatDuration(seconds: Int): String = buildString {
+        if (seconds >= 3600) append("${seconds / 3600} h ")
+        if (seconds % 3600 >= 60) append("${seconds % 3600 / 60} min ")
+        if (seconds % 60 > 0) append("${seconds % 60} s")
+    }.trim()
+
+    private fun calc(expression: String) {
+        if (expression.isBlank()) {
+            out("usage : calc 12*(3+4)", Tone.Error)
+            return
+        }
+        runCatching { Calc.eval(expression) }
+            .onSuccess { out("= ${Calc.format(it)}", Tone.Ok) }
+            .onFailure { out("erreur : ${it.message}", Tone.Error) }
+    }
+
+    private fun qrCode(text: String) {
+        if (text.isBlank()) {
+            out("usage : qr <texte ou lien>", Tone.Error)
+            return
+        }
+        qr = text
+        out("QR généré (touche-le pour fermer)", Tone.Ok)
+    }
+
+    private suspend fun speedtest() {
+        out("> cible : speed.cloudflare.com", Tone.Dim)
+        val pings = (1..3).mapNotNull {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val start = System.nanoTime()
+                    http("https://speed.cloudflare.com/__down?bytes=0").use { it.inputStream.readBytes() }
+                    (System.nanoTime() - start) / 1_000_000
+                }.getOrNull()
+            }
+        }
+        if (pings.isEmpty()) {
+            out("hors ligne : impossible de joindre le serveur", Tone.Error)
+            return
+        }
+        out("latence    ${pings.min()} ms", Tone.Ok)
+        val down = withContext(Dispatchers.IO) {
+            runCatching {
+                val bytes = 15_000_000
+                val start = System.nanoTime()
+                var total = 0L
+                http("https://speed.cloudflare.com/__down?bytes=$bytes").use { conn ->
+                    conn.inputStream.use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            total += n
+                        }
+                    }
+                }
+                total * 8.0 / ((System.nanoTime() - start) / 1e9) / 1e6
+            }.getOrNull()
+        }
+        out(if (down != null) "descendant %.1f Mb/s".format(down) else "descendant échec", if (down != null) Tone.Ok else Tone.Error)
+        val up = withContext(Dispatchers.IO) {
+            runCatching {
+                val payload = ByteArray(4_000_000)
+                val start = System.nanoTime()
+                http("https://speed.cloudflare.com/__up").use { conn ->
+                    conn.requestMethod = "POST"
+                    conn.doOutput = true
+                    conn.setFixedLengthStreamingMode(payload.size)
+                    conn.outputStream.use { it.write(payload) }
+                    conn.inputStream.readBytes()
+                }
+                payload.size * 8.0 / ((System.nanoTime() - start) / 1e9) / 1e6
+            }.getOrNull()
+        }
+        out(if (up != null) "montant    %.1f Mb/s".format(up) else "montant    échec", if (up != null) Tone.Ok else Tone.Error)
+    }
+
+    private fun http(url: String): HttpURLConnection =
+        (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8000
+            readTimeout = 15000
+        }
+
+    private inline fun <T> HttpURLConnection.use(block: (HttpURLConnection) -> T): T =
+        try { block(this) } finally { disconnect() }
+
+    private fun ghost(arg: String?) {
+        val lines = if (arg == "off") Ghost.disengage(context) else Ghost.engage(context)
+        out(if (Ghost.isOn(context)) "MODE FURTIF ENGAGÉ" else "MODE FURTIF COUPÉ", Tone.Warn)
+        lines.forEach { out(it, Tone.Dim) }
+    }
+
+    private fun theme(arg: String?) {
+        val faction = Faction.entries.firstOrNull { it.id == arg?.lowercase(Locale.ROOT) && it != Faction.Ghost }
+        if (faction == null) {
+            out("faction actuelle : ${Cp.faction.label}", Tone.Ok)
+            out("usage : theme netrunner | arasaka | militech | netwatch", Tone.Dim)
+            return
+        }
+        Cp.select(context, faction)
+        UiSound.play(context, UiSound.Cue.Glitch)
+        out("allégeance transférée : ${faction.label}", Tone.Ok)
+    }
+
+    private fun sound(arg: String?) {
+        val on = when (arg) {
+            "on" -> true
+            "off" -> false
+            else -> !UiSound.isEnabled(context)
+        }
+        UiSound.setEnabled(context, on)
+        out(if (on) "sons d'interface : ON" else "sons d'interface : OFF", Tone.Ok)
+    }
+
+    private fun wallpaper(arg: String?) {
+        val mode = WallpaperMode.entries.firstOrNull { it.id == arg?.lowercase(Locale.ROOT) }
+        if (mode == null) {
+            out("fond actuel : ${Wallpaper.mode.label}", Tone.Ok)
+            out("usage : wallpaper rain | city | off", Tone.Dim)
+            return
+        }
+        Wallpaper.select(context, mode)
+        out("fond d'écran : ${mode.label}", Tone.Ok)
+    }
+
     private fun lock(arg: String?) {
         when (arg) {
             "off" -> {
@@ -201,6 +403,15 @@ class Terminal(
             "call [numéro]   ouvre la holo-liaison (appels)",
             "keyboard        active / choisit le clavier Netrunner",
             "lock [on|off]   écran de verrouillage cyberdeck",
+            "ghost [off]     mode furtif (silence, HUD sombre, radios)",
+            "theme <faction> netrunner, arasaka, militech, netwatch",
+            "wallpaper <m>   fond animé : rain, city, off",
+            "sound [on|off]  sons et vibrations d'interface",
+            "torch [on|off]  lampe torche",
+            "timer <durée>   minuteur (ex : timer 5m, timer 1h30, timer 90s)",
+            "calc <expr>     calculatrice (ex : calc (12+8)*1,2^2)",
+            "qr <texte>      affiche un QR code (lien, texte, Wi-Fi…)",
+            "speedtest       latence, débit descendant et montant",
             "claude          ouvre l'appli Claude (ton compte)",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",

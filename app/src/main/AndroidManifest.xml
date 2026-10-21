@@ -28,6 +28,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Cyberdeck lock screen: lets it appear when the screen turns off. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Contracts (calendar), timer command. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <!-- Lets the launcher see every app that has a launcher icon. -->
     <queries>

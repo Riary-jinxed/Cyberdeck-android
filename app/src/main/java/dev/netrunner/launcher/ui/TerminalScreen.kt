@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.terminal.Terminal
 import dev.netrunner.launcher.terminal.Tone
 
-private val QuickCommands = listOf("help", "scan", "wifi", "claude", "call", "keyboard", "ports", "ping 1.1.1.1", "ip", "sysinfo", "battery", "apps", "stop", "clear")
+private val QuickCommands = listOf("help", "scan", "wifi", "claude", "ghost", "speedtest", "theme", "calc", "timer 5m", "torch", "call", "keyboard", "ports", "ping 1.1.1.1", "ip", "sysinfo", "battery", "apps", "stop", "clear")
 
 @Composable
 fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
@@ -57,6 +57,7 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
         input = ""
     }
 
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
@@ -171,5 +172,7 @@ fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {
             },
         )
         Spacer(Modifier.height(4.dp))
+    }
+    terminal.qr?.let { text -> QrOverlay(text, onClose = { terminal.qr = null }) }
     }
 }

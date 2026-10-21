@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.system.SystemInfo
+import dev.netrunner.launcher.system.UiSound
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -129,7 +130,9 @@ private val BootLines = listOf(
 @Composable
 fun BootSequence(onDone: () -> Unit) {
     var shown by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
+        UiSound.play(context, UiSound.Cue.Glitch)
         while (shown < BootLines.size) {
             delay(140)
             shown++

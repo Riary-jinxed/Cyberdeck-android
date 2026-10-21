@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.delay
 import dev.netrunner.launcher.lock.CyberLock
+import dev.netrunner.launcher.system.Ghost
+import dev.netrunner.launcher.system.UiSound
 
 private fun Context.open(intent: Intent) {
     runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -71,6 +73,8 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
     var ringer by remember { mutableIntStateOf(AudioManager.RINGER_MODE_NORMAL) }
     var tick by remember { mutableIntStateOf(0) }
     var lockOn by remember { mutableStateOf(false) }
+    var ghostOn by remember { mutableStateOf(false) }
+    var soundOn by remember { mutableStateOf(true) }
 
     fun readStates() {
         wifiOn = context.applicationContext.getSystemService(WifiManager::class.java)?.isWifiEnabled == true
@@ -79,6 +83,8 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
         rotationOn = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
         ringer = audio?.ringerMode ?: AudioManager.RINGER_MODE_NORMAL
         lockOn = CyberLock.isEnabled(context) && CyberLock.missingStep(context) == null
+        ghostOn = Ghost.isOn(context)
+        soundOn = UiSound.isEnabled(context)
     }
     LifecycleResumeEffect(tick) {
         readStates()
@@ -180,6 +186,31 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
             },
             Tile("CLAVIER", "NETRUNNER", false) { context.open(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) },
             Tile("TÉLÉPHONE", "APPLI PAR DÉFAUT", false) { context.open(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) },
+        )
+        TileRow(
+            Tile("MODE FURTIF", if (ghostOn) "ENGAGÉ" else "OFF", ghostOn) {
+                UiSound.play(context, UiSound.Cue.Glitch)
+                Ghost.toggle(context)
+                readStates()
+            },
+            Tile("SONS HUD", if (soundOn) "ON" else "OFF", soundOn) {
+                UiSound.setEnabled(context, !soundOn)
+                readStates()
+            },
+            Tile("FOND", Wallpaper.mode.label, Wallpaper.mode != WallpaperMode.Off) {
+                val modes = WallpaperMode.entries
+                Wallpaper.select(context, modes[(Wallpaper.mode.ordinal + 1) % modes.size])
+            },
+        )
+        Text("// ALLÉGEANCE", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        TileRow(
+            *Faction.entries.filter { it != Faction.Ghost }.map { f ->
+                Tile(f.label, if (Cp.faction == f) "ACTIF" else "", Cp.faction == f) {
+                    UiSound.play(context, UiSound.Cue.Glitch)
+                    Cp.select(context, f)
+                }
+            }.toTypedArray()
         )
 
         Spacer(Modifier.height(16.dp))

@@ -5,6 +5,7 @@ import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.netrunner.launcher.system.UiSound
 import dev.netrunner.launcher.terminal.Terminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +42,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         scope = viewModelScope,
         apps = { _apps.value },
         launch = ::requestLaunch,
-        openPanel = { _panel.value = it },
+        openPanel = ::openPanel,
     )
 
     // Keeps the app list in sync when something is installed, updated or removed.
@@ -74,6 +75,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun requestLaunch(app: AppEntry) {
+        UiSound.play(getApplication<Application>(), UiSound.Cue.JackIn)
         _launching.value = app
     }
 
@@ -83,6 +85,8 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openPanel(panel: Panel) {
+        if (panel == _panel.value) return
+        UiSound.play(getApplication<Application>(), if (panel == Panel.None) UiSound.Cue.Close else UiSound.Cue.Open)
         _panel.value = panel
     }
 

@@ -57,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -81,7 +82,9 @@ import dev.netrunner.launcher.call.DialerActivity
 import dev.netrunner.launcher.system.BatteryState
 import dev.netrunner.launcher.system.HomeRole
 import dev.netrunner.launcher.system.ClaudeApp
+import dev.netrunner.launcher.system.Ghost
 import dev.netrunner.launcher.system.SystemInfo
+import dev.netrunner.launcher.system.UiSound
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -153,6 +156,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     }
 
     var booting by remember { mutableStateOf(!viewModel.booted) }
+    remember { Wallpaper.load(context.applicationContext) }
+    val power = rememberBattery()
 
     Box(
         Modifier
@@ -161,6 +166,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             .scanlines()
             .hudFrame()
     ) {
+        LiveWallpaper(batteryLevel = power.level, charging = power.charging)
         Column(
             Modifier
                 .fillMaxSize()
@@ -206,7 +212,15 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 DefaultHomeBanner(onClick = makeDefault)
             }
             Spacer(Modifier.height(28.dp))
-            ClockBlock()
+            // Double tap on the clock: ghost mode on or off.
+            Box(
+                Modifier.pointerInput(Unit) {
+                    detectTapGestures(onDoubleTap = {
+                        UiSound.play(context, UiSound.Cue.Glitch)
+                        Ghost.toggle(context)
+                    })
+                }
+            ) { ClockBlock() }
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Mascot(
@@ -231,6 +245,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 } else {
                     FeedAccessCard()
                 }
+                ZoneWidget()
+                ImplantHud()
             }
             Spacer(Modifier.height(12.dp))
             QuickhackGrid(
@@ -343,7 +359,7 @@ private fun StatusStrip() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "NETRUNNER://HOME",
+            if (Cp.faction == Faction.Ghost) "GHOST://FURTIF" else "${Cp.faction.label}://HOME",
             color = Cp.Yellow,
             fontFamily = HudFont,
             fontSize = 12.sp,
