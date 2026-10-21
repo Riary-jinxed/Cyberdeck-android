@@ -11,6 +11,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
 - **Scanner Wi-Fi** : toutes les bornes à portée (SSID, BSSID, dBm, canal, bande, sécurité, norme Wi-Fi, distance estimée) et un mode « traque » avec radar, tendance et bip type compteur Geiger pour retrouver une borne physiquement.
 - **Claude** : glisser vers la gauche ouvre l'appli Claude officielle, connectée à ton compte. Commande terminal : `claude`.
+- **As//ka** : programme indépendant, une IA draconique noir et rose qui veille à côté de l'horloge. Touche son sigle (ou `aska` dans le terminal, ou un geste au choix) pour discuter. Elle pense **entièrement sur le téléphone** (LiteRT-LM de Google) : gratuit, privé, sans compte. Son noyau se télécharge une fois depuis son panneau (Gemma 4 E2B 2,6 Go, Qwen 2.5 1.5B 1,6 Go ou Qwen 3 0.6B 614 Mo, Wi-Fi par défaut) ou s'importe en `.litertlm`. Elle gère aussi les alarmes et minuteurs (« réveille-moi à 7h30 », « minuteur 10 min », « prochaine alarme ? »), toujours avec confirmation. Elle garde les 1000 derniers messages et une mémoire longue : « retiens que… », « qu'est-ce que tu sais sur moi ? », « oublie que… », « oublie tout ». Elle peut lire ses réponses à voix haute, hors ligne, avec une voix filtrée façon IA du jeu : packs SPECTRE et ORACLE (féminins), CHROME et CONSTRUCT (masculins) ou BRUTE (sans filtre). Le modèle n'est chargé que pendant la discussion (GPU si possible, sinon CPU) et libéré 90 s après la fermeture du panneau.
 - **Holo-liaison (appels)** : Netrunner peut devenir l'appli Téléphone. Appels entrants et sortants façon holo-appel du jeu (portrait hologramme, décrocher/refuser, micro, haut-parleur, clavier DTMF, mise en attente, raccrocher), écran d'appel au-dessus de l'écran verrouillé, clavier, journal et contacts.
 - **Clavier Netrunner** : clavier AZERTY néon (majuscules, verrouillage, chiffres et symboles, accents par appui long, effacement continu, flèches de curseur). À activer dans Paramètres › Clavier, ou avec la commande `keyboard`.
 - **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
@@ -78,6 +79,10 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/BreachOverlay.kt` | Animation « jack-in » au lancement d'une appli |
 | `ui/TerminalScreen.kt` | Interface du terminal |
 | `terminal/Terminal.kt` | Interpréteur de commandes |
+| `aska/AskaBrain.kt` | IA locale As//ka : chargement du modèle, conversation, historique |
+| `aska/AskaModels.kt` | Catalogue, téléchargement et import des modèles |
+| `aska/AskaAlarms.kt` | Alarmes et minuteurs en langage naturel |
+| `ui/AskaScreen.kt`, `ui/AskaSigil.kt` | Panneau de discussion et sigle draconique |
 | `terminal/NetTools.kt` | Scan réseau, scan de ports, infos réseau |
 | `system/SystemInfo.kt` | Batterie, mémoire, stockage, appareil |
 | `system/HomeRole.kt` | Demande à devenir l'écran d'accueil |

@@ -48,6 +48,10 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="com.anthropic.claude" />
+        <!-- As//ka's voice: lets the app find the speech engine (Android 11+). -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
         <!-- Apps that provide home screen widgets. -->
         <intent>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -60,6 +64,10 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Netrunner">
+
+        <!-- As//ka runs her model on the GPU when the phone exposes OpenCL. -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
 
         <activity
             android:name=".MainActivity"

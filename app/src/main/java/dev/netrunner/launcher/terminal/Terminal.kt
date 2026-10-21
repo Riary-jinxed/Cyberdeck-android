@@ -103,7 +103,8 @@ class Terminal(
             "sms", "messages", "msg" -> openPanel(Panel.Messages)
             "control", "settings", "cc" -> openPanel(Panel.Quick)
             "config", "reglages", "diag", "diagnostic" -> openPanel(Panel.Settings)
-            "claude", "glitch", "chat", "ai", "ia" -> openClaude()
+            "claude", "glitch", "chat", "ai" -> openClaude()
+            "aska", "ia" -> openPanel(Panel.Aska)
             "call", "dial", "tel" -> dial(args.joinToString(""))
             "keyboard", "kb", "clavier" -> keyboard()
             "lock", "verrou" -> lock(args.firstOrNull())
@@ -416,6 +417,7 @@ class Terminal(
             "calc <expr>     calculatrice (ex : calc (12+8)*1,2^2)",
             "qr <texte>      affiche un QR code (lien, texte, Wi-Fi…)",
             "speedtest       latence, débit descendant et montant",
+            "aska            parle à As//ka, l'IA locale (alarmes aussi)",
             "claude          ouvre l'appli Claude (ton compte)",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",

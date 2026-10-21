@@ -12,8 +12,13 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.0.1"
+        versionCode = 15
+        versionName = "1.1.0"
+
+        // As//ka's model runtime ships native code: phones only, which keeps the APK small.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     // Stable key from the CI secrets, so each new APK installs over the previous one (and the
@@ -42,9 +47,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -62,6 +64,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
@@ -74,4 +82,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     implementation("com.google.zxing:core:3.5.3")
+    // As//ka: on-device language model runtime (Gemma, Qwen… in .litertlm format).
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
 }
