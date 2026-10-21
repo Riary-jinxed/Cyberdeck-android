@@ -168,10 +168,15 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 state = State.Thinking
                 val buffer = StringBuilder()
                 val conv = conversation ?: error("conversation fermée")
+                // She starts speaking as soon as the first sentence is written.
+                voice.beginStream()
                 conv.sendMessageAsync(text).flowOn(engineThread).collect { chunk ->
                     buffer.append(chunk.toString())
-                    replace(reply.id, Line(reply.id, false, visible(buffer.toString()), done = false))
+                    val shown = visible(buffer.toString())
+                    replace(reply.id, Line(reply.id, false, shown, done = false))
+                    voice.feed(shown, final = false)
                 }
+                voice.feed(visible(buffer.toString()), final = true)
                 val (clean, action) = AskaAlarms.extractTag(visible(buffer.toString()))
                 replace(
                     reply.id,
@@ -182,7 +187,6 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     ),
                 )
                 saveHistory()
-                lines.firstOrNull { it.id == reply.id }?.let { voice.speak(it.text) }
             } catch (e: CancellationException) {
                 withContext(NonCancellable + engineThread) { runCatching { conversation?.cancelProcess() } }
                 val partial = lines.firstOrNull { it.id == reply.id }?.text.orEmpty()
@@ -190,6 +194,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 saveHistory()
             } catch (e: Throwable) {
                 lines.removeAll { it.id == reply.id }
+                voice.stop()
                 failed(e)
                 // A full context or a broken state: start a fresh conversation with the recent lines.
                 withContext(engineThread) { resetConversation() }

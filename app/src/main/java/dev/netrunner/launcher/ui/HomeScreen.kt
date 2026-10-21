@@ -309,7 +309,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         }
                 ) { Column { ClockBlock() } }
                 // As//ka watches over the deck: touch her sigil to talk.
-                AskaSigil(
+                AskaAvatar(
                     Modifier
                         .size(64.dp)
                         .clickable { viewModel.openPanel(Panel.Aska) },

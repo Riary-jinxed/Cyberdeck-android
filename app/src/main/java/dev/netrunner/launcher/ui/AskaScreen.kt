@@ -90,7 +90,7 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AskaSigil(
+            AskaAvatar(
                 Modifier.size(52.dp),
                 intensity = if (brain.state == AskaBrain.State.Thinking || brain.voice.speaking) 2.5f else 1f,
             )
@@ -383,6 +383,7 @@ private fun ModelBay(brain: AskaBrain, modifier: Modifier) {
         message?.let { Text(it, color = AskaColors.HotPink, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
 
         VoiceBay(brain.voice)
+        PortraitBay()
 
         AskaModels.catalog.forEach { model ->
             val installed = remember(revision) { AskaModels.isInstalled(context, model.id) }
@@ -574,7 +575,7 @@ private fun VoiceBay(voice: AskaVoice) {
                     modifier = Modifier
                         .clickable {
                             voice.select(pack)
-                            voice.speak("Connexion établie. Ici Aska. Je veille sur ton deck.", force = true)
+                            voice.speak("Connexion établie. Ici As//ka. Je veille sur ton deck.", force = true)
                         }
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                 )
@@ -583,6 +584,47 @@ private fun VoiceBay(voice: AskaVoice) {
         voice.problem?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
         Text(
             "Synthèse vocale du téléphone, hors ligne, filtrée façon IA. Touche une réponse d'As//ka pour la réentendre.",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
+    }
+}
+
+/** Her face: a picture imported from the phone, shown as a hologram. */
+@Composable
+private fun PortraitBay() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var error by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { AskaPortrait.import(context, uri) } }
+            error = result.exceptionOrNull()?.let { "Import impossible : ${it.message}" }
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.35f), fill = AskaColors.Panel)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AskaAvatar(Modifier.size(72.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("PORTRAIT", color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BayButton("IMPORTER UNE IMAGE", Cp.Cyan) { picker.launch("image/*") }
+                    if (AskaPortrait.image != null) BayButton("RETIRER", Cp.Dim) { AskaPortrait.clear(context) }
+                }
+            }
+        }
+        error?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
+        Text(
+            "Une image carrée (512 px ou plus), visage centré, fond sombre ou transparent. Elle remplace le sigle et s'affiche en hologramme.",
             color = Cp.Dim,
             fontFamily = HudFont,
             fontSize = 11.sp,

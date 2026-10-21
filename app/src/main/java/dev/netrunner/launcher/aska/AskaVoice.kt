@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -86,6 +87,8 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     private var job: Job? = null
     private var track: AudioTrack? = null
     // Filled on the main thread, completed on the speech engine's thread.
+    private var stream: Channel<String>? = null
+    private var streamFed = 0
     private val pending = java.util.concurrent.ConcurrentHashMap<String, (Boolean) -> Unit>()
 
     fun toggle() {
@@ -126,7 +129,65 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         }
     }
 
+    /**
+     * Starts reading a reply that is still being generated: [feed] hands over the text as it
+     * grows, and each finished sentence is spoken while the model writes the next one.
+     */
+    fun beginStream() {
+        if (!enabled) return
+        stop()
+        val queue = Channel<String>(Channel.UNLIMITED)
+        stream = queue
+        streamFed = 0
+        job = scope.launch {
+            val engine = engine() ?: return@launch
+            speaking = true
+            try {
+                val p = pack
+                var playing: Job? = null
+                for (sentence in queue) {
+                    val pcm = synthesize(engine, sentence, p) ?: continue
+                    val processed = withContext(Dispatchers.Default) { process(pcm, p.fx) }
+                    playing?.join()
+                    if (!isActive) break
+                    playing = launch { play(processed) }
+                }
+                playing?.join()
+            } finally {
+                speaking = false
+            }
+        }
+    }
+
+    /** The reply so far; [final] once the model is done. */
+    fun feed(text: String, final: Boolean) {
+        val queue = stream ?: return
+        if (text.length < streamFed) return
+        val end = if (final) text.length else sentenceEnd(text)
+        if (end > streamFed) {
+            forSpeech(text.substring(streamFed, end)).takeIf { it.isNotBlank() }?.let { queue.trySend(it) }
+            streamFed = end
+        }
+        if (final) {
+            queue.close()
+            stream = null
+        }
+    }
+
+    /** End of the last complete sentence worth sending on its own, or the current position. */
+    private fun sentenceEnd(text: String): Int {
+        var end = streamFed
+        for (m in SENTENCE_END.findAll(text, streamFed)) {
+            // The first piece goes out early to cut the wait; later ones in fuller sentences.
+            val min = if (streamFed == 0 && end == 0) 12 else 30
+            if (m.range.last + 1 - end >= min) end = m.range.last + 1
+        }
+        return end
+    }
+
     fun stop() {
+        stream?.close()
+        stream = null
         job?.cancel()
         job = null
         runCatching { track?.stop() }
@@ -341,7 +402,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     // ---- Text.
 
     private fun forSpeech(text: String): String =
-        text.replace(Regex("(?i)as//ka"), "Aska")
+        text.replace(Regex("(?i)as//ka"), "Ashka")
             .replace(Regex("\\[\\[.*?]]"), "")
             .replace(Regex("[▸▌◢■●•*_#`>]"), " ")
             .replace(Regex("[\\p{So}\\p{Cs}]"), "")
@@ -361,6 +422,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
 
     companion object {
         // Google's offline French voices: frb and frd are the male ones.
+        private val SENTENCE_END = Regex("[.!?…:;\\n]+[\"»)]*(?=\\s)")
         private val MALE_GOOGLE = listOf("fr-fr-x-frb", "fr-fr-x-frd", "fr-fr-x-vlm")
     }
 }
