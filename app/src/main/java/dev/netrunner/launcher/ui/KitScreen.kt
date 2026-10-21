@@ -57,9 +57,15 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private enum class KitTab(val label: String) { Inventory("INVENTAIRE"), Checklists("CHECKLISTS"), Subnet("SOUS-RÉSEAUX") }
+private enum class KitTab(val label: String) {
+    Inventory("INVENTAIRE"), Checklists("CHECKLISTS"), Cables("CÂBLES"),
+    Configs("CONFIGS"), Memo("MÉMO"), Subnet("IP / CIDR"),
+}
 
-/** Field kit for the technician: equipment inventory, intervention checklists and subnet calculator. */
+/**
+ * Field kit for the technician: equipment inventory, intervention checklists, cable survey,
+ * config templates, offline memo and IPv4/IPv6 calculator. Everything stays on the phone.
+ */
 @Composable
 fun KitScreen(onClose: () -> Unit) {
     val context = LocalContext.current
@@ -78,8 +84,10 @@ fun KitScreen(onClose: () -> Unit) {
     ) {
         PanelHeader(title = "// KIT DE TERRAIN", accent = Cp.Yellow, onClose = onClose)
         Spacer(Modifier.height(8.dp))
+        KitTab.entries.chunked(3).forEachIndexed { rowIndex, row ->
+        if (rowIndex > 0) Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            KitTab.entries.forEach { t ->
+            row.forEach { t ->
                 val on = t == tab
                 Text(
                     t.label,
@@ -100,11 +108,15 @@ fun KitScreen(onClose: () -> Unit) {
                 )
             }
         }
+        }
         Spacer(Modifier.height(10.dp))
         when (tab) {
             KitTab.Inventory -> InventoryTab()
             KitTab.Checklists -> ChecklistsTab()
-            KitTab.Subnet -> SubnetTab()
+            KitTab.Cables -> CablesTab()
+            KitTab.Configs -> ConfigsTab()
+            KitTab.Memo -> MemoTab()
+            KitTab.Subnet -> IpTab()
         }
     }
 }
@@ -112,7 +124,7 @@ fun KitScreen(onClose: () -> Unit) {
 // ---------------------------------------------------------------------------------- shared bits
 
 @Composable
-private fun KitField(
+internal fun KitField(
     label: String,
     value: String,
     onChange: (String) -> Unit,
@@ -141,7 +153,7 @@ private fun KitField(
 }
 
 @Composable
-private fun KitButton(label: String, color: Color = Cp.Yellow, modifier: Modifier = Modifier, filled: Boolean = false, onClick: () -> Unit) {
+internal fun KitButton(label: String, color: Color = Cp.Yellow, modifier: Modifier = Modifier, filled: Boolean = false, onClick: () -> Unit) {
     Text(
         label,
         color = if (filled) Cp.Background else color,
@@ -157,7 +169,31 @@ private fun KitButton(label: String, color: Color = Cp.Yellow, modifier: Modifie
     )
 }
 
-private val DateFmt = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm").withZone(ZoneId.systemDefault())
+/** One-choice row of small chips (states, PoE modes, vendors…). */
+@Composable
+internal fun KitChips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        options.forEach { s ->
+            val on = s == selected
+            Text(
+                s.uppercase(),
+                color = if (on) Cp.Background else Cp.Cyan,
+                fontFamily = HudFont,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.6f), fill = if (on) Cp.Cyan else Cp.Panel, cut = 4.dp)
+                    .clickable { onSelect(s) }
+                    .padding(vertical = 7.dp),
+            )
+        }
+    }
+}
+
+internal val DateFmt = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm").withZone(ZoneId.systemDefault())
 
 // ---------------------------------------------------------------------------------- inventory
 
@@ -280,27 +316,14 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
         item {
             Text("ÉTAT", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                KitStore.States.forEach { s ->
-                    val on = s == state
-                    Text(
-                        s.uppercase(),
-                        color = if (on) Cp.Background else Cp.Cyan,
-                        fontFamily = HudFont,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier
-                            .weight(1f)
-                            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.6f), fill = if (on) Cp.Cyan else Cp.Panel, cut = 4.dp)
-                            .clickable { state = s }
-                            .padding(vertical = 7.dp),
-                    )
-                }
-            }
+            KitChips(KitStore.States, state) { state = it }
         }
         item { KitField("Notes", notes, { notes = it }, singleLine = false) }
+        val linked = if (known) KitStore.cablesFor(item.id) else emptyList()
+        if (linked.isNotEmpty()) {
+            item { Text("CÂBLES RELEVÉS", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+            items(linked, key = { "c" + it.id }) { c -> Text("> ${cableLine(c)}", color = Cp.Cyan, fontFamily = MonoFont, fontSize = 12.sp) }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 KitButton("ENREGISTRER", Cp.Yellow, Modifier.weight(1f), filled = true) {
@@ -526,6 +549,16 @@ private fun TemplateEditor(template: ChecklistTemplate, onDone: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------------- subnet
+
+@Composable
+private fun IpTab() {
+    var version by remember { mutableStateOf("IPv4") }
+    Column {
+        KitChips(listOf("IPv4", "IPv6"), version) { version = it }
+        Spacer(Modifier.height(8.dp))
+        if (version == "IPv4") SubnetTab() else Ipv6Tab()
+    }
+}
 
 @Composable
 private fun SubnetTab() {

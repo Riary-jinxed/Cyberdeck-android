@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel.Panel
+import dev.netrunner.launcher.kit.Ipv6
 import dev.netrunner.launcher.kit.Subnet
 import dev.netrunner.launcher.call.DialerActivity
 import dev.netrunner.launcher.lock.CyberLock
@@ -248,6 +249,7 @@ class Terminal(
     private fun subnet(args: List<String>) {
         val split = args.lastOrNull()?.takeIf { args.size > 1 && it.startsWith("/") }?.drop(1)?.toIntOrNull()
         val spec = (if (split != null) args.dropLast(1) else args).joinToString(" ")
+        if (spec.contains(':')) return subnet6(spec, split)
         val info = Subnet.parse(spec)
         if (info == null) {
             out("usage : subnet 192.168.1.0/24 [/26]  ou  subnet 10.0.0.5 255.255.255.0", Tone.Error)
@@ -265,6 +267,26 @@ class Terminal(
                     out("${Subnet.text(p.network)}/$split  ${Subnet.text(p.firstHost)} → ${Subnet.text(p.lastHost)}  bc ${Subnet.text(p.broadcast)}")
                 }
                 if (total > parts.size) out("… ${total - parts.size} de plus (voir le panneau KIT)", Tone.Dim)
+            }
+        }
+    }
+
+    /** IPv6 side of `subnet`: same report as the KIT panel, and the split if asked. */
+    private fun subnet6(spec: String, split: Int?) {
+        val info = Ipv6.parse(spec)
+        if (info == null) {
+            out("usage : subnet 2001:db8::/48 [/64]", Tone.Error)
+            return
+        }
+        Ipv6.report(info).forEach { (k, v) -> out("${k.padEnd(18, '.')} $v", Tone.Ok) }
+        if (split != null) {
+            val parts = Ipv6.split(info, split, limit = 16)
+            if (parts.isEmpty()) {
+                out("découpage impossible : /$split doit être plus long que /${info.prefix}", Tone.Error)
+            } else {
+                out("découpage en /$split : ${Ipv6.count(info, split)} préfixes", Tone.Warn)
+                parts.forEach { out("${Ipv6.compressed(it.network)}/$split") }
+                if (split - info.prefix > 4) out("… (voir le panneau KIT)", Tone.Dim)
             }
         }
     }
@@ -450,7 +472,7 @@ class Terminal(
             "torch [on|off]  lampe torche",
             "timer <durée>   minuteur (ex : timer 5m, timer 1h30, timer 90s)",
             "calc <expr>     calculatrice (ex : calc (12+8)*1,2^2)",
-            "subnet <ip/n> [/m]  calculateur de sous-réseaux (ex : subnet 192.168.1.0/24 /26)",
+            "subnet <ip/n> [/m]  calculateur de sous-réseaux IPv4 ou IPv6 (ex : subnet 192.168.1.0/24 /26)",
             "kit             inventaire, checklists et sous-réseaux",
             "stats           temps d'écran, applis, batterie par jour",
             "hub             applis du deck et raccourcis (Claude…)",
