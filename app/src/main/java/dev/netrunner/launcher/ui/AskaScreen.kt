@@ -725,25 +725,22 @@ private fun VoiceBay(voice: AskaVoice, mobileData: Boolean) {
 private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
     val context = LocalContext.current
     var download by remember { mutableStateOf(AskaPiper.pollDownload(context)) }
-    var unpacking by remember { mutableStateOf<Float?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val unpacking = AskaPiper.progress
 
-    suspend fun unpack() {
-        unpacking = 0f
-        val result = withContext(Dispatchers.IO) { runCatching { AskaPiper.install(context) { unpacking = it } } }
-        unpacking = null
-        error = result.exceptionOrNull()?.let { "Installation impossible : ${it.message}" }
-        if (result.isFailure) AskaPiper.delete(context)
+    // An unpacking ended (maybe while this screen was closed): her voice picks it up.
+    val seen = remember { AskaPiper.finished }
+    LaunchedEffect(AskaPiper.finished) {
+        if (AskaPiper.finished == seen) return@LaunchedEffect
         voice.neuralChanged()
-        if (result.isSuccess) {
+        if (voice.neural) {
             voice.select(AskaVoice.Pack.Ashka)
             voice.speak("Voilà ma vraie voix. Tu me reconnais, runner ?", force = true)
         }
     }
-
     // A download finished while the panel was closed: unpack it now.
     LaunchedEffect(Unit) {
-        if (download == null && !voice.neural && AskaPiper.hasArchive(context)) unpack()
+        if (download == null && !voice.neural && unpacking == null && AskaPiper.hasArchive(context)) AskaPiper.installInBackground(context)
     }
     LaunchedEffect(download != null) {
         while (download != null) {
@@ -753,7 +750,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     AskaPiper.clearDownload(context)
                     download = null
-                    unpack()
+                    AskaPiper.installInBackground(context)
                 }
                 DownloadManager.STATUS_FAILED -> {
                     error = "Téléchargement échoué. Vérifie la connexion et l'espace libre, puis réessaie."
@@ -825,7 +822,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
             }
             Text(
                 when {
-                    unpacking != null -> "INSTALLATION… ${((unpacking ?: 0f) * 100).toInt()} %"
+                    unpacking != null -> "INSTALLATION… ${(unpacking * 100).toInt()} % (environ une minute)"
                     d?.third == DownloadManager.STATUS_PAUSED -> "EN PAUSE (attente du Wi-Fi ou du réseau)"
                     d?.third == DownloadManager.STATUS_PENDING -> "EN ATTENTE…"
                     else -> "${(d?.first ?: 0L) / 1_000_000} / ${(d?.second ?: 0L).coerceAtLeast(0L) / 1_000_000} Mo"
@@ -835,7 +832,7 @@ private fun NeuralVoice(voice: AskaVoice, mobileData: Boolean) {
                 fontSize = 11.sp,
             )
         }
-        error?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
+        (error ?: AskaPiper.error)?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
     }
 }
 
