@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.aska.AskaModels
+import dev.netrunner.launcher.aska.AskaVoice
 import dev.netrunner.launcher.system.SystemInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -89,7 +90,10 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AskaSigil(Modifier.size(52.dp), intensity = if (brain.state == AskaBrain.State.Thinking) 2.5f else 1f)
+            AskaSigil(
+                Modifier.size(52.dp),
+                intensity = if (brain.state == AskaBrain.State.Thinking || brain.voice.speaking) 2.5f else 1f,
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 GlitchText(
@@ -105,7 +109,12 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
                 )
             }
             HeaderButton(if (showModels && !noModel) "◂ CHAT" else "NOYAU", Cp.Cyan) { showModels = !showModels }
-            if (!showModels && !noModel) HeaderButton("PURGER", Cp.Dim) { brain.purge() }
+            if (!showModels && !noModel) {
+                HeaderButton(if (brain.voice.enabled) "VOIX ●" else "VOIX ○", if (brain.voice.enabled) AskaColors.Pink else Cp.Dim) {
+                    brain.voice.toggle()
+                }
+                HeaderButton("PURGER", Cp.Dim) { brain.purge() }
+            }
             Text(
                 "[ X ]",
                 color = Cp.Red,
@@ -244,6 +253,10 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
         Column(
             Modifier
                 .widthIn(max = 320.dp)
+                // Touching one of her lines reads it aloud again.
+                .clickable(enabled = !line.fromUser && line.done && line.text.isNotEmpty()) {
+                    brain.voice.speak(line.text, force = true)
+                }
                 .hudPanel(
                     borderColor = if (line.fromUser) Cp.Cyan.copy(alpha = 0.5f) else AskaColors.Pink.copy(alpha = 0.7f),
                     fill = if (line.fromUser) Cp.Panel else AskaColors.Panel,
@@ -368,6 +381,8 @@ private fun ModelBay(brain: AskaBrain, modifier: Modifier) {
             fontSize = 13.sp,
         )
         message?.let { Text(it, color = AskaColors.HotPink, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+
+        VoiceBay(brain.voice)
 
         AskaModels.catalog.forEach { model ->
             val installed = remember(revision) { AskaModels.isInstalled(context, model.id) }
@@ -520,4 +535,57 @@ private fun BayButton(label: String, color: Color, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     )
+}
+
+/** Voice packs: system speech run through As//ka's effects. */
+@Composable
+private fun VoiceBay(voice: AskaVoice) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.35f), fill = AskaColors.Panel)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("VOIX", color = AskaColors.Pink, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            BayButton(if (voice.enabled) "LECTURE AUTO ●" else "LECTURE AUTO ○", if (voice.enabled) AskaColors.Pink else Cp.Dim) { voice.toggle() }
+        }
+        AskaVoice.Pack.entries.forEach { pack ->
+            val selected = pack == voice.pack
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { voice.select(pack) }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(if (selected) "[■]" else "[ ]", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 14.sp)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(pack.label, color = if (selected) AskaColors.HotPink else Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(pack.detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
+                }
+                Text(
+                    "▶",
+                    color = AskaColors.Pink,
+                    fontFamily = MonoFont,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .clickable {
+                            voice.select(pack)
+                            voice.speak("Connexion établie. Ici Aska. Je veille sur ton deck.", force = true)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
+        voice.problem?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp) }
+        Text(
+            "Synthèse vocale du téléphone, hors ligne, filtrée façon IA. Touche une réponse d'As//ka pour la réentendre.",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
+    }
 }

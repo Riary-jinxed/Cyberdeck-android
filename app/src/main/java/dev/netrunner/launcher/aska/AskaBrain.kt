@@ -75,12 +75,15 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     private val historyFile = File(context.filesDir, "aska_history.json")
 
+    /** Her voice, read aloud through the game-AI filter. */
+    val voice = AskaVoice(context, scope)
+
     /** Facts she keeps across conversations ("retiens que…"). */
     val memory = AskaMemory(context)
 
     init {
         loadHistory()
-        if (lines.isEmpty()) say(GREETING)
+        if (lines.isEmpty()) say(GREETING, speak = false)
         refreshState()
     }
 
@@ -105,9 +108,11 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     /** Her panel closed: free the memory if she is not called back soon. */
     fun sleepSoon() {
         sleepJob?.cancel()
+        voice.stop()
         sleepJob = scope.launch {
             delay(SLEEP_DELAY_MS)
             replyJob?.join()
+            voice.release()
             unload()
         }
     }
@@ -115,6 +120,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     fun send(input: String) {
         val text = input.trim()
         if (text.isEmpty() || state == State.Thinking) return
+        voice.stop()
         add(Line(nextId++, fromUser = true, text = text))
 
         // Alarm requests are understood directly: instant, reliable, and they work without a model.
@@ -176,6 +182,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     ),
                 )
                 saveHistory()
+                lines.firstOrNull { it.id == reply.id }?.let { voice.speak(it.text) }
             } catch (e: CancellationException) {
                 withContext(NonCancellable + engineThread) { runCatching { conversation?.cancelProcess() } }
                 val partial = lines.firstOrNull { it.id == reply.id }?.text.orEmpty()
@@ -195,6 +202,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     fun stop() {
         replyJob?.cancel()
+        voice.stop()
     }
 
     /** Runs a confirmed action and clears its buttons. */
@@ -213,7 +221,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     fun purge() {
         stop()
         lines.clear()
-        say(GREETING)
+        say(GREETING, speak = false)
         scope.launch { withContext(engineThread) { resetConversation(keepHistory = false) } }
     }
 
@@ -330,9 +338,10 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     // ---- Conversation on screen.
 
-    private fun say(text: String, action: AlarmAction? = null) {
+    private fun say(text: String, action: AlarmAction? = null, speak: Boolean = true) {
         add(Line(nextId++, fromUser = false, text = text, action = action))
         saveHistory()
+        if (speak) voice.speak(text)
     }
 
     private fun add(line: Line) {
@@ -388,6 +397,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     }
 
     fun release() {
+        voice.release()
         sleepJob?.cancel()
         replyJob?.cancel()
         runCatching { conversation?.close() }
