@@ -75,6 +75,9 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     private val historyFile = File(context.filesDir, "aska_history.json")
 
+    /** Facts she keeps across conversations ("retiens que…"). */
+    val memory = AskaMemory(context)
+
     init {
         loadHistory()
         if (lines.isEmpty()) say(GREETING)
@@ -121,6 +124,29 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 if (!request.action.needsConfirm) return say(AskaAlarms.run(context, request.action))
                 return say("Je prépare ça. Valide et je l'envoie à l'horloge.", request.action)
             }
+            null -> Unit
+        }
+
+        when (val request = memory.parse(text)) {
+            is AskaMemory.Request.Remember -> {
+                memory.remember(request.fact)
+                promptChanged()
+                return say("C'est gravé dans ma mémoire : « ${request.fact} ».")
+            }
+            is AskaMemory.Request.Forget -> {
+                val count = memory.forget(request.topic)
+                promptChanged()
+                return say(if (count > 0) "Effacé. Je n'en garde aucune trace." else "Je n'avais rien gardé là-dessus.")
+            }
+            AskaMemory.Request.ForgetAll -> {
+                memory.clear()
+                promptChanged()
+                return say("Mémoire longue effacée. Notre conversation reste à l'écran tant que tu ne la purges pas.")
+            }
+            AskaMemory.Request.Recall -> return say(
+                if (memory.facts.isEmpty()) "Je ne garde encore rien sur toi. Dis « retiens que… » et je m'en souviendrai."
+                else "Ce que je garde sur toi :\n" + memory.facts.joinToString("\n") { "▸ $it" }
+            )
             null -> Unit
         }
 
@@ -191,6 +217,11 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         scope.launch { withContext(engineThread) { resetConversation(keepHistory = false) } }
     }
 
+    /** Her instructions changed (new memory): the loaded conversation picks them up, history kept. */
+    private fun promptChanged() {
+        if (engine != null) scope.launch { withContext(engineThread) { resetConversation() } }
+    }
+
     /** Called after the user installs, picks or deletes a model. */
     fun modelChanged() {
         // A new model gets a fresh chance on the GPU.
@@ -253,7 +284,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         runCatching { conversation?.close() }
         conversation = null
         val engine = engine ?: return
-        val recent = if (keepHistory) lines.filter { it.done && it.text.isNotEmpty() && it.text != GREETING }.takeLast(8) else emptyList()
+        val recent = if (keepHistory) recentForContext() else emptyList()
         conversation = engine.createConversation(
             ConversationConfig(
                 systemInstruction = Contents.of(systemPrompt()),
@@ -263,6 +294,19 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 thinkingConfig = if (AskaModels.thinks(loadedModel.orEmpty())) ThinkingConfig(enableThinking = false) else null,
             )
         )
+    }
+
+    /** The latest exchanges that fit in the model's context, oldest first. */
+    private fun recentForContext(): List<Line> {
+        val picked = ArrayDeque<Line>()
+        var budget = CONTEXT_CHARS
+        for (line in lines.asReversed()) {
+            if (!line.done || line.text.isEmpty() || line.text == GREETING) continue
+            budget -= line.text.length
+            if (budget < 0) break
+            picked.addFirst(line)
+        }
+        return picked.toList()
     }
 
     private suspend fun unload() {
@@ -316,8 +360,13 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Ta seule action possible sur le téléphone : les alarmes et minuteurs. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
             [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
-        """.trimIndent()
+        """.trimIndent() + memoryBlock()
     }
+
+    private fun memoryBlock(): String =
+        if (memory.facts.isEmpty()) ""
+        else "\nCe que ${DeckSettings.handle} t'a demandé de retenir (sers-t'en naturellement, sans tout réciter) :\n" +
+            memory.facts.joinToString("\n") { "- $it" }
 
     private fun loadHistory() {
         runCatching {
@@ -349,7 +398,10 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     companion object {
         const val GREETING = "Connexion établie. Ici As//ka. Pose ta question, ou demande-moi une alarme."
         private const val SLEEP_DELAY_MS = 90_000L
-        private const val MAX_LINES = 80
+        /** Messages kept on screen and on disk. */
+        private const val MAX_LINES = 1000
+        /** About 1 500 tokens of past conversation handed back to the model when it reloads. */
+        private const val CONTEXT_CHARS = 6000
         private const val GPU_TRYING = "aska_gpu_trying"
         private const val GPU_BROKEN = "aska_gpu_broken"
     }
