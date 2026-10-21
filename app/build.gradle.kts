@@ -12,16 +12,29 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.9.0"
+        versionCode = 13
+        versionName = "1.0.0"
+    }
+
+    // Stable key from the CI secrets, so each new APK installs over the previous one (and the
+    // built-in updater works). Without the secrets, builds fall back to the debug key.
+    val keystore = System.getenv("NETRUNNER_KEYSTORE")?.takeIf { file(it).exists() }
+    signingConfigs {
+        if (keystore != null) {
+            create("netrunner") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("NETRUNNER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("NETRUNNER_KEY_ALIAS") ?: "netrunner"
+                keyPassword = System.getenv("NETRUNNER_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             // Off: keeps stack traces readable while the launcher is still moving fast.
             isMinifyEnabled = false
-            // Signed with the debug key so the APK installs directly; use your own key to publish.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (keystore != null) "netrunner" else "debug")
         }
     }
 

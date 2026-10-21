@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import dev.netrunner.launcher.system.hideSystemBars
 import dev.netrunner.launcher.ui.HomeScreen
 import dev.netrunner.launcher.ui.NetrunnerTheme
+import dev.netrunner.launcher.widgets.DeckWidgets
 
 class MainActivity : ComponentActivity() {
 
@@ -50,6 +51,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (!openRequestedPanel(intent)) homePresses.intValue++
+    }
+
+    // Hosted widgets only receive updates while the launcher is visible.
+    override fun onStart() {
+        super.onStart()
+        DeckWidgets.startListening(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        DeckWidgets.stopListening(this)
     }
 
     override fun onResume() {

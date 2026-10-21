@@ -97,6 +97,14 @@ import dev.netrunner.launcher.system.Ghost
 import dev.netrunner.launcher.system.HomeRole
 import dev.netrunner.launcher.system.SystemInfo
 import dev.netrunner.launcher.system.UiSound
+import dev.netrunner.launcher.Folder
+import dev.netrunner.launcher.system.Gestures
+import dev.netrunner.launcher.system.NightWatch
+import dev.netrunner.launcher.system.Profiles
+import dev.netrunner.launcher.system.Updater
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.draw.drawWithContent
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val SecondsFormat = DateTimeFormatter.ofPattern("ss")
@@ -165,9 +173,61 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         favoriteKeys.mapNotNull { key -> apps.find { it.key == key } }
     }
 
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    // Grid slots: pinned apps and folders, in the saved order.
+    val slots = remember(apps, favoriteKeys, folders) {
+        favoriteKeys.mapNotNull { key ->
+            if (key.startsWith(Folder.PREFIX)) {
+                folders.firstOrNull { it.slot == key }?.let { f ->
+                    QuickSlot.Dir(f, f.keys.mapNotNull { k -> apps.find { it.key == k } })
+                }
+            } else {
+                apps.find { it.key == key }?.let { QuickSlot.App(it) }
+            }
+        }
+    }
+    var openFolder by remember { mutableStateOf<String?>(null) }
+
     var booting by remember { mutableStateOf(!viewModel.booted) }
     remember { Wallpaper.load(context.applicationContext) }
     remember { DeckSettings.load(context.applicationContext) }
+    remember { Gestures.load(context.applicationContext) }
+    remember { Profiles.load(context.applicationContext) }
+    remember { NightWatch.load(context.applicationContext) }
+    // Night window check once a minute while the home screen is visible.
+    val screenActive = rememberScreenActive()
+    LaunchedEffect(screenActive) {
+        while (screenActive) {
+            NightWatch.refresh()
+            delay(60_000)
+        }
+    }
+    // Silent update check, at most once a day.
+    var update by remember { mutableStateOf<Updater.Release?>(null) }
+    LaunchedEffect(Unit) {
+        if (Updater.dueForAutoCheck(context)) update = runCatching { Updater.check(context) }.getOrNull()
+    }
+
+    val runAction: (Gestures.Action) -> Unit = { action ->
+        when (action) {
+            Gestures.Action.Drawer -> drawerOpen = true
+            Gestures.Action.Notifications -> expandNotifications(context)
+            Gestures.Action.Quick -> viewModel.openPanel(Panel.Quick)
+            Gestures.Action.Terminal -> viewModel.openPanel(Panel.Terminal)
+            Gestures.Action.Claude -> ClaudeApp.open(context)
+            Gestures.Action.Messages -> viewModel.openPanel(Panel.Messages)
+            Gestures.Action.Feed -> viewModel.openPanel(Panel.Feed)
+            Gestures.Action.Dialer -> context.startActivity(Intent(context, DialerActivity::class.java))
+            Gestures.Action.Wifi -> viewModel.openPanel(Panel.Wifi)
+            Gestures.Action.Ghost -> {
+                UiSound.play(context, UiSound.Cue.Glitch)
+                Ghost.toggle(context)
+            }
+            Gestures.Action.Torch -> toggleTorch(context)
+            Gestures.Action.Settings -> viewModel.openPanel(Panel.Settings)
+            Gestures.Action.None -> Unit
+        }
+    }
     // Glitch burst whenever a panel or the drawer opens.
     LaunchedEffect(panel, drawerOpen) {
         if (panel != Panel.None || drawerOpen) GlitchBus.trigger()
@@ -181,6 +241,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             .scanlines()
             .hudFrame()
             .crtGlitch()
+            .nightDim()
     ) {
         LiveWallpaper(batteryLevel = power.level, charging = power.charging)
         Column(
@@ -203,10 +264,10 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         },
                         onDragEnd = {
                             when {
-                                total < -120f -> drawerOpen = true
+                                total < -120f -> runAction(Gestures.actionFor(Gestures.Gesture.SwipeUp))
                                 total > 120f && fromEdge -> Unit
                                 total > 120f && fromTopRight -> viewModel.openPanel(Panel.Quick)
-                                total > 120f -> expandNotifications(context)
+                                total > 120f -> runAction(Gestures.actionFor(Gestures.Gesture.SwipeDown))
                             }
                         },
                     ) { _, dragAmount -> total += dragAmount }
@@ -218,8 +279,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         onDragStart = { total = 0f },
                         onDragEnd = {
                             when {
-                                total < -120f -> ClaudeApp.open(context)
-                                total > 120f -> viewModel.openPanel(Panel.Terminal)
+                                total < -120f -> runAction(Gestures.actionFor(Gestures.Gesture.SwipeLeft))
+                                total > 120f -> runAction(Gestures.actionFor(Gestures.Gesture.SwipeRight))
                             }
                         },
                     ) { _, dragAmount -> total += dragAmount }
@@ -237,40 +298,70 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Box(
                 Modifier.pointerInput(Unit) {
                     detectTapGestures(
-                        onDoubleTap = {
-                            UiSound.play(context, UiSound.Cue.Glitch)
-                            Ghost.toggle(context)
-                        },
-                        // Long press on the clock: Netrunner settings.
-                        onLongPress = { viewModel.openPanel(Panel.Settings) },
+                        onDoubleTap = { runAction(Gestures.actionFor(Gestures.Gesture.DoubleTap)) },
+                        onLongPress = { runAction(Gestures.actionFor(Gestures.Gesture.LongPress)) },
                     )
                 }
             ) { ClockBlock() }
             Spacer(Modifier.height(20.dp))
             LiveFeed()
-            Spacer(Modifier.height(12.dp))
-            // Music and incoming messages scroll between the clock and the shortcuts.
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                nowPlaying?.let { MediaWidget(it, mediaWatcher) }
-                if (feedAccess) {
-                    FeedPreview(feed) { viewModel.openPanel(Panel.Feed) }
-                } else {
-                    FeedAccessCard()
-                }
-                ZoneWidget()
-                ImplantHud()
+            update?.let { release ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "▲ MISE À JOUR v${release.version} DISPONIBLE · TOUCHE POUR L'INSTALLER",
+                    color = Cp.Cyan,
+                    fontFamily = HudFont,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hudPanel(borderColor = Cp.Cyan, fill = Cp.Cyan.copy(alpha = 0.1f), cut = 8.dp)
+                        .clickable {
+                            update = null
+                            viewModel.openPanel(Panel.Settings)
+                        }
+                        .padding(10.dp),
+                )
             }
             Spacer(Modifier.height(12.dp))
+            // Home pages: HUD (music, messages, zone, implants) then Android widgets.
+            val pages = rememberPagerState { 2 }
+            HorizontalPager(
+                state = pages,
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.Top,
+                beyondViewportPageCount = 1,
+            ) { page ->
+                if (page == 0) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        nowPlaying?.let { MediaWidget(it, mediaWatcher) }
+                        if (feedAccess) {
+                            FeedPreview(feed) { viewModel.openPanel(Panel.Feed) }
+                        } else {
+                            FeedAccessCard()
+                        }
+                        ZoneWidget()
+                        ImplantHud()
+                    }
+                } else {
+                    WidgetsPage(Modifier.fillMaxSize())
+                }
+            }
+            PageDots(count = 2, current = pages.currentPage, labels = listOf("HUD", "WIDGETS"))
+            Spacer(Modifier.height(8.dp))
             QuickhackGrid(
-                favorites = favorites,
+                slots = slots,
+                folders = folders,
                 onLaunch = viewModel::requestLaunch,
                 onUnpin = viewModel::toggleFavorite,
                 onInfo = viewModel::openAppInfo,
+                onMoveToFolder = viewModel::moveToFolder,
+                onOpenFolder = { openFolder = it },
             )
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -348,7 +439,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
-            SettingsScreen(onClose = { viewModel.openPanel(Panel.None) })
+            SettingsScreen(onClose = { viewModel.openPanel(Panel.None) }, onConfigChanged = viewModel::reloadConfig)
         }
 
         AnimatedVisibility(
@@ -365,6 +456,19 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             WifiScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        slots.filterIsInstance<QuickSlot.Dir>().firstOrNull { it.folder.id == openFolder }?.let { dir ->
+            FolderOverlay(
+                dir = dir,
+                onLaunch = { app ->
+                    openFolder = null
+                    viewModel.requestLaunch(app)
+                },
+                onRemove = { app -> viewModel.removeFromFolder(dir.folder.id, app.key) },
+                onRename = { name -> viewModel.renameFolder(dir.folder.id, name) },
+                onClose = { openFolder = null },
+            )
         }
 
         launching?.let { app ->
@@ -404,7 +508,11 @@ private fun StatusStrip(onMenu: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (Cp.faction == Faction.Ghost) "GHOST://FURTIF" else "${Cp.faction.label}://HOME",
+            when {
+                Cp.faction == Faction.Ghost -> "GHOST://FURTIF"
+                NightWatch.active -> "NETWATCH://NUIT"
+                else -> "${Cp.faction.label}://${Profiles.current.label}"
+            },
             color = Cp.Yellow,
             fontFamily = HudFont,
             fontSize = 12.sp,
@@ -529,20 +637,32 @@ private fun LiveFeed() {
 
 @Composable
 private fun QuickhackGrid(
-    favorites: List<AppEntry>,
+    slots: List<QuickSlot>,
+    folders: List<Folder>,
     onLaunch: (AppEntry) -> Unit,
     onUnpin: (AppEntry) -> Unit,
     onInfo: (AppEntry) -> Unit,
+    onMoveToFolder: (String, String?) -> Unit,
+    onOpenFolder: (String) -> Unit,
 ) {
-    Text(
-        "// QUICKHACKS",
-        color = Cp.Yellow,
-        fontFamily = HudFont,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-    )
+    // Two rows of four per page; more quickhacks spill onto further pages.
+    val pages = slots.chunked(8)
+    val pager = rememberPagerState { pages.size.coerceAtLeast(1) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "// QUICKHACKS",
+            color = Cp.Yellow,
+            fontFamily = HudFont,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+        )
+        if (pages.size > 1) {
+            Text("${pager.currentPage + 1}/${pages.size}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+        }
+    }
     Spacer(Modifier.height(8.dp))
-    if (favorites.isEmpty()) {
+    if (slots.isEmpty()) {
         Text(
             "Aucun raccourci. Ouvre le réseau et fais un appui long sur une appli pour l'épingler.",
             color = Cp.Dim,
@@ -551,28 +671,182 @@ private fun QuickhackGrid(
         )
         return
     }
-    favorites.chunked(4).forEach { row ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            row.forEach { app ->
-                QuickhackTile(app, onLaunch, onUnpin, onInfo, Modifier.weight(1f))
+    HorizontalPager(state = pager, verticalAlignment = Alignment.Top) { page ->
+        Column {
+            pages[page].chunked(4).forEach { row ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    row.forEach { slot ->
+                        when (slot) {
+                            is QuickSlot.App -> QuickhackTile(slot.app, folders, onLaunch, onUnpin, onInfo, onMoveToFolder, Modifier.weight(1f))
+                            is QuickSlot.Dir -> FolderTile(slot, Modifier.weight(1f)) { onOpenFolder(slot.folder.id) }
+                        }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
-            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
         }
     }
+}
+
+/** One cell of the quickhack grid: an app or a folder of apps. */
+sealed interface QuickSlot {
+    data class App(val app: AppEntry) : QuickSlot
+    data class Dir(val folder: Folder, val apps: List<AppEntry>) : QuickSlot
+}
+
+@Composable
+private fun FolderTile(dir: QuickSlot.Dir, modifier: Modifier, onOpen: () -> Unit) {
+    Column(
+        modifier
+            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.8f), fill = Cp.Cyan.copy(alpha = 0.06f))
+            .clickable(onClick = onOpen)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // 2×2 preview of the first apps inside.
+        Column(Modifier.size(40.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            dir.apps.take(4).chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    row.forEach { AppIcon(it, 19.dp, tint = Cp.Cyan) }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            dir.folder.name.uppercase(),
+            color = Cp.Cyan,
+            fontFamily = HudFont,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+    }
+}
+
+/** Opened folder: its apps in a HUD window, a renamable title, long press to take an app out. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderOverlay(
+    dir: QuickSlot.Dir,
+    onLaunch: (AppEntry) -> Unit,
+    onRemove: (AppEntry) -> Unit,
+    onRename: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var name by remember(dir.folder.id) { mutableStateOf(dir.folder.name) }
+    BackHandler(onBack = onClose)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClose),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(24.dp)
+                .fillMaxWidth()
+                .hudPanel(borderColor = Cp.Cyan, fill = Cp.Background.copy(alpha = 0.96f))
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { }
+                .padding(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("// ", color = Cp.Cyan, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                BasicTextField(
+                    value = name,
+                    onValueChange = { name = it.take(20) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Cp.Cyan, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                    cursorBrush = SolidColor(Cp.Yellow),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onRename(name) }),
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "[ X ]",
+                    color = Cp.Red,
+                    fontFamily = HudFont,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        if (name != dir.folder.name) onRename(name)
+                        onClose()
+                    }.padding(6.dp),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            dir.apps.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { app ->
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .combinedClickable(onClick = { onLaunch(app) }, onLongClick = { onRemove(app) }),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            AppIcon(app, 40.dp)
+                            Text(app.label.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Text("Appui long : sortir du dossier", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun PageDots(count: Int, current: Int, labels: List<String>) {
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+        repeat(count) { i ->
+            Text(
+                if (i == current) "◆ ${labels[i]}" else "◇ ${labels[i]}",
+                color = if (i == current) Cp.Yellow else Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+    }
+}
+
+private var torchOn = false
+
+private fun toggleTorch(context: Context) {
+    val camera = context.getSystemService(android.hardware.camera2.CameraManager::class.java) ?: return
+    runCatching {
+        val id = camera.cameraIdList.firstOrNull {
+            camera.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: return
+        camera.setTorchMode(id, !torchOn)
+        torchOn = !torchOn
+    }
+}
+
+/** Netwatch night mode: dims everything drawn on top of the launcher. */
+private fun Modifier.nightDim(): Modifier = drawWithContent {
+    drawContent()
+    if (NightWatch.active) drawRect(Color.Black.copy(alpha = 0.42f))
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun QuickhackTile(
     app: AppEntry,
+    folders: List<Folder>,
     onLaunch: (AppEntry) -> Unit,
     onUnpin: (AppEntry) -> Unit,
     onInfo: (AppEntry) -> Unit,
+    onMoveToFolder: (String, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -610,6 +884,8 @@ private fun QuickhackTile(
             onDismiss = { menu = false },
             onTogglePin = { onUnpin(app) },
             onInfo = { onInfo(app) },
+            folders = folders,
+            onMoveToFolder = { folderId -> onMoveToFolder(app.key, folderId) },
         )
     }
 }
@@ -914,8 +1190,29 @@ private fun AppMenu(
     onDismiss: () -> Unit,
     onTogglePin: () -> Unit,
     onInfo: () -> Unit,
+    folders: List<Folder>? = null,
+    onMoveToFolder: (String?) -> Unit = {},
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        // Quickhack tiles only: file the app into a folder.
+        if (folders != null) {
+            DropdownMenuItem(
+                text = { Text("NOUVEAU DOSSIER", color = Cp.Cyan, fontFamily = HudFont, fontSize = 13.sp) },
+                onClick = {
+                    onMoveToFolder(null)
+                    onDismiss()
+                },
+            )
+            folders.forEach { f ->
+                DropdownMenuItem(
+                    text = { Text("RANGER DANS ${f.name.uppercase()}", color = Cp.Cyan, fontFamily = HudFont, fontSize = 13.sp) },
+                    onClick = {
+                        onMoveToFolder(f.id)
+                        onDismiss()
+                    },
+                )
+            }
+        }
         DropdownMenuItem(
             text = {
                 Text(

@@ -30,6 +30,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import dev.netrunner.launcher.media.Spectrum
 import dev.netrunner.launcher.media.MediaWatcher
 import dev.netrunner.launcher.media.NowPlaying
 import kotlinx.coroutines.delay
@@ -108,6 +115,8 @@ fun MediaWidget(track: NowPlaying, watcher: MediaWatcher) {
             }
         }
         Spacer(Modifier.height(8.dp))
+        SpectrumBars(playing = track.playing && active, accent = accent)
+        Spacer(Modifier.height(6.dp))
         if (track.durationMs > 0) {
             // Tap anywhere on the bar to seek.
             Box(
@@ -147,6 +156,42 @@ fun MediaWidget(track: NowPlaying, watcher: MediaWatcher) {
             MediaButton("◄◄") { watcher.previous() }
             MediaButton(if (track.playing) "❚❚" else "►", big = true) { watcher.playPause() }
             MediaButton("►►") { watcher.next() }
+        }
+    }
+}
+
+/** HUD spectrum analyser: real audio with the microphone permission, an imitation otherwise. */
+@Composable
+private fun SpectrumBars(playing: Boolean, accent: Color) {
+    val context = LocalContext.current
+    val spectrum = remember { Spectrum(context.applicationContext) }
+    DisposableEffect(playing) {
+        if (playing) spectrum.start()
+        onDispose { spectrum.stop() }
+    }
+    // The clock only runs while music plays and the screen is visible.
+    val t by androidx.compose.runtime.key(playing) { rememberSlowClock(fps = if (playing) 15 else 1) }
+    val levels = spectrum.read(t, playing).copyOf()
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(34.dp)
+    ) {
+        val n = levels.size
+        val gap = 3.dp.toPx()
+        val w = (size.width - gap * (n - 1)) / n
+        val segment = 4.dp.toPx()
+        for (i in 0 until n) {
+            val h = size.height * levels[i].coerceIn(0.04f, 1f)
+            val x = i * (w + gap)
+            // Segmented bars, hotter colour at the top like the game's audio meters.
+            var y = size.height
+            while (y > size.height - h) {
+                val top = maxOf(size.height - h, y - segment + 1.dp.toPx())
+                val hot = y < size.height * 0.35f
+                drawRect(if (hot) Cp.Red else accent, Offset(x, top), Size(w, y - top))
+                y -= segment
+            }
         }
     }
 }

@@ -68,13 +68,69 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun isFavorite(app: AppEntry): Boolean = app.key in _favorites.value
+    private val _folders = MutableStateFlow(repo.folders())
+    val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
+
+    fun isFavorite(app: AppEntry): Boolean =
+        app.key in _favorites.value || _folders.value.any { app.key in it.keys }
 
     fun toggleFavorite(app: AppEntry) {
+        _folders.value.firstOrNull { app.key in it.keys }?.let {
+            removeFromFolder(it.id, app.key, backToGrid = false)
+            return
+        }
         val current = _favorites.value
-        val updated = if (app.key in current) current - app.key else current + app.key
-        _favorites.value = updated
-        repo.saveFavorites(updated)
+        setFavorites(if (app.key in current) current - app.key else current + app.key)
+    }
+
+    private fun setFavorites(keys: List<String>) {
+        _favorites.value = keys
+        repo.saveFavorites(keys)
+    }
+
+    private fun setFolders(list: List<Folder>) {
+        _folders.value = list
+        repo.saveFolders(list)
+    }
+
+    /** Moves a pinned app into a folder; a null id creates a new folder in the app's place. */
+    fun moveToFolder(appKey: String, folderId: String?) {
+        val folders = _folders.value
+        val target = folders.firstOrNull { it.id == folderId }
+        if (target == null) {
+            val folder = Folder(System.currentTimeMillis().toString(36), "DOSSIER ${folders.size + 1}", listOf(appKey))
+            setFolders(folders + folder)
+            setFavorites(_favorites.value.map { if (it == appKey) folder.slot else it })
+        } else {
+            setFolders(folders.map { if (it.id == target.id && appKey !in it.keys) it.copy(keys = it.keys + appKey) else it })
+            setFavorites(_favorites.value - appKey)
+        }
+    }
+
+    /** Takes an app out of a folder (back to the grid or unpinned); an empty folder disappears. */
+    fun removeFromFolder(folderId: String, appKey: String, backToGrid: Boolean = true) {
+        val folder = _folders.value.firstOrNull { it.id == folderId } ?: return
+        val keys = folder.keys - appKey
+        var favorites = _favorites.value
+        if (backToGrid) favorites = favorites + appKey
+        if (keys.isEmpty()) {
+            setFolders(_folders.value.filter { it.id != folderId })
+            favorites = favorites - folder.slot
+        } else {
+            setFolders(_folders.value.map { if (it.id == folderId) it.copy(keys = keys) else it })
+        }
+        setFavorites(favorites)
+    }
+
+    fun renameFolder(folderId: String, name: String) {
+        val clean = name.trim().take(20).ifEmpty { return }
+        setFolders(_folders.value.map { if (it.id == folderId) it.copy(name = clean) else it })
+    }
+
+    /** Re-reads favorites and folders, after a profile switch or a config restore. */
+    fun reloadConfig() {
+        _favorites.value = repo.favorites()
+        _folders.value = repo.folders()
     }
 
     fun requestLaunch(app: AppEntry) {

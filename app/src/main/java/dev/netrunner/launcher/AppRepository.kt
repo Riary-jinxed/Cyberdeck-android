@@ -31,6 +31,15 @@ data class AppEntry(
     val packageName: String get() = component.packageName
 }
 
+/** A group of quickhacks shown as one tile; it sits in the favorites list as "dir:<id>". */
+data class Folder(val id: String, val name: String, val keys: List<String>) {
+    val slot: String get() = "$PREFIX$id"
+
+    companion object {
+        const val PREFIX = "dir:"
+    }
+}
+
 /** Reads installed apps through LauncherApps and stores the pinned ones. */
 class AppRepository(private val context: Context) {
 
@@ -59,6 +68,21 @@ class AppRepository(private val context: Context) {
 
     fun saveFavorites(keys: List<String>) {
         prefs.edit().putString(KEY_FAVORITES, keys.joinToString("|")).apply()
+    }
+
+    /** Quickhack folders: one line per folder, "id \t name \t key|key|…". */
+    fun folders(): List<Folder> =
+        prefs.getString(KEY_FOLDERS, "").orEmpty().lines().mapNotNull { line ->
+            val parts = line.split('\t')
+            if (parts.size < 3) null
+            else Folder(parts[0], parts[1], parts[2].split('|').filter { it.isNotBlank() })
+        }
+
+    fun saveFolders(folders: List<Folder>) {
+        prefs.edit().putString(
+            KEY_FOLDERS,
+            folders.joinToString("\n") { f -> "${f.id}\t${f.name.replace('\t', ' ').replace('\n', ' ')}\t${f.keys.joinToString("|")}" },
+        ).apply()
     }
 
     /** How many times each app was opened from Netrunner, for the "frequent" sort. */
@@ -103,6 +127,7 @@ class AppRepository(private val context: Context) {
     private companion object {
         const val TAG = "Netrunner"
         const val KEY_FAVORITES = "favorites"
+        const val KEY_FOLDERS = "folders"
         const val ICON_PX = 128
     }
 }
