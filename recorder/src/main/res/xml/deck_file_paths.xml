@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replaces the deck kit's file: its update cache, plus the recordings to share. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+    <external-files-path name="recordings" path="Recordings/" />
+    <files-path name="recordings_internal" path="recordings/" />
+</paths>
