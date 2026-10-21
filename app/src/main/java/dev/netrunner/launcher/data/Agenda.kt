@@ -3,7 +3,6 @@ package dev.netrunner.launcher.data
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
@@ -51,11 +50,5 @@ object Agenda {
             }
         }
         return out
-    }
-
-    fun open(context: Context, contract: Contract) {
-        val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, contract.id))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(intent) }
     }
 }
