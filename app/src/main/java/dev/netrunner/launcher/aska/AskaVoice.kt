@@ -8,12 +8,17 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import com.k2fsa.sherpa.onnx.OfflineTts
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,6 +29,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.math.PI
 import kotlin.math.abs
@@ -31,9 +37,10 @@ import kotlin.math.sin
 import kotlin.math.tanh
 
 /**
- * As//ka's voice: Android's offline speech synthesis, run through a small effects chain
- * (ring modulator, bit crusher, chorus, echo) so it sounds like a game AI rather than a GPS.
- * The speech engine is only bound while her panel is open.
+ * As//ka's voice. Her own pack uses a neural voice (Piper, through sherpa-onnx) once it is
+ * downloaded; the others, and hers until then, use Android's offline speech synthesis. Either
+ * way it runs through a small effects chain (ring modulator, bit crusher, chorus, echo) so it
+ * sounds like a game AI rather than a GPS. The engines are only loaded while her panel is open.
  */
 class AskaVoice(private val context: Context, private val scope: CoroutineScope) {
 
@@ -85,7 +92,15 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     var problem by mutableStateOf<String?>(null)
         private set
 
+    /** Her neural voice is on the phone: her own pack uses it. */
+    var neural by mutableStateOf(AskaPiper.isInstalled(context))
+        private set
+
     private var tts: TextToSpeech? = null
+    private var piper: OfflineTts? = null
+    // The neural engine is not thread-safe: built, used and freed on this one thread only.
+    private val piperThread = Executors.newSingleThreadExecutor { Thread(it, "aska-piper") }
+    private val piperDispatcher = piperThread.asCoroutineDispatcher()
     private var ready = false
     private var job: Job? = null
     private var track: AudioTrack? = null
@@ -114,15 +129,14 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         if (clean.isBlank()) return
         stop()
         job = scope.launch {
-            val engine = engine() ?: return@launch
+            val p = pack
+            val say = speaker(p) ?: return@launch
             speaking = true
             try {
-                val p = pack
                 var playing: Job? = null
                 // Sentence by sentence: the first one plays while the next is synthesized.
                 for (sentence in sentences(clean)) {
-                    val pcm = synthesize(engine, sentence, p) ?: break
-                    val processed = withContext(Dispatchers.Default) { encode(process(pcm, p.fx)) }
+                    val processed = say(sentence) ?: break
                     playing?.join()
                     if (!isActive) break
                     playing = launch { play(processed) }
@@ -145,14 +159,13 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         stream = queue
         streamFed = 0
         job = scope.launch {
-            val engine = engine() ?: return@launch
+            val p = pack
+            val say = speaker(p) ?: return@launch
             speaking = true
             try {
-                val p = pack
                 var playing: Job? = null
                 for (sentence in queue) {
-                    val pcm = synthesize(engine, sentence, p) ?: continue
-                    val processed = withContext(Dispatchers.Default) { encode(process(pcm, p.fx)) }
+                    val processed = say(sentence) ?: continue
                     playing?.join()
                     if (!isActive) break
                     playing = launch { play(processed) }
@@ -201,14 +214,76 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         speaking = false
     }
 
-    /** Frees the speech engine (panel closed). */
+    /** Frees the speech engines (panel closed). */
     fun release() {
         stop()
         runCatching { tts?.shutdown() }
         tts = null
         ready = false
         voices.clear()
+        // After any sentence still being synthesized.
+        piperThread.execute {
+            piper?.release()
+            piper = null
+        }
     }
+
+    /** The neural voice was installed or deleted. */
+    fun neuralChanged() {
+        neural = AskaPiper.isInstalled(context)
+        piperThread.execute {
+            piper?.release()
+            piper = null
+        }
+    }
+
+    /** Turns a sentence into a clip ready to play, with the engine [pack] uses. Null when no engine works. */
+    private suspend fun speaker(pack: Pack): (suspend (String) -> Clip?)? {
+        if (pack == Pack.Ashka && neural) {
+            return { sentence -> withContext(piperDispatcher) { neuralClip(sentence) } }
+        }
+        val engine = engine() ?: return null
+        return { sentence ->
+            synthesize(engine, sentence, pack)?.let { withContext(Dispatchers.Default) { encode(process(it, pack.fx)) } }
+        }
+    }
+
+    // ---- Neural voice.
+
+    /**
+     * Her neural voice, a little higher than the speaker's own: synthesized slower, then played
+     * faster by the same factor, so the pitch rises and the pace stays. A light holo shimmer on top.
+     */
+    private fun neuralClip(sentence: String): Clip? {
+        val engine = piper ?: runCatching { loadPiper() }.getOrNull()?.also { piper = it } ?: run {
+            problem = "Voix neuronale illisible : supprime-la puis télécharge-la à nouveau."
+            return null
+        }
+        val (pitch, rate) = expression(sentence)
+        // Her expressions, softened: the neural voice already has its own intonation.
+        val up = NEURAL_PITCH * (1f + (pitch - 1f) * 0.5f)
+        val pace = 1f + (rate - 1f) * 0.5f
+        val audio = runCatching { engine.generate(sentence, sid = AskaPiper.SPEAKER, speed = pace / up) }.getOrNull() ?: return null
+        if (audio.samples.isEmpty()) return null
+        val clip = encode(process(Pcm(audio.samples, audio.sampleRate), NEURAL_FX))
+        return Clip(clip.bytes, clip.frames, (audio.sampleRate * up).toInt())
+    }
+
+    private fun loadPiper(): OfflineTts = OfflineTts(
+        assetManager = null,
+        config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                vits = OfflineTtsVitsModelConfig(
+                    model = AskaPiper.model(context).path,
+                    tokens = AskaPiper.tokens(context).path,
+                    dataDir = AskaPiper.espeakData(context).path,
+                ),
+                // Two cores: fast enough to stay ahead of her speech, easy on the battery.
+                numThreads = 2,
+                provider = "cpu",
+            ),
+        ),
+    )
 
     // ---- Speech engine.
 
@@ -453,5 +528,8 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         // Google's offline French voices: frb and frd are the male ones.
         private val SENTENCE_END = Regex("[.!?…:;\\n]+[\"»)]*(?=\\s)")
         private val MALE_GOOGLE = listOf("fr-fr-x-frb", "fr-fr-x-frd", "fr-fr-x-vlm")
+        // Her neural voice: 9 % higher than the speaker, a touch of chorus and echo.
+        private const val NEURAL_PITCH = 1.09f
+        private val NEURAL_FX = Fx(chorusMix = 0.10f, echoMs = 55, echoGain = 0.10f)
     }
 }

@@ -74,6 +74,9 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     /** Facts she keeps across conversations ("retiens que…"). */
     val memory = AskaMemory(context)
 
+    /** Her Tamagotchi side: appetite, mood, energy, bond. */
+    val pet = AskaPet(context)
+
     init {
         loadHistory()
         if (lines.isEmpty()) say(GREETING, speak = false)
@@ -362,7 +365,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Ta seule action possible sur le téléphone : les alarmes et minuteurs. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
             [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
-        """.trimIndent() + memoryBlock()
+        """.trimIndent() + memoryBlock() + pet.forPrompt()
     }
 
     private fun memoryBlock(): String =
