@@ -14,7 +14,8 @@ import java.util.Locale
  */
 object AskaActions {
 
-    private val OPEN = Regex("^(?:as//ka|ashka|aska)?[ ,]*(?:peux-tu |tu peux |stp |s'il te plait )?(?:ouvre|ouvrir|lance|lancer|demarre|demarrer|affiche)(?:-moi| moi)?\\s+(?:l'appli |l'application |l'app |l')?(?:le |la |les |mon |ma |mes )?(.+?)(?: stp| s'il te plait| please)?[ .!?]*$")
+    /** "ouvre", "lance", "tu peux ouvrir", "démarre-moi"… anywhere in the sentence. */
+    private val OPEN = Regex("\\b(ouvr(e|es|ir|ez)|lance(r|z)?|demarre(r|z)?)\\b")
     private val TORCH_ON = Regex("\\b(allume|active|mets)\\b.*\\b(lampe|torche|flash)\\b")
     private val TORCH_OFF = Regex("\\b(eteins|eteint|coupe|desactive)\\b.*\\b(lampe|torche|flash)\\b")
     private val GHOST = Regex("\\bmode furtif\\b|\\bfurtif\\b")
@@ -26,21 +27,38 @@ object AskaActions {
         if (GHOST.containsMatchIn(t) && Regex("\\b(active|lance|passe|mets|desactive|coupe|quitte|sors|mode furtif)\\b").containsMatchIn(t)) {
             return AlarmAction.GhostMode
         }
-        val wanted = OPEN.find(t)?.groupValues?.get(1)?.trim()?.takeIf { it.length >= 2 } ?: return null
-        return findApp(context, wanted)?.let { (label, pkg) -> AlarmAction.OpenApp(label, pkg) }
+        val verb = OPEN.find(t) ?: return null
+        return findApp(context, t, t.substring(verb.range.last + 1))?.let { (label, pkg) -> AlarmAction.OpenApp(label, pkg) }
     }
 
-    /** The launcher app whose name best matches what was said. */
-    private fun findApp(context: Context, wanted: String): Pair<String, String>? {
+    /**
+     * The launcher app named in the sentence: an app whose whole name appears in it (the
+     * longest wins), otherwise one whose name starts with the words after the verb.
+     */
+    private fun findApp(context: Context, sentence: String, afterVerb: String): Pair<String, String>? {
         val pm = context.packageManager
         val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .map { it.loadLabel(pm).toString() to it.activityInfo.packageName }
             .distinctBy { it.second }
-        val w = wanted.replace(" ", "")
-        return apps.firstOrNull { normalize(it.first).replace(" ", "") == w }
-            ?: apps.filter { normalize(it.first).replace(" ", "").startsWith(w) }.minByOrNull { it.first.length }
-            ?: apps.filter { w.length >= 4 && normalize(it.first).replace(" ", "").contains(w) }.minByOrNull { it.first.length }
+        val words = " " + words(sentence) + " "
+        apps.filter { words(normalize(it.first)).length >= 3 && words.contains(" " + words(normalize(it.first)) + " ") }
+            .maxByOrNull { it.first.length }
+            ?.let { return it }
+        val wanted = words(afterVerb)
+            .removePrefix("moi ").split(' ')
+            .dropWhile { it in FILLERS }
+            .takeWhile { it !in FILLERS }
+            .joinToString("")
+            .takeIf { it.length >= 3 } ?: return null
+        val compact = { label: String -> normalize(label).filter(Char::isLetterOrDigit) }
+        return apps.filter { compact(it.first).startsWith(wanted) }.minByOrNull { it.first.length }
+            ?: apps.filter { wanted.length >= 4 && compact(it.first).contains(wanted) }.minByOrNull { it.first.length }
     }
+
+    private val FILLERS = setOf("l", "la", "le", "les", "mon", "ma", "mes", "app", "appli", "application", "stp", "please", "pour", "s", "il", "te", "plait", "moi", "vite")
+
+    /** Letters and digits only, single spaces. */
+    private fun words(s: String) = s.replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
     fun run(context: Context, action: AlarmAction): String = when (action) {
         is AlarmAction.OpenApp -> {
