@@ -38,8 +38,9 @@ jobs:
       # Shows which key signed the APK in the run summary ("Android Debug" = throwaway key).
       - name: Signer
         run: |
-          OWNER=$(keytool -printcert -jarfile app/build/outputs/apk/release/*.apk | grep -m1 -E "Owner|Propriétaire" | sed 's/^[^:]*: //')
-          echo "::notice title=Signature::$OWNER"
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          OWNER=$("$APKSIGNER" verify --print-certs app/build/outputs/apk/release/*.apk | grep -m1 "certificate DN" | sed 's/^[^:]*: //')
+          echo "::notice title=Signature::${OWNER:-unknown}"
       - uses: actions/upload-artifact@v4
         with:
           name: netrunner-launcher
