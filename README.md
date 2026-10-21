@@ -135,6 +135,16 @@ Enregistreur vocal dans le module `recorder/` (package `dev.netrunner.recorder`,
 - **Qualité** : réglage haute qualité (48 kHz / 192 kb/s) ou économe (44,1 kHz / 96 kb/s) dans CONFIG.
 - **Mises à jour** : releases GitHub `recorder-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## Scanner Netrunner (appli à part)
+
+Lecteur de QR codes et codes-barres dans le module `scanner/` (package `dev.netrunner.scanner`, même clé de signature), au style terminal.
+
+- **Scan** : caméra en direct avec réticule, lampe, et lecture depuis une image de la galerie (ML Kit, hors ligne).
+- **Décodage** : liens, Wi-Fi (connexion en un geste), téléphone, SMS, e-mail, position GPS, carte de visite, code produit, texte.
+- **Actions** : ouvrir, se connecter, appeler, copier, partager ; ouverture automatique des liens en option.
+- **Historique** des 100 derniers scans, vibration réglable.
+- **Mises à jour** : releases GitHub `scanner-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
