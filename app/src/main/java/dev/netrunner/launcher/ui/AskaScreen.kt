@@ -36,6 +36,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
+import androidx.annotation.DrawableRes
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -178,6 +184,37 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
             reminders -> ReminderBay(Modifier.weight(1f))
             showModels || noModel -> ModelBay(brain, Modifier.weight(1f))
             else -> Chat(brain, Modifier.weight(1f), onChibi = { nest = true }, onReminders = { reminders = true })
+        }
+    }
+}
+
+/** A photo she sent during a date: small in the chat, full screen on touch. */
+@Composable
+private fun DatePhoto(@DrawableRes photo: Int) {
+    var zoom by remember { mutableStateOf(false) }
+    Spacer(Modifier.height(8.dp))
+    Image(
+        painterResource(photo),
+        contentDescription = "Photo d'As//ka",
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(width = 180.dp, height = 262.dp)
+            .hudPanel(borderColor = AskaColors.Pink.copy(alpha = 0.8f), fill = AskaColors.Void, cut = 8.dp)
+            .padding(2.dp)
+            .clickable { zoom = true },
+    )
+    if (zoom) {
+        Dialog(onDismissRequest = { zoom = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Image(
+                painterResource(photo),
+                contentDescription = "Photo d'As//ka",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f))
+                    .clickable { zoom = false }
+                    .padding(12.dp),
+            )
         }
     }
 }
@@ -434,6 +471,7 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                     lineHeight = 19.sp,
                 )
             }
+            line.photo?.let { photo -> DatePhoto(photo) }
             line.action?.let { action ->
                 Spacer(Modifier.height(8.dp))
                 Text(action.summary, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 12.sp)

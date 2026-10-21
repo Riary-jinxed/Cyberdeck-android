@@ -1,5 +1,7 @@
 package dev.netrunner.launcher.aska
 
+import dev.netrunner.launcher.R
+
 /**
  * Her rendez-vous: a scene somewhere in the city where she and her runner spend a moment
  * together. Tender, playful flirting, never explicit. Each scene opens once their bond is
@@ -133,6 +135,27 @@ object AskaDate {
         $handle : Tu es vraiment jolie ce soir.
         As//ka : *manque de renverser son chocolat* Q-quoi ? *cache ses joues derrière la tasse* …Tu ne peux pas dire ça comme ça, sans prévenir. *jette un coup d'œil par-dessus la tasse* Toi aussi, tu es… pas mal. Voilà. Tu veux goûter mon macaron, pour la peine ?
     """.trimIndent() + if (facts.isEmpty()) "" else "\nCe que tu sais de $handle : " + facts.joinToString(" ; ") + "."
+
+    /** After how many of her runner's messages she sends her photo. */
+    const val PHOTO_AFTER = 4
+
+    fun photo(scene: Scene): Int = when (scene) {
+        Scene.Cafe -> R.drawable.aska_date_cafe
+        Scene.Roof -> R.drawable.aska_date_roof
+        Scene.Arcade -> R.drawable.aska_date_arcade
+        Scene.Home -> R.drawable.aska_date_home
+        Scene.Market -> R.drawable.aska_date_market
+        Scene.Beach -> R.drawable.aska_date_beach
+    }
+
+    fun photoLine(scene: Scene): String = when (scene) {
+        Scene.Cafe -> "*te tend son téléphone* Je me suis prise en photo avec mon macaron… pour me souvenir de ce soir. Tu la gardes ?"
+        Scene.Roof -> "*bzzt* Une photo pour toi. Sous la pluie, avec la ville… et un peu de moi au milieu. Héhé."
+        Scene.Arcade -> "*te montre l'écran, toute fière* Regarde ! Moi et ma nouvelle peluche. On est jolies toutes les deux, non ?"
+        Scene.Home -> "*cache à moitié son visage derrière son téléphone* Je… je nous ai pris en photo. Enfin, surtout moi dans ton plaid. Ne te moque pas."
+        Scene.Market -> "*t'envoie une photo, la bouche encore pleine* Preuve que ce mochi en forme de cœur a existé !"
+        Scene.Beach -> "*doucement* Je voulais garder cet instant. Alors je l'ai pris en photo. Pour toi."
+    }
 
     fun goodbye(scene: Scene): String = when (scene) {
         Scene.Cafe -> "*finit son macaron, les joues roses* Merci pour ce café… On pourra revenir ? Juste nous deux ?"

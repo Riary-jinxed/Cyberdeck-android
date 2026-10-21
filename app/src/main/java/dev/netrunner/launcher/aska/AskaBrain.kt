@@ -40,6 +40,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val action: AlarmAction? = null,
         /** False while the answer is still streaming in. */
         val done: Boolean = true,
+        /** A photo she sends during a date (drawable). */
+        val photo: Int? = null,
     )
 
     private val talk = mutableStateListOf<Line>()
@@ -49,6 +51,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     var date by mutableStateOf<AskaDate.Scene?>(null)
         private set
     private var dateMessages = 0
+    private var photoSent = false
 
     /** What the chat shows: the usual conversation, or the rendez-vous. */
     val lines: SnapshotStateList<Line> get() = if (date != null) dateTalk else talk
@@ -211,6 +214,11 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     ),
                 )
                 saveHistory()
+                // Halfway through a date, she sends a photo of the moment.
+                if (scene != null && date == scene && !photoSent && dateMessages >= AskaDate.PHOTO_AFTER) {
+                    photoSent = true
+                    add(Line(nextId++, fromUser = false, text = AskaDate.photoLine(scene), photo = AskaDate.photo(scene)))
+                }
             } catch (e: CancellationException) {
                 val partial = lines.firstOrNull { it.id == reply.id }?.text.orEmpty()
                 replace(reply.id, Line(reply.id, false, if (partial.isEmpty()) "[transmission coupée]" else "$partial […]"))
@@ -236,6 +244,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         stop()
         dateTalk.clear()
         dateMessages = 0
+        photoSent = false
         date = scene
         say(scene.opening)
         if (engine.connected) resetConversation()
