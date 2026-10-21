@@ -48,6 +48,20 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
 
+## Horloge Netrunner (appli à part)
+
+Une deuxième appli, dans le module `clock/` (package `dev.netrunner.clock`, APK séparé signé avec la même clé), pour remplacer l'horloge Xiaomi dans le même style.
+
+- **Horloge** plein écran et prochaine alarme.
+- **Alarmes** : jours de répétition, libellé, vibreur, répit réglable, volume progressif, arrêt automatique.
+- **Sonnerie au choix** : sonnerie du téléphone, sonnerie système, ou **musique importée** depuis le téléphone (MP3, M4A, OGG, FLAC…) avec l'extrait à jouer en boucle (début et fin). Le fichier est copié dans l'appli et ne quitte pas le téléphone.
+- **Écran de réveil** plein écran par-dessus l'écran verrouillé : glisser pour arrêter, bouton ou touches de volume pour le répit. Après une alarme du matin, retour à l'accueil pour qu'As//ka dise bonjour (désactivable).
+- **Minuteurs** (plusieurs à la fois, notification avec compte à rebours, pause, +1 min) et **chrono** avec tours.
+- **Fiable sur HyperOS** : vraies alarmes système (exactes, icône dans la barre d'état, reprogrammées au redémarrage et au changement d'heure) et une page CONFIG qui vérifie chaque réglage (notifications, plein écran, batterie, démarrage auto) avec accès direct.
+- **Compatible As//ka** : l'appli répond aux intents Android standard de l'horloge, donc « réveille-moi à 7h30 », « minuteur 10 min » ou « prochaine alarme ? » marchent avec elle. La première fois, choisis Horloge Netrunner puis « Toujours ».
+- **Sobre en batterie** : rien ne tourne en fond ; un service ne démarre que pendant qu'une alarme sonne.
+- **Mises à jour** : releases GitHub `horloge-vX.Y.Z` (jamais marquées « latest », pour ne pas gêner la mise à jour du launcher), installables depuis CONFIG › Mise à jour.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).

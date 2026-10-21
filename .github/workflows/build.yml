@@ -34,7 +34,7 @@ jobs:
       - name: Build release APK
         env:
           NETRUNNER_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon :app:assembleRelease
       # Shows which key signed the APK in the run summary ("Android Debug" = throwaway key).
       - name: Signer
         run: |
@@ -58,5 +58,5 @@ jobs:
           fi
           cp app/build/outputs/apk/release/*.apk "netrunner-$VERSION.apk"
           gh release create "v$VERSION" "netrunner-$VERSION.apk" \
-            --title "Netrunner v$VERSION" \
+            --title "Netrunner v$VERSION" --latest \
             --notes "$(git log -1 --pretty=%B | head -n 1)"
