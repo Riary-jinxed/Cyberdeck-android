@@ -5,8 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.BatteryManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,9 +65,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel
+import dev.netrunner.launcher.system.BatteryState
+import dev.netrunner.launcher.system.HomeRole
+import dev.netrunner.launcher.system.SystemInfo
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -89,14 +94,38 @@ private val FeedLines = listOf(
 fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     val apps by viewModel.apps.collectAsStateWithLifecycle()
     val favoriteKeys by viewModel.favorites.collectAsStateWithLifecycle()
+    val launching by viewModel.launching.collectAsStateWithLifecycle()
+    val terminalOpen by viewModel.terminalOpen.collectAsStateWithLifecycle()
     var drawerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // Pressing Home while the drawer is open brings us back to the main HUD.
-    LaunchedEffect(homePresses) { drawerOpen = false }
+    // Re-checked every time we come back, e.g. after the user picked a home app in Settings.
+    var isDefaultHome by remember { mutableStateOf(true) }
+    LifecycleResumeEffect(Unit) {
+        isDefaultHome = HomeRole.isDefault(context)
+        onPauseOrDispose { }
+    }
+    val roleRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isDefaultHome = HomeRole.isDefault(context)
+        // HyperOS sometimes dismisses the dialog without asking: send the user to Settings instead.
+        if (!isDefaultHome) HomeRole.openSettings(context)
+    }
+    val makeDefault = {
+        val intent = HomeRole.requestIntent(context)
+        if (intent != null) roleRequest.launch(intent) else HomeRole.openSettings(context)
+    }
+
+    // Pressing Home brings us back to the main HUD.
+    LaunchedEffect(homePresses) {
+        drawerOpen = false
+        viewModel.setTerminalOpen(false)
+    }
 
     // A launcher must never close on Back.
-    BackHandler { drawerOpen = false }
+    BackHandler {
+        drawerOpen = false
+        viewModel.setTerminalOpen(false)
+    }
 
     val favorites = remember(apps, favoriteKeys) {
         favoriteKeys.mapNotNull { key -> apps.find { it.key == key } }
@@ -127,6 +156,10 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 }
         ) {
             StatusStrip()
+            if (!isDefaultHome) {
+                Spacer(Modifier.height(12.dp))
+                DefaultHomeBanner(onClick = makeDefault)
+            }
             Spacer(Modifier.height(28.dp))
             ClockBlock()
             Spacer(Modifier.height(20.dp))
@@ -134,12 +167,15 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Spacer(Modifier.weight(1f))
             QuickhackGrid(
                 favorites = favorites,
-                onLaunch = viewModel::launch,
+                onLaunch = viewModel::requestLaunch,
                 onUnpin = viewModel::toggleFavorite,
                 onInfo = viewModel::openAppInfo,
             )
             Spacer(Modifier.height(16.dp))
-            NetworkButton(onClick = { drawerOpen = true })
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HudButton("[ RÉSEAU ] ▲", Cp.Yellow, Modifier.weight(1f)) { drawerOpen = true }
+                HudButton("[ TERMINAL ] >_", Cp.Cyan, Modifier.weight(1f)) { viewModel.setTerminalOpen(true) }
+            }
         }
 
         AnimatedVisibility(
@@ -151,7 +187,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 apps = apps,
                 favoriteKeys = favoriteKeys,
                 onLaunch = { app ->
-                    viewModel.launch(app)
+                    viewModel.requestLaunch(app)
                     drawerOpen = false
                 },
                 onTogglePin = viewModel::toggleFavorite,
@@ -159,7 +195,35 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 onClose = { drawerOpen = false },
             )
         }
+
+        AnimatedVisibility(
+            visible = terminalOpen,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            TerminalScreen(terminal = viewModel.terminal, onClose = { viewModel.setTerminalOpen(false) })
+        }
+
+        launching?.let { app ->
+            BreachOverlay(app = app, onDone = viewModel::completeLaunch)
+        }
     }
+}
+
+@Composable
+private fun DefaultHomeBanner(onClick: () -> Unit) {
+    Text(
+        "⚠ NETRUNNER N'EST PAS TON ÉCRAN D'ACCUEIL. TOUCHE ICI POUR L'ACTIVER.",
+        color = Cp.Red,
+        fontFamily = HudFont,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Red, fill = Cp.Red.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    )
 }
 
 @Composable
@@ -366,22 +430,22 @@ private fun QuickhackTile(
 }
 
 @Composable
-private fun NetworkButton(onClick: () -> Unit) {
+private fun HudButton(label: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier
-            .fillMaxWidth()
-            .hudPanel(borderColor = Cp.Yellow, fill = Cp.Yellow.copy(alpha = 0.12f), cut = 14.dp)
+        modifier
+            .hudPanel(borderColor = color, fill = color.copy(alpha = 0.12f), cut = 14.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "[ ACCÈS RÉSEAU ]  ▲",
-            color = Cp.Yellow,
+            label,
+            color = color,
             fontFamily = HudFont,
-            fontSize = 15.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 3.sp,
+            letterSpacing = 1.sp,
+            maxLines = 1,
         )
     }
 }
@@ -576,32 +640,30 @@ private fun AppMenu(
     }
 }
 
-private data class BatteryState(val level: Int, val charging: Boolean)
-
+/** Polls the battery every 20 s and also listens for changes, so it is right on every OEM skin. */
 @Composable
 private fun rememberBattery(): BatteryState {
     val context = LocalContext.current
-    var state by remember { mutableStateOf(BatteryState(-1, false)) }
+    var state by remember { mutableStateOf(SystemInfo.battery(context)) }
+    LaunchedEffect(context) {
+        while (true) {
+            state = SystemInfo.battery(context)
+            delay(20_000)
+        }
+    }
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
-                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
-                val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-                state = BatteryState(
-                    level = if (level >= 0 && scale > 0) level * 100 / scale else -1,
-                    charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                        status == BatteryManager.BATTERY_STATUS_FULL,
-                )
+                state = SystemInfo.battery(context)
             }
         }
-        ContextCompat.registerReceiver(
-            context,
-            receiver,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        onDispose { context.unregisterReceiver(receiver) }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
     return state
 }

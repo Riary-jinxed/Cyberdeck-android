@@ -5,6 +5,7 @@ import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.netrunner.launcher.terminal.Terminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,21 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _favorites = MutableStateFlow(repo.favorites())
     val favorites: StateFlow<List<String>> = _favorites.asStateFlow()
+
+    /** The app being "jacked into": the launch animation plays, then the app opens. */
+    private val _launching = MutableStateFlow<AppEntry?>(null)
+    val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
+
+    private val _terminalOpen = MutableStateFlow(false)
+    val terminalOpen: StateFlow<Boolean> = _terminalOpen.asStateFlow()
+
+    val terminal = Terminal(
+        context = app,
+        scope = viewModelScope,
+        apps = { _apps.value },
+        launch = ::requestLaunch,
+        close = { _terminalOpen.value = false },
+    )
 
     // Keeps the app list in sync when something is installed, updated or removed.
     private val packageCallback = object : LauncherApps.Callback() {
@@ -51,7 +67,18 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         repo.saveFavorites(updated)
     }
 
-    fun launch(app: AppEntry) = repo.launch(app)
+    fun requestLaunch(app: AppEntry) {
+        _launching.value = app
+    }
+
+    fun completeLaunch() {
+        _launching.value?.let(repo::launch)
+        _launching.value = null
+    }
+
+    fun setTerminalOpen(open: Boolean) {
+        _terminalOpen.value = open
+    }
 
     fun openAppInfo(app: AppEntry) = repo.openAppInfo(app)
 

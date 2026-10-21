@@ -7,6 +7,9 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **HUD d'accueil** : grosse horloge jaune qui « glitche » de temps en temps, date, batterie segmentée, ligne de terminal animée.
 - **Quickhacks** : tes applis favorites en tuiles angulaires (appui long dans le tiroir pour épingler).
 - **Accès réseau** : tiroir de toutes les applis avec recherche (Entrée lance le premier résultat).
+- **Lancement en ligne de commande** : chaque appli s'ouvre après une courte séquence « jack-in » façon terminal.
+- **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
+- **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
 
@@ -37,6 +40,12 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/Theme.kt` | Palette Night City et police |
 | `ui/Effects.kt` | Glitch, scanlines, grille, panneaux angulaires |
 | `ui/HomeScreen.kt` | HUD, quickhacks, tiroir d'applis |
+| `ui/BreachOverlay.kt` | Animation « jack-in » au lancement d'une appli |
+| `ui/TerminalScreen.kt` | Interface du terminal |
+| `terminal/Terminal.kt` | Interpréteur de commandes |
+| `terminal/NetTools.kt` | Scan réseau, scan de ports, infos réseau |
+| `system/SystemInfo.kt` | Batterie, mémoire, stockage, appareil |
+| `system/HomeRole.kt` | Demande à devenir l'écran d'accueil |
 
 ## Idées pour la suite
 
