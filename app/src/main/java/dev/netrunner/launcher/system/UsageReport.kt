@@ -74,7 +74,61 @@ object UsageReport {
             }
         }
 
+        replay(manager, begin, now, context.packageName,
+            onStretch = ::add,
+            onOpen = { pkg, t -> opens[dayOf(t)]?.merge(pkg, 1, Int::plus) },
+            onUnlock = { t -> unlocks[dayOf(t)]?.let { it[0]++ } },
+        )
+
+        val pm = context.packageManager
+        val labels = mutableMapOf<String, String>()
+        fun label(pkg: String) = labels.getOrPut(pkg) {
+            runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        }
+
         val own = context.packageName
+        return Report(
+            dates.map { date ->
+                val perApp = time.getValue(date)
+                val opened = opens.getValue(date)
+                // The launcher itself is the home screen, not "screen time".
+                val apps = (perApp.keys + opened.keys).filter { it != own }.map { pkg ->
+                    AppUsage(pkg, label(pkg), perApp[pkg] ?: 0L, opened[pkg] ?: 0)
+                }.filter { it.foregroundMs >= 1_000 || it.opens > 0 }.sortedByDescending { it.foregroundMs }
+                Day(date, apps.sumOf { it.foregroundMs }, unlocks.getValue(date)[0], apps.sumOf { it.opens }, apps)
+            }
+        )
+    }
+
+    /** Foreground time per app since midnight, and the app in front right now (null: none or home). */
+    class Today(val foregroundMs: Map<String, Long>, val current: String?)
+
+    fun today(context: Context): Today? {
+        if (!granted(context)) return null
+        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return null
+        val begin = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val time = mutableMapOf<String, Long>()
+        val current = replay(manager, begin, System.currentTimeMillis(), context.packageName,
+            onStretch = { pkg, a, b -> time.merge(pkg, b - a, Long::plus) },
+            onOpen = { _, _ -> },
+            onUnlock = { },
+        )
+        return Today(time, current)
+    }
+
+    /**
+     * Walks the usage events between [begin] and [now]: reports each foreground stretch, each app
+     * opening and each unlock. Returns the app still in front at the end, if any.
+     */
+    private fun replay(
+        manager: UsageStatsManager,
+        begin: Long,
+        now: Long,
+        own: String,
+        onStretch: (pkg: String, from: Long, to: Long) -> Unit,
+        onOpen: (pkg: String, time: Long) -> Unit,
+        onUnlock: (time: Long) -> Unit,
+    ): String? {
         var current: String? = null
         var currentClass: String? = null
         var since = 0L
@@ -87,8 +141,8 @@ object UsageReport {
             when (e.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
                     if (pkg != current) {
-                        current?.let { add(it, since, t) }
-                        if (pkg != own) opens[dayOf(t)]?.merge(pkg, 1, Int::plus)
+                        current?.let { onStretch(it, since, t) }
+                        if (pkg != own) onOpen(pkg, t)
                         current = pkg
                         since = t
                     }
@@ -97,35 +151,18 @@ object UsageReport {
                 UsageEvents.Event.ACTIVITY_PAUSED, UsageEvents.Event.ACTIVITY_STOPPED -> {
                     // A paused activity only ends the stretch if it is the one in front.
                     if (pkg == current && e.className == currentClass) {
-                        add(pkg, since, t)
+                        onStretch(pkg, since, t)
                         current = null
                     }
                 }
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    current?.let { add(it, since, t) }
+                    current?.let { onStretch(it, since, t) }
                     current = null
                 }
-                UsageEvents.Event.KEYGUARD_HIDDEN -> unlocks[dayOf(t)]?.let { it[0]++ }
+                UsageEvents.Event.KEYGUARD_HIDDEN -> onUnlock(t)
             }
         }
-        current?.let { add(it, since, now) }
-
-        val pm = context.packageManager
-        val labels = mutableMapOf<String, String>()
-        fun label(pkg: String) = labels.getOrPut(pkg) {
-            runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-        }
-
-        return Report(
-            dates.map { date ->
-                val perApp = time.getValue(date)
-                val opened = opens.getValue(date)
-                // The launcher itself is the home screen, not "screen time".
-                val apps = (perApp.keys + opened.keys).filter { it != own }.map { pkg ->
-                    AppUsage(pkg, label(pkg), perApp[pkg] ?: 0L, opened[pkg] ?: 0)
-                }.filter { it.foregroundMs >= 1_000 || it.opens > 0 }.sortedByDescending { it.foregroundMs }
-                Day(date, apps.sumOf { it.foregroundMs }, unlocks.getValue(date)[0], apps.sumOf { it.opens }, apps)
-            }
-        )
+        current?.let { onStretch(it, since, now) }
+        return current?.takeIf { it != own }
     }
 }

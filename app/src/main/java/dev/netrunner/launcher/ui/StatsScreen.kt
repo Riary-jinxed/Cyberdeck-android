@@ -42,6 +42,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.netrunner.launcher.system.BatteryLog
+import dev.netrunner.launcher.system.DataUsage
+import dev.netrunner.launcher.system.Ice
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import dev.netrunner.launcher.system.SystemInfo
 import dev.netrunner.launcher.system.UiSound
 import dev.netrunner.launcher.system.UsageReport
@@ -50,7 +54,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private class StatsData(val usage: UsageReport.Report?, val battery: List<BatteryLog.Day>)
+private class StatsData(val usage: UsageReport.Report?, val data: DataUsage.Report?, val battery: List<BatteryLog.Day>)
 
 private fun duration(ms: Long): String {
     val minutes = ms / 60_000
@@ -73,7 +77,7 @@ fun StatsScreen(onClose: () -> Unit) {
             val usage = UsageReport.load(context)
             val dates = usage?.days?.map { it.date }
                 ?: (UsageReport.DAYS - 1 downTo 0).map { java.time.LocalDate.now().minusDays(it.toLong()) }
-            StatsData(usage, BatteryLog.days(context, dates))
+            StatsData(usage, DataUsage.load(context), BatteryLog.days(context, dates))
         }
     }
 
@@ -116,6 +120,7 @@ fun StatsScreen(onClose: () -> Unit) {
                     }
                 }
                 UsageSection(stats.usage, week)
+                stats.data?.let { DataSection(it, week) }
             }
         }
         if (stats != null) BatterySection(stats.battery)
@@ -176,7 +181,15 @@ private fun UsageSection(report: UsageReport.Report, week: Boolean) {
         Text("> aucune activité enregistrée", color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
     }
     val max = apps.maxOfOrNull { it.foregroundMs }?.coerceAtLeast(1L) ?: 1L
-    apps.forEach { AppRow(it, it.foregroundMs.toFloat() / max) }
+    // Today's time per app, to colour the ICE badge once a limit is used up.
+    val todayMs = report.today.apps.associate { it.packageName to it.foregroundMs }
+    apps.forEach { AppRow(it, it.foregroundMs.toFloat() / max, todayMs[it.packageName] ?: 0L) }
+    Text(
+        "> touche une appli pour lui poser une limite ICE (temps max par jour)",
+        color = Cp.Dim,
+        fontFamily = HudFont,
+        fontSize = 11.sp,
+    )
 }
 
 @Composable
@@ -261,52 +274,161 @@ private fun DayBars(values: List<Float>, labels: List<String>, captions: List<St
 }
 
 @Composable
-private fun AppRow(app: UsageReport.AppUsage, share: Float) {
+private fun AppRow(app: UsageReport.AppUsage, share: Float, todayMs: Long) {
     val context = LocalContext.current
+    remember { Ice.load(context.applicationContext) }
+    var menu by remember { mutableStateOf(false) }
+    val limit = Ice.limits[app.packageName]
     val icon = remember(app.packageName) {
         runCatching {
             context.packageManager.getApplicationIcon(app.packageName).toBitmap(96, 96).asImageBitmap()
         }.getOrNull()
     }
     val bar = Cp.Yellow
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.4f), cut = 8.dp)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Image(icon, contentDescription = null, modifier = Modifier.size(26.dp))
-        } else {
-            Box(Modifier.size(26.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    app.label.uppercase(),
-                    color = Cp.Text,
-                    fontFamily = HudFont,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(duration(app.foregroundMs), color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .hudPanel(borderColor = if (limit != null) Cp.Red.copy(alpha = 0.6f) else Cp.Cyan.copy(alpha = 0.4f), cut = 8.dp)
+                .clickable { menu = true }
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Image(icon, contentDescription = null, modifier = Modifier.size(26.dp))
+            } else {
+                Box(Modifier.size(26.dp))
             }
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        app.label.uppercase(),
+                        color = Cp.Text,
+                        fontFamily = HudFont,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(duration(app.foregroundMs), color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(
+                        Modifier
+                            .weight(1f)
+                            .height(5.dp)
+                    ) {
+                        drawRect(bar.copy(alpha = 0.15f))
+                        drawRect(bar, size = Size(size.width * share.coerceIn(0.02f, 1f), size.height))
+                    }
+                    Text("  ×${app.opens}", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
+                    if (limit != null) {
+                        val over = todayMs >= limit * 60_000L
+                        Text(
+                            "  ICE ${limit}m",
+                            color = if (over) Cp.Red else Cp.Red.copy(alpha = 0.7f),
+                            fontFamily = HudFont,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            Text(
+                "LIMITE ICE / JOUR",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            (listOf<Int?>(null) + Ice.choices).forEach { minutes ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (minutes == null) "AUCUNE" else duration(minutes * 60_000L).uppercase(),
+                            color = if (minutes == limit) Cp.Yellow else Cp.Cyan,
+                            fontFamily = HudFont,
+                            fontSize = 13.sp,
+                        )
+                    },
+                    onClick = {
+                        Ice.setLimit(context, app.packageName, minutes)
+                        UiSound.play(context, UiSound.Cue.Confirm)
+                        menu = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DataSection(report: DataUsage.Report, week: Boolean) {
+    val days = report.days
+    val today = days.last()
+    val wifi = if (week) days.sumOf { it.wifi } else today.wifi
+    val mobile = if (week) days.sumOf { it.mobile } else today.mobile
+    Label(if (week) "DATA CONSOMMÉE, 7 JOURS" else "DATA CONSOMMÉE, AUJOURD'HUI")
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatTile("MOBILE", DataUsage.format(mobile), Cp.Yellow, Modifier.weight(1f))
+        StatTile("WI-FI", DataUsage.format(wifi), Cp.Cyan, Modifier.weight(1f))
+    }
+    DayBars(
+        values = days.map { it.mobile.toFloat() },
+        labels = days.map { it.date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.FRENCH) },
+        captions = days.map { DataUsage.format(it.mobile).replace(" ", "") },
+        color = Cp.Yellow,
+    )
+    Text("> barres : données mobiles par jour", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
+    val apps = (if (week) report.week else report.today).take(6)
+    val max = apps.maxOfOrNull { it.total }?.coerceAtLeast(1L) ?: 1L
+    apps.forEach { app ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.4f), cut = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        app.label.uppercase(),
+                        color = Cp.Text,
+                        fontFamily = HudFont,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(DataUsage.format(app.total), color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(4.dp))
+                val share = app.total.toFloat() / max
+                val mobileShare = if (app.total > 0) app.mobile.toFloat() / app.total else 0f
+                val yellow = Cp.Yellow
+                val cyan = Cp.Cyan
                 Canvas(
                     Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(5.dp)
                 ) {
-                    drawRect(bar.copy(alpha = 0.15f))
-                    drawRect(bar, size = Size(size.width * share.coerceIn(0.02f, 1f), size.height))
+                    drawRect(cyan.copy(alpha = 0.15f))
+                    val w = size.width * share.coerceIn(0.02f, 1f)
+                    drawRect(yellow, size = Size(w * mobileShare, size.height))
+                    drawRect(cyan, topLeft = Offset(w * mobileShare, 0f), size = Size(w * (1 - mobileShare), size.height))
                 }
-                Text("  ×${app.opens}", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
+                Text(
+                    "mobile ${DataUsage.format(app.mobile)} · wi-fi ${DataUsage.format(app.wifi)}",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 10.sp,
+                )
             }
         }
     }

@@ -38,7 +38,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
 - **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
 - **Gestes personnalisables** : chaque glisser et le double-tap / appui long sur l'horloge se règlent dans Config › Gestes.
-- **Stats du deck** : temps d'écran, déverrouillages, ouvertures et applis les plus utilisées (aujourd'hui ou sur 7 jours, en barres segmentées façon HUD), plus la batterie consommée et rechargée par jour. Il faut activer « Accès aux données d'utilisation ». Tout est calculé sur le téléphone, et l'historique batterie reste dans les fichiers privés de l'appli. À ouvrir avec `stats` dans le terminal ou via un geste.
+- **Stats du deck** : temps d'écran, déverrouillages, ouvertures et applis les plus utilisées (aujourd'hui ou sur 7 jours, en barres segmentées façon HUD), plus la batterie consommée et rechargée par jour. Il faut activer « Accès aux données d'utilisation ». Tout est calculé sur le téléphone, et l'historique batterie reste dans les fichiers privés de l'appli. On y voit aussi la data consommée (mobile et Wi-Fi, par jour et par appli). **Limites ICE** : touche une appli dans les stats pour lui fixer un temps max par jour. Une fois ce temps écoulé, un écran d'intrusion Netwatch la recouvre (bouton Déconnexion ou +5 min). Il faut « Afficher par-dessus les autres applis », sinon c'est une notification. À ouvrir avec `stats` dans le terminal ou via un geste.
 - **Mode éco Ripperdoc** : coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur, et fige le fond d'écran animé. En Auto, il s'active sous 20 % de batterie (hors charge) ou avec l'économiseur d'Android ; il peut aussi rester toujours actif (Config › Mode éco Ripperdoc). Le HUD affiche alors RIPPERDOC://ÉCO.
 - **Profils Boulot / Perso** : chacun garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.
 - **Mode nuit Netwatch** : interface assombrie, sans fond animé ni glitchs, sur une plage horaire choisie.
@@ -121,7 +121,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `system/Tones.kt` | Synthèse et installation des sonneries |
 | `system/MusicTone.kt` | Découpe d'une musique importée en sonnerie |
 | `system/Ripperdoc.kt` | Mode éco (animations coupées) |
-| `system/UsageReport.kt`, `system/BatteryLog.kt`, `ui/StatsScreen.kt` | Statistiques d'usage et de batterie |
+| `system/UsageReport.kt`, `system/BatteryLog.kt`, `system/DataUsage.kt`, `ui/StatsScreen.kt` | Statistiques d'usage, de data et de batterie |
+| `system/Ice.kt`, `ui/IceActivity.kt` | Limites ICE par appli |
 | `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
 | `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 

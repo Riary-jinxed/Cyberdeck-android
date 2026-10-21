@@ -164,6 +164,15 @@
             android:showWhenLocked="true"
             android:taskAffinity="dev.netrunner.launcher.lock" />
 
+        <!-- ICE limits: intrusion screen over an app whose daily time is used up. -->
+        <activity
+            android:name=".ui.IceActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:taskAffinity="dev.netrunner.launcher.ice" />
+
         <!-- Live wallpaper (also behind the lock screen). -->
         <service
             android:name=".wallpaper.BreachWallpaperService"
