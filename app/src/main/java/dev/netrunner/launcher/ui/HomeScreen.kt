@@ -191,15 +191,19 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 .pointerInput(Unit) {
                     var total = 0f
                     var fromTopRight = false
+                    var fromEdge = false
                     detectVerticalDragGestures(
                         onDragStart = { start ->
                             total = 0f
-                            // Like HyperOS: pulling down from the top-right corner opens the control centre.
+                            // The top strip belongs to Android (it reveals the hidden status bar):
+                            // pull-downs that start there are left alone.
+                            fromEdge = start.y < 64.dp.toPx()
                             fromTopRight = start.x > size.width * 0.55f && start.y < size.height * 0.3f
                         },
                         onDragEnd = {
                             when {
                                 total < -120f -> drawerOpen = true
+                                total > 120f && fromEdge -> Unit
                                 total > 120f && fromTopRight -> viewModel.openPanel(Panel.Quick)
                                 total > 120f -> expandNotifications(context)
                             }
@@ -220,7 +224,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                     ) { _, dragAmount -> total += dragAmount }
                 }
         ) {
-            StatusStrip()
+            StatusStrip(onMenu = { viewModel.openPanel(Panel.Quick) })
             Spacer(Modifier.height(6.dp))
             DeckRamBar()
             if (!isDefaultHome) {
@@ -383,7 +387,7 @@ private fun DefaultHomeBanner(onClick: () -> Unit) {
 }
 
 @Composable
-private fun StatusStrip() {
+private fun StatusStrip(onMenu: () -> Unit) {
     val battery = rememberBattery()
     Row(
         Modifier.fillMaxWidth(),
@@ -406,6 +410,19 @@ private fun StatusStrip() {
         )
         Spacer(Modifier.width(8.dp))
         BatteryBar(battery.level, low)
+        Spacer(Modifier.width(10.dp))
+        // Control panel button, so nothing depends on swiping from the top edge.
+        Text(
+            "◢ DECK",
+            color = Cp.Background,
+            fontFamily = HudFont,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .hudPanel(borderColor = Cp.Yellow, fill = Cp.Yellow, cut = 6.dp)
+                .clickable(onClick = onMenu)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
     }
     Spacer(Modifier.height(6.dp))
     Box(

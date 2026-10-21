@@ -15,7 +15,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Clavier Netrunner** : clavier AZERTY néon (majuscules, verrouillage, chiffres et symboles, accents par appui long, effacement continu, flèches de curseur). À activer dans Paramètres › Clavier, ou avec la commande `keyboard`.
 - **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
 - **Widget musique** : Spotify (ou tout autre lecteur) avec pochette, titre, progression, lecture/pause/suivant.
-- **Contrôle du deck** : glisser vers le bas depuis le haut à droite ouvre un panneau Wi-Fi, données, Bluetooth, lampe, sonnerie, Ne pas déranger, rotation et volumes.
+- **Contrôle du deck** : le bouton « ◢ DECK » en haut à droite (ou un glisser vers le bas dans le quart haut droit, hors bord de l'écran) ouvre un panneau Wi-Fi, données, Bluetooth, lampe, sonnerie, Ne pas déranger, rotation et volumes.
 - **Verrou cyber** : écran de verrouillage cyberdeck (horloge, batterie, RAM, musique, signaux entrants sans le contenu des messages). Glisser vers le haut passe la main au déverrouillage système (empreinte, visage ou code), la sécurité reste celle d'Android. À activer dans le panneau de contrôle (tuile « VERROU CYBER ») ou avec `lock on`.
 - **Sobre en batterie** : toutes les animations et boucles s'arrêtent dès que l'écran est éteint ou qu'une autre appli est au premier plan ; la mascotte tourne à 15 images/s au lieu de 120 ; aucun service en arrière-plan en plus de l'accès aux notifications.
 - **Factions** : thèmes NETRUNNER, ARASAKA, MILITECH et NETWATCH (panneau de contrôle ou `theme <faction>`), qui recolorent tout le deck.
