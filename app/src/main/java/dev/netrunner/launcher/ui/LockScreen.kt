@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -100,6 +101,7 @@ fun LockScreen(onUnlock: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .systemBarsPadding()
+                .displayCutoutPadding()
                 .padding(horizontal = 22.dp, vertical = 16.dp)
                 .offset { IntOffset(0, (drag / 3).roundToInt()) }
                 .alpha((1f + drag / 900f).coerceIn(0.3f, 1f)),

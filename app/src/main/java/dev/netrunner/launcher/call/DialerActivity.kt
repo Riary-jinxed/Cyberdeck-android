@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
+import dev.netrunner.launcher.system.hideSystemBars
 import dev.netrunner.launcher.ui.DialerScreen
 import dev.netrunner.launcher.ui.NetrunnerTheme
 
@@ -23,6 +24,11 @@ class DialerActivity : ComponentActivity() {
                 DialerScreen(prefill = prefill.value, onClose = { finish() })
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars(this)
     }
 
     override fun onNewIntent(intent: Intent) {

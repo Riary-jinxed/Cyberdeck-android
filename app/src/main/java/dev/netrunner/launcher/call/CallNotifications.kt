@@ -22,6 +22,13 @@ object CallNotifications {
     private const val NOTIFICATION_ID = 7077
     private const val YELLOW = 0xFFFCEE0A.toInt()
 
+    /**
+     * True while the holocall screen is in front. The ringing card is then posted silently,
+     * otherwise Android drops a heads-up card on top of our own screen.
+     */
+    @Volatile
+    var screenVisible = false
+
     const val ACTION_ANSWER = "dev.netrunner.launcher.call.ANSWER"
     const val ACTION_DECLINE = "dev.netrunner.launcher.call.DECLINE"
     const val ACTION_HANG_UP = "dev.netrunner.launcher.call.HANG_UP"
@@ -66,7 +73,8 @@ object CallNotifications {
             Intent(context, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val builder = NotificationCompat.Builder(context, if (main.ringing) CHANNEL_INCOMING else CHANNEL_ONGOING)
+        val headsUp = main.ringing && !screenVisible
+        val builder = NotificationCompat.Builder(context, if (headsUp) CHANNEL_INCOMING else CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_stat_holocall)
             .setColor(YELLOW)
             .setContentIntent(open)
@@ -74,7 +82,12 @@ object CallNotifications {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setContentTitle(name)
 
-        if (main.ringing) {
+        if (main.ringing && !headsUp) {
+            builder
+                .setContentText("Holo-appel entrant")
+                .setSilent(true)
+                .setOnlyAlertOnce(true)
+        } else if (main.ringing) {
             val caller = Person.Builder().setName(name).setImportant(true).build()
             builder
                 .setPriority(NotificationCompat.PRIORITY_MAX)

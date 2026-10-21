@@ -11,6 +11,7 @@ import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.ContextCompat
+import dev.netrunner.launcher.system.hideSystemBars
 import dev.netrunner.launcher.ui.LockScreen
 import dev.netrunner.launcher.ui.NetrunnerTheme
 
@@ -36,6 +37,11 @@ class LockActivity : ComponentActivity() {
                 LockScreen(onUnlock = ::unlock)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars(this)
     }
 
     override fun onDestroy() {

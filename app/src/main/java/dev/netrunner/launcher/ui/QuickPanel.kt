@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -105,6 +106,7 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
             .background(Cp.Background.copy(alpha = 0.97f))
             .scanlines()
             .systemBarsPadding()
+            .displayCutoutPadding()
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .verticalScroll(rememberScrollState())
     ) {

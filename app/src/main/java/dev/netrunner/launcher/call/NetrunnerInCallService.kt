@@ -25,13 +25,15 @@ class NetrunnerInCallService : InCallService() {
     }
 
     override fun onCallAdded(call: Call) {
-        CallManager.add(call)
-        // Incoming calls also go through the full-screen notification, which works from the lock screen.
-        runCatching {
+        // Open the holocall screen first, so the call card posted by add() is the silent one
+        // and Android does not drop its own heads-up card on top of it.
+        val shown = runCatching {
             startActivity(
                 Intent(this, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        }
+        }.isSuccess
+        CallNotifications.screenVisible = shown
+        CallManager.add(call)
     }
 
     override fun onCallRemoved(call: Call) {

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -210,6 +211,7 @@ fun FeedScreen(onClose: () -> Unit) {
             .background(Cp.Background.copy(alpha = 0.98f))
             .scanlines()
             .systemBarsPadding()
+            .displayCutoutPadding()
             .imePadding()
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {

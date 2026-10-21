@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -171,6 +172,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Modifier
                 .fillMaxSize()
                 .systemBarsPadding()
+                .displayCutoutPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
                 .pointerInput(Unit) {
                     var total = 0f
@@ -598,6 +600,7 @@ private fun AppDrawer(
             .background(Cp.Background.copy(alpha = 0.97f))
             .scanlines()
             .systemBarsPadding()
+            .displayCutoutPadding()
             .imePadding()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
