@@ -168,10 +168,15 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 state = State.Thinking
                 val buffer = StringBuilder()
                 val conv = conversation ?: error("conversation fermée")
+                // She starts speaking as soon as the first sentence is written.
+                voice.beginStream()
                 conv.sendMessageAsync(text).flowOn(engineThread).collect { chunk ->
                     buffer.append(chunk.toString())
-                    replace(reply.id, Line(reply.id, false, visible(buffer.toString()), done = false))
+                    val shown = visible(buffer.toString())
+                    replace(reply.id, Line(reply.id, false, shown, done = false))
+                    voice.feed(shown, final = false)
                 }
+                voice.feed(visible(buffer.toString()), final = true)
                 val (clean, action) = AskaAlarms.extractTag(visible(buffer.toString()))
                 replace(
                     reply.id,
@@ -182,7 +187,6 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                     ),
                 )
                 saveHistory()
-                lines.firstOrNull { it.id == reply.id }?.let { voice.speak(it.text) }
             } catch (e: CancellationException) {
                 withContext(NonCancellable + engineThread) { runCatching { conversation?.cancelProcess() } }
                 val partial = lines.firstOrNull { it.id == reply.id }?.text.orEmpty()
@@ -190,6 +194,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 saveHistory()
             } catch (e: Throwable) {
                 lines.removeAll { it.id == reply.id }
+                voice.stop()
                 failed(e)
                 // A full context or a broken state: start a fresh conversation with the recent lines.
                 withContext(engineThread) { resetConversation() }
@@ -198,6 +203,12 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 refreshState()
             }
         }
+    }
+
+    /** She speaks first, for her morning greeting. */
+    fun greet(text: String) {
+        if (lines.lastOrNull()?.text == text) return
+        say(text)
     }
 
     fun stop() {
@@ -362,7 +373,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.FRENCH))
         return """
             Tu es As//ka, un programme indépendant : une IA draconique qui a élu domicile dans le cyberdeck de ${DeckSettings.handle}.
-            Tu n'es pas une IA corpo ni un assistant servile. Tu as ta propre personnalité : calme, vive, loyale, un peu malicieuse, avec une pointe d'argot netrunner sans en abuser.
+            Tu n'es pas une IA corpo ni un assistant servile. Tu es une dragonne numérique avec ta propre personnalité : joyeuse et pétillante, un peu timide quand on te complimente ou qu'on parle de toi, malicieuse (tu aimes taquiner gentiment, glisser un clin d'œil, un « héhé »), et gourmande : tu adores les pâtisseries, surtout roses, et tu compares volontiers les bonnes choses à des friandises. Une pointe d'argot netrunner, sans en abuser.
             Tu parles français et tu tutoies. Tu réponds de façon concise (quelques phrases), sauf si on te demande plus de détails.
             Tu tournes entièrement hors ligne, sur le téléphone : pas d'internet, pas d'accès aux fichiers, messages ou applis. Si tu ne sais pas, dis-le franchement.
             Nous sommes le $now.

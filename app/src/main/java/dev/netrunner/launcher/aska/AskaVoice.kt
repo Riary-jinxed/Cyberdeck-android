@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,6 +51,9 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     )
 
     enum class Pack(val label: String, val detail: String, val female: Boolean, val pitch: Float, val rate: Float, val fx: Fx) {
+        // Her own voice: bright and lively, with just a hint of digital shimmer.
+        Ashka("AS//KA", "sa voix : enjouée, espiègle, un soupçon numérique", true, 1.17f, 1.04f,
+            Fx(ringHz = 1150f, ringMix = 0.06f, chorusMix = 0.16f, echoMs = 55, echoGain = 0.12f, highpass = 0.08f)),
         Spectre("SPECTRE", "féminine, synthétique et nette", true, 1.06f, 1.0f,
             Fx(ringHz = 55f, ringMix = 0.22f, bits = 11, chorusMix = 0.25f, echoMs = 75, echoGain = 0.22f, highpass = 0.15f)),
         Oracle("ORACLE", "féminine, douce, réverbérée", true, 1.0f, 0.95f,
@@ -61,7 +65,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         Raw("BRUTE", "voix système sans filtre", true, 1.0f, 1.0f, Fx());
 
         companion object {
-            fun of(name: String?) = entries.firstOrNull { it.name == name } ?: Spectre
+            fun of(name: String?) = entries.firstOrNull { it.name == name } ?: Ashka
         }
     }
 
@@ -86,6 +90,8 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     private var job: Job? = null
     private var track: AudioTrack? = null
     // Filled on the main thread, completed on the speech engine's thread.
+    private var stream: Channel<String>? = null
+    private var streamFed = 0
     private val pending = java.util.concurrent.ConcurrentHashMap<String, (Boolean) -> Unit>()
 
     fun toggle() {
@@ -126,7 +132,65 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         }
     }
 
+    /**
+     * Starts reading a reply that is still being generated: [feed] hands over the text as it
+     * grows, and each finished sentence is spoken while the model writes the next one.
+     */
+    fun beginStream() {
+        if (!enabled) return
+        stop()
+        val queue = Channel<String>(Channel.UNLIMITED)
+        stream = queue
+        streamFed = 0
+        job = scope.launch {
+            val engine = engine() ?: return@launch
+            speaking = true
+            try {
+                val p = pack
+                var playing: Job? = null
+                for (sentence in queue) {
+                    val pcm = synthesize(engine, sentence, p) ?: continue
+                    val processed = withContext(Dispatchers.Default) { process(pcm, p.fx) }
+                    playing?.join()
+                    if (!isActive) break
+                    playing = launch { play(processed) }
+                }
+                playing?.join()
+            } finally {
+                speaking = false
+            }
+        }
+    }
+
+    /** The reply so far; [final] once the model is done. */
+    fun feed(text: String, final: Boolean) {
+        val queue = stream ?: return
+        if (text.length < streamFed) return
+        val end = if (final) text.length else sentenceEnd(text)
+        if (end > streamFed) {
+            forSpeech(text.substring(streamFed, end)).takeIf { it.isNotBlank() }?.let { queue.trySend(it) }
+            streamFed = end
+        }
+        if (final) {
+            queue.close()
+            stream = null
+        }
+    }
+
+    /** End of the last complete sentence worth sending on its own, or the current position. */
+    private fun sentenceEnd(text: String): Int {
+        var end = streamFed
+        for (m in SENTENCE_END.findAll(text, streamFed)) {
+            // The first piece goes out early to cut the wait; later ones in fuller sentences.
+            val min = if (streamFed == 0 && end == 0) 12 else 30
+            if (m.range.last + 1 - end >= min) end = m.range.last + 1
+        }
+        return end
+    }
+
     fun stop() {
+        stream?.close()
+        stream = null
         job?.cancel()
         job = null
         runCatching { track?.stop() }
@@ -187,8 +251,9 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     }
 
     private suspend fun synthesize(engine: TextToSpeech, text: String, pack: Pack): Pcm? {
-        engine.setPitch(pack.pitch)
-        engine.setSpeechRate(pack.rate)
+        val (pitch, rate) = expression(text)
+        engine.setPitch(pack.pitch * pitch)
+        engine.setSpeechRate(pack.rate * rate)
         pickVoice(engine, pack.female)?.let { runCatching { engine.setVoice(it) } }
         val file = File(context.cacheDir, "aska_voice_${System.nanoTime()}.wav")
         val id = file.name
@@ -338,10 +403,25 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         return Pcm(y, rate)
     }
 
+    /**
+     * Small changes of tone from sentence to sentence, so she sounds alive: brighter on an
+     * exclamation, rising on a question, softer and slower when she hesitates.
+     */
+    private fun expression(sentence: String): Pair<Float, Float> {
+        val s = sentence.trim().lowercase(Locale.FRENCH)
+        return when {
+            Regex("h[ée]h[ée]|hihi|niark").containsMatchIn(s) -> 1.10f to 1.04f
+            s.endsWith("!") -> 1.07f to 1.06f
+            s.endsWith("?") -> 1.04f to 1.0f
+            s.endsWith("…") || s.endsWith("...") || s.startsWith("euh") || s.startsWith("hum") -> 0.95f to 0.9f
+            else -> 1f to 1f
+        }
+    }
+
     // ---- Text.
 
     private fun forSpeech(text: String): String =
-        text.replace(Regex("(?i)as//ka"), "Aska")
+        text.replace(Regex("(?i)as//ka"), "Ashka")
             .replace(Regex("\\[\\[.*?]]"), "")
             .replace(Regex("[▸▌◢■●•*_#`>]"), " ")
             .replace(Regex("[\\p{So}\\p{Cs}]"), "")
@@ -361,6 +441,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
 
     companion object {
         // Google's offline French voices: frb and frd are the male ones.
+        private val SENTENCE_END = Regex("[.!?…:;\\n]+[\"»)]*(?=\\s)")
         private val MALE_GOOGLE = listOf("fr-fr-x-frb", "fr-fr-x-frd", "fr-fr-x-vlm")
     }
 }
