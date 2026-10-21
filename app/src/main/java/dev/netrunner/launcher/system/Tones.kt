@@ -152,12 +152,14 @@ object Tones {
         return out
     }
 
-    private fun wav(samples: ShortArray): ByteArray {
+    /** 16-bit PCM WAV file; samples are interleaved when there is more than one channel. */
+    internal fun wav(samples: ShortArray, rate: Int = RATE, channels: Int = 1): ByteArray {
         val data = ByteBuffer.allocate(samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
         samples.forEach { data.putShort(it) }
         val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
             put("RIFF".toByteArray()); putInt(36 + samples.size * 2); put("WAVE".toByteArray())
-            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(1); putInt(RATE); putInt(RATE * 2); putShort(2); putShort(16)
+            put("fmt ".toByteArray()); putInt(16); putShort(1); putShort(channels.toShort()); putInt(rate)
+            putInt(rate * channels * 2); putShort((channels * 2).toShort()); putShort(16)
             put("data".toByteArray()); putInt(samples.size * 2)
         }
         return ByteArrayOutputStream().apply { write(header.array()); write(data.array()) }.toByteArray()
@@ -196,40 +198,49 @@ object Tones {
     /** Saves the tone to the system sound folder (once) and makes it the default. */
     fun install(context: Context, tone: Tone): Boolean {
         if (!canSetDefault(context)) return false
-        val uri = existing(context, tone) ?: save(context, tone) ?: return false
+        val name = "Netrunner - ${tone.title}"
+        val uri = existing(context, "$name.wav") ?: save(context, name, tone.kind) { wav(tone.build()) } ?: return false
         RingtoneManager.setActualDefaultRingtoneUri(context, tone.kind.ringtoneType, uri)
         return true
     }
 
-    private fun fileName(tone: Tone) = "Netrunner - ${tone.title}.wav"
+    /** Same as [install] for a sound made elsewhere (an imported song); replaces any older cut. */
+    internal fun installWav(context: Context, title: String, kind: Kind, bytes: ByteArray): Boolean {
+        if (!canSetDefault(context)) return false
+        val name = "Netrunner - $title"
+        existing(context, "$name.wav")?.let { context.contentResolver.delete(it, null, null) }
+        val uri = save(context, name, kind) { bytes } ?: return false
+        RingtoneManager.setActualDefaultRingtoneUri(context, kind.ringtoneType, uri)
+        return true
+    }
 
-    private fun existing(context: Context, tone: Tone): Uri? {
+    private fun existing(context: Context, fileName: String): Uri? {
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         return context.contentResolver.query(
             collection,
             arrayOf(MediaStore.Audio.Media._ID),
             "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
-            arrayOf(fileName(tone)),
+            arrayOf(fileName),
             null,
         )?.use { c -> if (c.moveToFirst()) Uri.withAppendedPath(collection, c.getLong(0).toString()) else null }
     }
 
-    private fun save(context: Context, tone: Tone): Uri? {
+    private fun save(context: Context, name: String, kind: Kind, bytes: () -> ByteArray): Uri? {
         val resolver = context.contentResolver
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val values = ContentValues().apply {
-            put(MediaStore.Audio.Media.DISPLAY_NAME, fileName(tone))
-            put(MediaStore.Audio.Media.TITLE, "Netrunner - ${tone.title}")
+            put(MediaStore.Audio.Media.DISPLAY_NAME, "$name.wav")
+            put(MediaStore.Audio.Media.TITLE, name)
             put(MediaStore.Audio.Media.MIME_TYPE, "audio/wav")
-            put(MediaStore.Audio.Media.RELATIVE_PATH, tone.kind.folder + "/Netrunner")
-            put(MediaStore.Audio.Media.IS_RINGTONE, tone.kind == Kind.Ringtone)
-            put(MediaStore.Audio.Media.IS_NOTIFICATION, tone.kind == Kind.Notification)
-            put(MediaStore.Audio.Media.IS_ALARM, tone.kind == Kind.Alarm)
+            put(MediaStore.Audio.Media.RELATIVE_PATH, kind.folder + "/Netrunner")
+            put(MediaStore.Audio.Media.IS_RINGTONE, kind == Kind.Ringtone)
+            put(MediaStore.Audio.Media.IS_NOTIFICATION, kind == Kind.Notification)
+            put(MediaStore.Audio.Media.IS_ALARM, kind == Kind.Alarm)
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
         val uri = resolver.insert(collection, values) ?: return null
         return runCatching {
-            resolver.openOutputStream(uri)?.use { it.write(wav(tone.build())) }
+            resolver.openOutputStream(uri)?.use { it.write(bytes()) }
             resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
             uri
         }.getOrElse {
