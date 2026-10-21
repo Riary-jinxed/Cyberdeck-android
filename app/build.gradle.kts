@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,7 +15,7 @@ if (!sherpaAar.exists()) {
     val part = File(sherpaAar.path + ".part")
     uri("https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaVersion/sherpa-onnx-$sherpaVersion.aar")
         .toURL().openStream().use { input -> part.outputStream().use { input.copyTo(it) } }
-    val sha = java.security.MessageDigest.getInstance("SHA-256").digest(part.readBytes()).joinToString("") { "%02x".format(it) }
+    val sha = MessageDigest.getInstance("SHA-256").digest(part.readBytes()).joinToString("") { byte -> "%02x".format(byte) }
     check(sha == "c4ef49e309f24fcee5c106b8a279481aaecaabb078cd37b2cd6e9a62cc8a73c8") { "sherpa-onnx AAR: unexpected hash $sha" }
     part.renameTo(sherpaAar)
 }
