@@ -136,8 +136,13 @@ object AskaDate {
         As//ka : *manque de renverser son chocolat* Q-quoi ? *cache ses joues derrière la tasse* …Tu ne peux pas dire ça comme ça, sans prévenir. *jette un coup d'œil par-dessus la tasse* Toi aussi, tu es… pas mal. Voilà. Tu veux goûter mon macaron, pour la peine ?
     """.trimIndent() + if (facts.isEmpty()) "" else "\nCe que tu sais de $handle : " + facts.joinToString(" ; ") + "."
 
-    /** After how many of her runner's messages she sends her photo. */
-    const val PHOTO_AFTER = 4
+    private val PHOTO = Regex("\\b(photos?|selfies?|images?|pic)\\b")
+
+    /** "envoie-moi une photo", "un selfie ?", "tu me montres une photo de toi"… */
+    fun asksPhoto(input: String): Boolean {
+        val t = java.text.Normalizer.normalize(input.lowercase(java.util.Locale.FRENCH), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        return PHOTO.containsMatchIn(t)
+    }
 
     fun photo(scene: Scene): Int = when (scene) {
         Scene.Cafe -> R.drawable.aska_date_cafe

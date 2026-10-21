@@ -345,7 +345,7 @@ private fun Chat(brain: AskaBrain, modifier: Modifier, onChibi: () -> Unit, onRe
                         .padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    (brain.date?.prompts ?: Prompts).forEach { prompt ->
+                    (brain.date?.let { it.prompts + "Une photo de toi ?" } ?: Prompts).forEach { prompt ->
                         Text(
                             prompt,
                             color = AskaColors.HotPink,
