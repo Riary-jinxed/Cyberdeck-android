@@ -17,12 +17,24 @@ import dev.netrunner.launcher.notify.NotificationHub
 object CyberLock {
     private const val PREFS = "netrunner"
     private const val KEY = "cyber_lock"
+    private const val KEY_HANDOFF = "cyber_lock_handoff"
 
     fun isEnabled(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
 
     fun setEnabled(context: Context, on: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
+    }
+
+    /**
+     * Hand over to the system lock as soon as the display wakes, after a short animation. The
+     * system then starts face unlock (and the fingerprint) on its own; the code is only a fallback.
+     */
+    fun handoff(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_HANDOFF, false)
+
+    fun setHandoff(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_HANDOFF, on).apply()
     }
 
     /** Starting a screen from the background needs "display over other apps". */
