@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -89,21 +90,23 @@ fun AskaAvatar(modifier: Modifier = Modifier, animated: Boolean = true, intensit
         return
     }
     val clock = if (animated) rememberSlowClock(fps = 12) else remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    val t by clock
-    val pulse = if (animated) 0.6f + 0.4f * ((sin(t / 1000f * 2.2f) + 1f) / 2f) else 0.8f
-    val flicker = animated && (t / 80) % 47 in 0L..1L
+    // The clock is only read while drawing: each tick redraws, nothing is recomposed.
+    fun pulse() = if (animated) 0.6f + 0.4f * ((sin(clock.value / 1000f * 2.2f) + 1f) / 2f) else 0.8f
     val shape = hudShape(12.dp)
     Box(modifier.clip(shape)) {
         Image(
             portrait,
             contentDescription = "As//ka",
             contentScale = ContentScale.Crop,
-            alpha = if (flicker) 0.55f else 0.92f,
             // A little pink washed over the picture, like a projection.
             colorFilter = ColorFilter.tint(AskaColors.Pink.copy(alpha = 0.18f), BlendMode.SrcAtop),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = if (animated && (clock.value / 80) % 47 in 0L..1L) 0.55f else 0.92f },
         )
         Canvas(Modifier.fillMaxSize()) {
+            val t = clock.value
+            val pulse = pulse()
             // Scanlines.
             val step = 3f * density
             var y = (t / 40 % 3).toFloat() * density

@@ -74,10 +74,11 @@ private val Prompts = listOf(
 
 @Composable
 fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
-    // The model only stays in memory while this panel is open (and a short while after).
-    DisposableEffect(Unit) {
-        brain.wake()
-        onDispose { brain.sleepSoon() }
+    // The model only stays in memory while this panel is open and on screen (and a short while after).
+    val onScreen = rememberScreenActive()
+    DisposableEffect(onScreen) {
+        if (onScreen) brain.wake()
+        onDispose { if (onScreen) brain.sleepSoon() }
     }
     var showModels by remember { mutableStateOf(false) }
     val noModel = brain.state == AskaBrain.State.NoModel

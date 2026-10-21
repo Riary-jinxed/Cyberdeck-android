@@ -5,40 +5,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.Contents
-import com.google.ai.edge.litertlm.Conversation
-import com.google.ai.edge.litertlm.ConversationConfig
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.Message
-import com.google.ai.edge.litertlm.SamplerConfig
-import com.google.ai.edge.litertlm.ThinkingConfig
 import dev.netrunner.launcher.ui.DeckSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.concurrent.Executors
 
 /**
  * As//ka's mind: a small language model running on the phone through LiteRT-LM.
  *
- * Battery and memory first: the model is only loaded while her panel is open, and released a
- * little after it closes. Nothing runs in the background.
+ * Battery and memory first: the model is only loaded while her panel is open and on screen,
+ * and released a little after. It runs in its own process ([AskaEngineService]), so running
+ * out of memory or a GPU crash only stops her, never the launcher.
  */
 class AskaBrain(private val context: Context, private val scope: CoroutineScope) {
 
@@ -62,11 +50,16 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     var backend by mutableStateOf<String?>(null)
         private set
 
-    // Every native call goes through this one thread: LiteRT-LM objects are not thread safe.
-    private val engineThread = Executors.newSingleThreadExecutor { Thread(it, "aska-engine") }.asCoroutineDispatcher()
-
-    private var engine: Engine? = null
-    private var conversation: Conversation? = null
+    private val engine = AskaEngine(context).apply {
+        // Mid-answer or mid-load, send() and load() deal with it.
+        onDied = {
+            if (state != State.Thinking && state != State.Waking) {
+                loadedModel = null
+                backend = null
+                refreshState()
+            }
+        }
+    }
     private var loadedModel: String? = null
     private var sleepJob: Job? = null
     private var replyJob: Job? = null
@@ -91,7 +84,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         if (state == State.Waking || state == State.Thinking) return
         state = when {
             AskaModels.active(context) == null -> State.NoModel
-            engine != null && loadedModel == AskaModels.active(context) -> State.Ready
+            engine.connected && loadedModel == AskaModels.active(context) -> State.Ready
             else -> State.Asleep
         }
     }
@@ -167,11 +160,15 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 ensureLoaded()
                 state = State.Thinking
                 val buffer = StringBuilder()
-                val conv = conversation ?: error("conversation fermée")
                 // She starts speaking as soon as the first sentence is written.
                 voice.beginStream()
-                conv.sendMessageAsync(text).flowOn(engineThread).collect { chunk ->
-                    buffer.append(chunk.toString())
+                var shownAt = 0L
+                engine.send(text).collect { chunk ->
+                    buffer.append(chunk)
+                    // The screen follows at most ten times a second: the model needs the CPU more.
+                    val now = System.currentTimeMillis()
+                    if (now - shownAt < UI_REFRESH_MS) return@collect
+                    shownAt = now
                     val shown = visible(buffer.toString())
                     replace(reply.id, Line(reply.id, false, shown, done = false))
                     voice.feed(shown, final = false)
@@ -188,18 +185,19 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 )
                 saveHistory()
             } catch (e: CancellationException) {
-                withContext(NonCancellable + engineThread) { runCatching { conversation?.cancelProcess() } }
                 val partial = lines.firstOrNull { it.id == reply.id }?.text.orEmpty()
                 replace(reply.id, Line(reply.id, false, if (partial.isEmpty()) "[transmission coupée]" else "$partial […]"))
                 saveHistory()
             } catch (e: Throwable) {
                 lines.removeAll { it.id == reply.id }
                 voice.stop()
-                failed(e)
-                // A full context or a broken state: start a fresh conversation with the recent lines.
-                withContext(engineThread) { resetConversation() }
+                if (e is AskaEngine.Crashed) crashed() else {
+                    failed(e)
+                    // A full context or a broken state: start a fresh conversation with the recent lines.
+                    resetConversation()
+                }
             } finally {
-                state = if (engine != null) State.Ready else State.Asleep
+                state = State.Asleep
                 refreshState()
             }
         }
@@ -233,12 +231,12 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         stop()
         lines.clear()
         say(GREETING, speak = false)
-        scope.launch { withContext(engineThread) { resetConversation(keepHistory = false) } }
+        resetConversation(keepHistory = false)
     }
 
     /** Her instructions changed (new memory): the loaded conversation picks them up, history kept. */
     private fun promptChanged() {
-        if (engine != null) scope.launch { withContext(engineThread) { resetConversation() } }
+        if (engine.connected) resetConversation()
     }
 
     /** Called after the user installs, picks or deletes a model. */
@@ -256,16 +254,13 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     private suspend fun ensureLoaded() = loadLock.withLock {
         val id = AskaModels.active(context) ?: error("aucun modèle installé")
-        if (engine != null && loadedModel == id) return@withLock
+        if (engine.connected && loadedModel == id) return@withLock
         state = State.Waking
         try {
-            withContext(engineThread) {
-                closeEngine()
-                val path = AskaModels.file(context, id).path
-                engine = openEngine(path)
-                loadedModel = id
-                resetConversation()
-            }
+            val loaded = load(AskaModels.file(context, id).path)
+            loadedModel = id
+            backend = loaded.backend
+            resetConversation()
         } finally {
             state = State.Asleep
             refreshState()
@@ -273,46 +268,26 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     }
 
     /**
-     * GPU first (faster and lighter on the battery), CPU if it fails. A GPU driver can also crash
-     * the process outright: a flag left behind by such a crash sends the next loads to the CPU.
+     * GPU first (faster and lighter on the battery), CPU if it fails. A GPU driver can also
+     * crash its process outright: then the next loads go to the CPU.
      */
-    private fun openEngine(path: String): Engine {
+    private suspend fun load(path: String): AskaEngine.Loaded {
         val prefs = context.getSharedPreferences("netrunner", Context.MODE_PRIVATE)
-        if (prefs.getBoolean(GPU_TRYING, false)) prefs.edit().putBoolean(GPU_BROKEN, true).remove(GPU_TRYING).commit()
-        if (!prefs.getBoolean(GPU_BROKEN, false)) {
-            prefs.edit().putBoolean(GPU_TRYING, true).commit()
-            try {
-                val gpu = Engine(EngineConfig(modelPath = path, backend = Backend.GPU(), cacheDir = context.cacheDir.path))
-                gpu.initialize()
-                backend = "GPU"
-                return gpu
-            } catch (_: Throwable) {
-                prefs.edit().putBoolean(GPU_BROKEN, true).apply()
-            } finally {
-                prefs.edit().remove(GPU_TRYING).commit()
-            }
+        val gpu = !prefs.getBoolean(GPU_BROKEN, false)
+        val loaded = try {
+            engine.load(path, gpu)
+        } catch (e: AskaEngine.Crashed) {
+            if (!gpu) throw e
+            prefs.edit().putBoolean(GPU_BROKEN, true).apply()
+            engine.load(path, gpu = false)
         }
-        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
-        val cpu = Engine(EngineConfig(modelPath = path, backend = Backend.CPU(threadCount = threads), cacheDir = context.cacheDir.path))
-        cpu.initialize()
-        backend = "CPU"
-        return cpu
+        if (loaded.gpuFailed) prefs.edit().putBoolean(GPU_BROKEN, true).apply()
+        return loaded
     }
 
     private fun resetConversation(keepHistory: Boolean = true) {
-        runCatching { conversation?.close() }
-        conversation = null
-        val engine = engine ?: return
         val recent = if (keepHistory) recentForContext() else emptyList()
-        conversation = engine.createConversation(
-            ConversationConfig(
-                systemInstruction = Contents.of(systemPrompt()),
-                initialMessages = recent.map { if (it.fromUser) Message.user(it.text) else Message.model(it.text) },
-                samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = 0.7),
-                maxOutputToken = 768,
-                thinkingConfig = if (AskaModels.thinks(loadedModel.orEmpty())) ThinkingConfig(enableThinking = false) else null,
-            )
-        )
+        engine.converse(systemPrompt(), recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()))
     }
 
     /** The latest exchanges that fit in the model's context, oldest first. */
@@ -328,19 +303,26 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         return picked.toList()
     }
 
-    private suspend fun unload() {
+    private fun unload() {
         replyJob?.cancel()
-        withContext(engineThread) { closeEngine() }
+        engine.close()
+        loadedModel = null
         backend = null
         refreshState()
     }
 
-    private fun closeEngine() {
-        runCatching { conversation?.close() }
-        runCatching { engine?.close() }
-        conversation = null
-        engine = null
+    /** Her process died mid-answer: on the GPU, the driver is the usual suspect. */
+    private fun crashed() {
+        val onGpu = backend == "GPU"
         loadedModel = null
+        backend = null
+        engine.close()
+        if (onGpu) context.getSharedPreferences("netrunner", Context.MODE_PRIVATE).edit().putBoolean(GPU_BROKEN, true).apply()
+        say(
+            if (onGpu) "Mon noyau a planté sur le GPU. Je repasse sur le CPU : renvoie ton message."
+            else "Mon noyau a manqué de mémoire. Ferme quelques applis ou prends un modèle plus léger (NOYAU), puis renvoie ton message.",
+            speak = false,
+        )
     }
 
     private fun failed(e: Throwable) {
@@ -400,7 +382,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
 
     private fun saveHistory() {
         val snapshot = lines.filter { it.done && it.text.isNotEmpty() }.takeLast(MAX_LINES)
-        scope.launch(engineThread) {
+        scope.launch(Dispatchers.IO) {
             val array = JSONArray()
             snapshot.forEach { array.put(JSONObject().put("u", it.fromUser).put("t", it.text)) }
             runCatching { historyFile.writeText(array.toString()) }
@@ -411,9 +393,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         voice.release()
         sleepJob?.cancel()
         replyJob?.cancel()
-        runCatching { conversation?.close() }
-        runCatching { engine?.close() }
-        engineThread.close()
+        engine.close()
     }
 
     companion object {
@@ -423,7 +403,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         private const val MAX_LINES = 1000
         /** About 1 500 tokens of past conversation handed back to the model when it reloads. */
         private const val CONTEXT_CHARS = 6000
-        private const val GPU_TRYING = "aska_gpu_trying"
+        private const val UI_REFRESH_MS = 100L
         private const val GPU_BROKEN = "aska_gpu_broken"
     }
 }

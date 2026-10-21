@@ -93,6 +93,8 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
     private var stream: Channel<String>? = null
     private var streamFed = 0
     private val pending = java.util.concurrent.ConcurrentHashMap<String, (Boolean) -> Unit>()
+    // Listing the engine's voices is slow: done once per engine and gender.
+    private val voices = mutableMapOf<Boolean, Voice?>()
 
     fun toggle() {
         enabled = !enabled
@@ -120,7 +122,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
                 // Sentence by sentence: the first one plays while the next is synthesized.
                 for (sentence in sentences(clean)) {
                     val pcm = synthesize(engine, sentence, p) ?: break
-                    val processed = withContext(Dispatchers.Default) { process(pcm, p.fx) }
+                    val processed = withContext(Dispatchers.Default) { encode(process(pcm, p.fx)) }
                     playing?.join()
                     if (!isActive) break
                     playing = launch { play(processed) }
@@ -150,7 +152,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
                 var playing: Job? = null
                 for (sentence in queue) {
                     val pcm = synthesize(engine, sentence, p) ?: continue
-                    val processed = withContext(Dispatchers.Default) { process(pcm, p.fx) }
+                    val processed = withContext(Dispatchers.Default) { encode(process(pcm, p.fx)) }
                     playing?.join()
                     if (!isActive) break
                     playing = launch { play(processed) }
@@ -205,6 +207,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         runCatching { tts?.shutdown() }
         tts = null
         ready = false
+        voices.clear()
     }
 
     // ---- Speech engine.
@@ -254,7 +257,7 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         val (pitch, rate) = expression(text)
         engine.setPitch(pack.pitch * pitch)
         engine.setSpeechRate(pack.rate * rate)
-        pickVoice(engine, pack.female)?.let { runCatching { engine.setVoice(it) } }
+        voices.getOrPut(pack.female) { pickVoice(engine, pack.female) }?.let { if (engine.voice != it) runCatching { engine.setVoice(it) } }
         val file = File(context.cacheDir, "aska_voice_${System.nanoTime()}.wav")
         val id = file.name
         val ok = suspendCancellableCoroutine { cont ->
@@ -272,9 +275,16 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
         }
     }
 
-    private suspend fun play(pcm: Pcm) {
+    /** 16-bit samples ready for the speaker, prepared off the main thread. */
+    private class Clip(val bytes: ByteArray, val frames: Int, val rate: Int)
+
+    private fun encode(pcm: Pcm): Clip {
         val bytes = ByteBuffer.allocate(pcm.samples.size * 2).order(ByteOrder.LITTLE_ENDIAN)
         pcm.samples.forEach { bytes.putShort((it.coerceIn(-1f, 1f) * 32767).toInt().toShort()) }
+        return Clip(bytes.array(), pcm.samples.size, pcm.rate)
+    }
+
+    private suspend fun play(clip: Clip) {
         val audio = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -285,18 +295,18 @@ class AskaVoice(private val context: Context, private val scope: CoroutineScope)
             .setAudioFormat(
                 AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(pcm.rate)
+                    .setSampleRate(clip.rate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
             )
             .setTransferMode(AudioTrack.MODE_STATIC)
-            .setBufferSizeInBytes(bytes.capacity().coerceAtLeast(4))
+            .setBufferSizeInBytes(clip.bytes.size.coerceAtLeast(4))
             .build()
         track = audio
         try {
-            audio.write(bytes.array(), 0, bytes.capacity())
+            audio.write(clip.bytes, 0, clip.bytes.size)
             audio.play()
-            delay(pcm.samples.size * 1000L / pcm.rate + 60)
+            delay(clip.frames * 1000L / clip.rate + 60)
         } finally {
             runCatching { audio.stop() }
             runCatching { audio.release() }
