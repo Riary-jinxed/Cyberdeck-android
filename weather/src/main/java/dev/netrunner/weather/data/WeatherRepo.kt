@@ -49,6 +49,10 @@ object WeatherRepo {
 
     suspend fun search(query: String): List<Place> = if (query.isBlank()) emptyList() else Place.parseSearch(get(Place.searchUrl(query)))
 
+    /** As//ka's chibi on the report, on by default. */
+    fun showAska(context: Context): Boolean = prefs(context).getBoolean("show_aska", true)
+    fun setShowAska(context: Context, on: Boolean) = prefs(context).edit().putBoolean("show_aska", on).apply()
+
     fun saved(context: Context): List<Place> = Place.listFromJson(prefs(context).getString("places", "[]").orEmpty())
     fun setSaved(context: Context, places: List<Place>) = prefs(context).edit().putString("places", Place.listToJson(places)).apply()
 

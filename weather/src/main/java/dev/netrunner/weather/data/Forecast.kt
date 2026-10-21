@@ -112,4 +112,32 @@ object Sky {
         day.uv >= 6 -> "UV élevés : protège-toi du soleil."
         else -> "Conditions favorables pour la mission."
     }
+
+    /** As//ka's look for the current weather: the suffix of drawable "aska_weather_<mood>". */
+    fun mood(c: Forecast.Current): String = when {
+        c.code >= 95 -> "storm"
+        c.code in 71..77 || c.code == 85 || c.code == 86 -> "snow"
+        c.code in 51..67 || c.code in 80..82 -> "rain"
+        c.code == 45 || c.code == 48 -> "fog"
+        c.wind >= 50 || c.gusts >= 70 -> "wind"
+        c.temp >= 30 -> "heat"
+        c.temp <= 0 -> "cold"
+        !c.isDay -> "night"
+        c.code == 2 || c.code == 3 -> "cloudy"
+        else -> "sun"
+    }
+
+    /** What she says about it, under the report. */
+    fun quip(mood: String): String = when (mood) {
+        "storm" -> "Ça tonne ! J'adore cette énergie, mais toi reste à l'abri."
+        "snow" -> "De la neige ! On fait un bonhomme ?"
+        "rain" -> "Parapluie activé. Pense au tien, runner."
+        "fog" -> "Visibilité zéro. Je scanne pour toi."
+        "wind" -> "Accroche-toi, ça souffle fort !"
+        "heat" -> "Je fonds… de l'eau, vite."
+        "cold" -> "Brr… prête-moi ton écharpe ?"
+        "night" -> "Ciel clair. Les étoiles veillent sur Night City."
+        "cloudy" -> "Un peu gris, mais je suis là."
+        else -> "Grand soleil ! Lunettes noires de rigueur."
+    }
 }
