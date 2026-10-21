@@ -557,3 +557,268 @@ internal fun Ipv6Tab() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------- calculations
+
+private fun num(text: String): Double? = text.replace(',', '.').toDoubleOrNull()
+
+private fun watts(w: Double) = "%.1f W".format(w)
+
+private fun db(v: Double) = "%.2f dB".format(v)
+
+@Composable
+internal fun CalcTab() {
+    var mode by remember { mutableStateOf("PoE") }
+    // Kept here so switching between the three calculators keeps what was typed.
+    val poeCounts = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+    Column {
+        KitChips(listOf("PoE", "Fibre", "MAC"), mode) { mode = it }
+        Spacer(Modifier.height(8.dp))
+        when (mode) {
+            "PoE" -> PoeCalc(poeCounts)
+            "Fibre" -> FiberCalc()
+            else -> MacCalc()
+        }
+    }
+}
+
+@Composable
+private fun ResultBox(color: androidx.compose.ui.graphics.Color, lines: List<Pair<String, String>>, verdict: String? = null) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = color.copy(alpha = 0.7f), fill = color.copy(alpha = 0.06f), cut = 8.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        verdict?.let { Text(it, color = color, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+        lines.forEach { (k, v) ->
+            Row {
+                Text(k.uppercase(), color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text(v, color = Cp.Text, fontFamily = MonoFont, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PoeCalc(counts: MutableMap<String, Int>) {
+    var budget by remember { mutableStateOf("370") }
+    var ports by remember { mutableStateOf("24") }
+    val result = dev.netrunner.launcher.kit.FieldCalc.poe(counts, num(budget) ?: 0.0)
+    val portCount = ports.toIntOrNull()
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KitField("Budget PoE du switch (W)", budget, { budget = it.take(6) }, Modifier.weight(1.4f), KeyboardType.Decimal)
+                KitField("Ports PoE", ports, { ports = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f), KeyboardType.Number)
+            }
+        }
+        item {
+            val over = result.budget > 0 && result.reservedLeft < 0
+            val tight = result.budget > 0 && result.load > 80
+            val noPorts = portCount != null && result.ports > portCount
+            val color = when {
+                over || noPorts -> Cp.Red
+                tight -> Cp.Yellow
+                else -> Cp.Cyan
+            }
+            val verdict = when {
+                result.ports == 0 -> "> ajoute des appareils ci-dessous"
+                noPorts -> "✕ ${result.ports} appareils pour $portCount ports PoE"
+                over -> "✕ BUDGET DÉPASSÉ de ${watts(-result.reservedLeft)}"
+                tight -> "⚠ BUDGET TENDU (${result.load.toInt()} % réservé)"
+                else -> "✓ ÇA PASSE (${result.load.toInt()} % réservé)"
+            }
+            ResultBox(
+                color,
+                listOf(
+                    "Appareils" to "${result.ports}" + (portCount?.let { " / $it ports" } ?: ""),
+                    "Réservé (classes)" to watts(result.reserved),
+                    "Reste réservable" to watts(result.reservedLeft),
+                    "Conso typique" to watts(result.typical),
+                    "Reste en usage" to watts(result.typicalLeft),
+                ),
+                verdict,
+            )
+        }
+        item {
+            Text(
+                "Le switch réserve la puissance de la classe annoncée. Visez moins de 80 % réservé pour garder de la marge.",
+                color = Cp.Dim,
+                fontFamily = MonoFont,
+                fontSize = 11.sp,
+            )
+        }
+        items(dev.netrunner.launcher.kit.FieldCalc.PoeDevices, key = { it.name }) { d ->
+            val n = counts[d.name] ?: 0
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .hudPanel(borderColor = (if (n > 0) Cp.Yellow else Cp.Cyan).copy(alpha = 0.45f), cut = 6.dp)
+                    .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(d.name.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${d.standard} · ${watts(d.reservedW)} réservés · ~${watts(d.typicalW)}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 10.sp)
+                }
+                Text(
+                    "−",
+                    color = Cp.Cyan,
+                    fontFamily = HudFont,
+                    fontSize = 22.sp,
+                    modifier = Modifier.clickable(enabled = n > 0) { counts[d.name] = n - 1 }.padding(horizontal = 10.dp),
+                )
+                Text("$n", color = if (n > 0) Cp.Yellow else Cp.Dim, fontFamily = MonoFont, fontSize = 15.sp, modifier = Modifier.width(26.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(
+                    "+",
+                    color = Cp.Cyan,
+                    fontFamily = HudFont,
+                    fontSize = 22.sp,
+                    modifier = Modifier.clickable { counts[d.name] = n + 1 }.padding(horizontal = 10.dp),
+                )
+            }
+        }
+        item {
+            Text(
+                "REMETTRE À ZÉRO",
+                color = Cp.Dim,
+                fontFamily = HudFont,
+                fontSize = 11.sp,
+                modifier = Modifier.clickable { counts.clear() }.padding(vertical = 10.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FiberCalc() {
+    val fibers = dev.netrunner.launcher.kit.FieldCalc.Fibers
+    var fiberName by remember { mutableStateOf(fibers[0].name) }
+    var length by remember { mutableStateOf("2") }
+    var connectors by remember { mutableStateOf("2") }
+    var splices by remember { mutableStateOf("0") }
+    var margin by remember { mutableStateOf("3") }
+    var tx by remember { mutableStateOf("") }
+    var rx by remember { mutableStateOf("") }
+    val fiber = fibers.first { it.name == fiberName }
+    val r = dev.netrunner.launcher.kit.FieldCalc.fiber(
+        fiber, num(length) ?: 0.0, connectors.toIntOrNull() ?: 0, splices.toIntOrNull() ?: 0, num(margin) ?: 0.0, num(tx), num(rx),
+    )
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                fibers.chunked(2).forEach { row -> KitChips(row.map { it.name }, fiberName) { fiberName = it } }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KitField("Longueur (km)", length, { length = it.take(7) }, Modifier.weight(1f), KeyboardType.Decimal)
+                KitField("Connecteurs", connectors, { connectors = it.filter(Char::isDigit).take(2) }, Modifier.weight(1f), KeyboardType.Number)
+                KitField("Soudures", splices, { splices = it.filter(Char::isDigit).take(3) }, Modifier.weight(1f), KeyboardType.Number)
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KitField("Émission (dBm)", tx, { tx = it.take(6) }, Modifier.weight(1f), KeyboardType.Text)
+                KitField("Sensibilité (dBm)", rx, { rx = it.take(6) }, Modifier.weight(1f), KeyboardType.Text)
+                KitField("Marge (dB)", margin, { margin = it.take(4) }, Modifier.weight(1f), KeyboardType.Decimal)
+            }
+        }
+        item {
+            val headroom = r.headroom
+            val color = when {
+                headroom == null -> Cp.Cyan
+                headroom < 0 -> Cp.Red
+                headroom < 1 -> Cp.Yellow
+                else -> Cp.Cyan
+            }
+            val verdict = when {
+                headroom == null -> "> perte totale : ${db(r.loss)}"
+                headroom < 0 -> "✕ LIAISON HORS BUDGET (${db(headroom)})"
+                headroom < 1 -> "⚠ LIAISON JUSTE (reste ${db(headroom)})"
+                else -> "✓ LIAISON OK (reste ${db(headroom)})"
+            }
+            val lines = buildList {
+                add("Fibre (${fiber.dbPerKm} dB/km)" to db(r.cable))
+                add("Connecteurs (${dev.netrunner.launcher.kit.FieldCalc.CONNECTOR_DB} dB)" to db(r.connectors))
+                add("Soudures (${dev.netrunner.launcher.kit.FieldCalc.SPLICE_DB} dB)" to db(r.splices))
+                add("Perte totale" to db(r.loss))
+                r.budget?.let { add("Budget optique" to db(it)) }
+                if (r.budget != null) add("Marge de sécurité" to db(r.margin))
+            }
+            ResultBox(color, lines, verdict)
+        }
+        item {
+            Text(
+                "Valeurs maximales TIA-568 : le résultat est pessimiste. Puissance d'émission mini et sensibilité dans la fiche du module SFP (ex : 1000BASE-LX −9,5 / −20 dBm).",
+                color = Cp.Dim,
+                fontFamily = MonoFont,
+                fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MacCalc() {
+    val context = LocalContext.current
+    var input by remember { mutableStateOf("") }
+    val mac = dev.netrunner.launcher.kit.FieldCalc.mac(input)
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { KitField("Adresse MAC (tout format)", input, { input = it.take(20) }) }
+        if (input.isNotBlank() && mac == null) {
+            item { Text("> MAC invalide (12 chiffres hexadécimaux)", color = Cp.Red, fontFamily = MonoFont, fontSize = 12.sp) }
+        }
+        if (mac != null) {
+            item {
+                val kind = when {
+                    mac.broadcast -> "diffusion (broadcast)"
+                    mac.multicast -> "multicast"
+                    mac.local -> "locale : aléatoire (téléphone) ou virtuelle"
+                    else -> "unicast, attribuée au constructeur"
+                }
+                ResultBox(
+                    Cp.Cyan,
+                    listOf(
+                        "Constructeur" to (mac.vendor ?: if (mac.local) "—" else "inconnu (OUI ${mac.oui})"),
+                        "Type" to kind,
+                        "EUI-64" to (Ipv6.eui64(mac.bare) ?: "—"),
+                    ),
+                )
+            }
+            items(
+                listOf("Linux / Unix" to mac.colon, "Windows" to mac.dash, "Cisco" to mac.cisco, "Brut" to mac.bare),
+                key = { it.first },
+            ) { (label, value) ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.35f), cut = 6.dp)
+                        .clickable {
+                            context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("MAC", value))
+                            Toast.makeText(context, "$value copié", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(label.uppercase(), color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text(value, color = Cp.Cyan, fontFamily = MonoFont, fontSize = 14.sp)
+                    Text("  ⧉", color = Cp.Dim, fontSize = 12.sp)
+                }
+            }
+            item {
+                Text(
+                    "Liste de constructeurs courte et hors ligne (réseau, VoIP, caméras, virtualisation).",
+                    color = Cp.Dim,
+                    fontFamily = MonoFont,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}
