@@ -1,11 +1,13 @@
 package dev.netrunner.launcher.notify
 
 import android.app.Notification
+import android.content.BroadcastReceiver
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import dev.netrunner.launcher.lock.CyberLock
 
 /**
  * Mirrors the phone's notifications into the HUD. Being an enabled listener is also
@@ -16,13 +18,18 @@ class NetrunnerNotificationService : NotificationListenerService() {
     private val labels = mutableMapOf<String, String>()
     private val icons = mutableMapOf<String, ImageBitmap?>()
 
+    private var screenOff: BroadcastReceiver? = null
+
     override fun onListenerConnected() {
         NotificationHub.attach(this)
+        if (screenOff == null) screenOff = CyberLock.register(this)
         refresh()
     }
 
     override fun onListenerDisconnected() {
         NotificationHub.detach(this)
+        screenOff?.let { runCatching { unregisterReceiver(it) } }
+        screenOff = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = refresh()

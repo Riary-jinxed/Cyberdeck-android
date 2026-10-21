@@ -115,7 +115,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     LifecycleResumeEffect(Unit) {
         feedAccess = NotificationHub.isAccessGranted(context)
         if (feedAccess) mediaWatcher.start()
-        onPauseOrDispose { }
+        // No media callbacks while another app or the lock screen is in front.
+        onPauseOrDispose { mediaWatcher.stop() }
     }
     DisposableEffect(Unit) { onDispose { mediaWatcher.stop() } }
 
@@ -151,11 +152,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         favoriteKeys.mapNotNull { key -> apps.find { it.key == key } }
     }
 
+    var booting by remember { mutableStateOf(!viewModel.booted) }
+
     Box(
         Modifier
             .fillMaxSize()
             .cyberGrid()
             .scanlines()
+            .hudFrame()
     ) {
         Column(
             Modifier
@@ -195,6 +199,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 }
         ) {
             StatusStrip()
+            Spacer(Modifier.height(6.dp))
+            DeckRamBar()
             if (!isDefaultHome) {
                 Spacer(Modifier.height(12.dp))
                 DefaultHomeBanner(onClick = makeDefault)
@@ -211,13 +217,6 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f)) { LiveFeed() }
             }
-            Text(
-                "◄ CLAUDE · GLISSE · TERMINAL ►",
-                color = Cp.Dim,
-                fontFamily = HudFont,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
             Spacer(Modifier.height(12.dp))
             // Music and incoming messages scroll between the clock and the shortcuts.
             Column(
@@ -240,18 +239,15 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 onUnpin = viewModel::toggleFavorite,
                 onInfo = viewModel::openAppInfo,
             )
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HudButton("[ RÉSEAU ] ▲", Cp.Yellow, Modifier.weight(1f)) { drawerOpen = true }
-                HudButton("[ TERMINAL ] >_", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Terminal) }
-            }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HudButton("[ WI-FI ] ((•))", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
                 HudButton("[ APPELS ] ☎", Cp.Red, Modifier.weight(1f)) {
                     context.startActivity(Intent(context, DialerActivity::class.java))
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            GestureCompass()
         }
 
         AnimatedVisibility(
@@ -312,6 +308,13 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         launching?.let { app ->
             BreachOverlay(app = app, onDone = viewModel::completeLaunch)
+        }
+
+        if (booting) {
+            BootSequence(onDone = {
+                viewModel.booted = true
+                booting = false
+            })
         }
     }
 }
@@ -388,8 +391,9 @@ private fun BatteryBar(level: Int, low: Boolean) {
 
 @Composable
 private fun ClockBlock() {
-    val now by produceState(LocalDateTime.now()) {
-        while (true) {
+    val active = rememberScreenActive()
+    val now by produceState(LocalDateTime.now(), active) {
+        while (active) {
             value = LocalDateTime.now()
             delay(1000L - System.currentTimeMillis() % 1000L)
         }
@@ -423,8 +427,9 @@ private fun ClockBlock() {
 private fun LiveFeed() {
     var index by remember { mutableIntStateOf(0) }
     var shown by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    val active = rememberScreenActive()
+    LaunchedEffect(active) {
+        while (active) {
             val line = FeedLines[index]
             for (i in 1..line.length) {
                 shown = i
@@ -751,8 +756,9 @@ private fun AppMenu(
 private fun rememberBattery(): BatteryState {
     val context = LocalContext.current
     var state by remember { mutableStateOf(SystemInfo.battery(context)) }
-    LaunchedEffect(context) {
-        while (true) {
+    val active = rememberScreenActive()
+    LaunchedEffect(active) {
+        while (active) {
             state = SystemInfo.battery(context)
             delay(20_000)
         }

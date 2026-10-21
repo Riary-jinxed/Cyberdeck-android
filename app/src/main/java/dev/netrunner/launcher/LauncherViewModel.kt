@@ -30,6 +30,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     /** Full-screen panel shown over the home HUD. */
     enum class Panel { None, Terminal, Wifi, Feed, Quick }
 
+    /** The boot log plays once per launcher process, not on every return home. */
+    var booted = false
+
     private val _panel = MutableStateFlow(Panel.None)
     val panel: StateFlow<Panel> = _panel.asStateFlow()
 

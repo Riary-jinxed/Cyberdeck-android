@@ -23,6 +23,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
@@ -94,8 +99,9 @@ fun GlitchText(
 ) {
     var shift by remember { mutableFloatStateOf(0f) }
     var flicker by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    val active = rememberScreenActive()
+    LaunchedEffect(active) {
+        while (active) {
             delay(Random.nextLong(1800, 5000))
             repeat(Random.nextInt(3, 7)) {
                 shift = Random.nextFloat() * 10f - 5f
@@ -118,5 +124,32 @@ fun GlitchText(
             )
         }
         Text(text, style = style, color = if (flicker) color.copy(alpha = 0.4f) else color)
+    }
+}
+
+/**
+ * True while the screen is on and Netrunner is visible. Every animation loop keys on it,
+ * so nothing ticks in the background, behind another app or with the screen off.
+ */
+@Composable
+fun rememberScreenActive(): Boolean {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val state by lifecycle.currentStateFlow.collectAsState()
+    return state.isAtLeast(Lifecycle.State.STARTED)
+}
+
+/**
+ * Milliseconds since start, updated at a low frame rate. Cheaper than an infinite transition,
+ * which redraws at the panel's full 120 Hz.
+ */
+@Composable
+fun rememberSlowClock(fps: Int = 15): State<Long> {
+    val active = rememberScreenActive()
+    return produceState(0L, active) {
+        val start = android.os.SystemClock.uptimeMillis() - value
+        while (active) {
+            value = android.os.SystemClock.uptimeMillis() - start
+            delay(1000L / fps)
+        }
     }
 }

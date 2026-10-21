@@ -26,6 +26,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Cyberdeck lock screen: lets it appear when the screen turns off. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Lets the launcher see every app that has a launcher icon. -->
     <queries>
@@ -118,6 +120,15 @@
         <receiver
             android:name=".call.CallActionReceiver"
             android:exported="false" />
+
+        <activity
+            android:name=".lock.LockActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:screenOrientation="portrait"
+            android:showWhenLocked="true"
+            android:taskAffinity="dev.netrunner.launcher.lock" />
 
         <!-- Cyberdeck keyboard. Turn it on in Settings > Keyboards. -->
         <service

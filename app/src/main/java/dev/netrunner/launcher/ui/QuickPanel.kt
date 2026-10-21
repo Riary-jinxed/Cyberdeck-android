@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.coroutines.delay
+import dev.netrunner.launcher.lock.CyberLock
 
 private fun Context.open(intent: Intent) {
     runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -69,6 +70,7 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
     var rotationOn by remember { mutableStateOf(false) }
     var ringer by remember { mutableIntStateOf(AudioManager.RINGER_MODE_NORMAL) }
     var tick by remember { mutableIntStateOf(0) }
+    var lockOn by remember { mutableStateOf(false) }
 
     fun readStates() {
         wifiOn = context.applicationContext.getSystemService(WifiManager::class.java)?.isWifiEnabled == true
@@ -76,14 +78,16 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
         dndOn = notifications?.currentInterruptionFilter?.let { it != NotificationManager.INTERRUPTION_FILTER_ALL } == true
         rotationOn = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
         ringer = audio?.ringerMode ?: AudioManager.RINGER_MODE_NORMAL
+        lockOn = CyberLock.isEnabled(context) && CyberLock.missingStep(context) == null
     }
     LifecycleResumeEffect(tick) {
         readStates()
         onPauseOrDispose { }
     }
     // System panels change state behind our back: poll lightly while open.
-    LaunchedEffect(Unit) {
-        while (true) {
+    val active = rememberScreenActive()
+    LaunchedEffect(active) {
+        while (active) {
             readStates()
             delay(1500)
         }
@@ -159,6 +163,23 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit) {
             Tile("LOCALISATION", "RÉGLAGE", false) { context.open(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
             Tile("BATTERIE", "ÉCONOMIE", false) { context.open(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)) },
             Tile("PARAMÈTRES", "SYSTÈME", false) { context.open(Intent(Settings.ACTION_SETTINGS)) },
+        )
+        TileRow(
+            Tile("VERROU CYBER", if (lockOn) "ACTIF" else "OFF", lockOn) {
+                val missing = CyberLock.missingStep(context)
+                when {
+                    lockOn -> CyberLock.setEnabled(context, false)
+                    missing != null -> {
+                        // Turned on now, effective as soon as the permission is granted.
+                        CyberLock.setEnabled(context, true)
+                        context.startActivity(missing)
+                    }
+                    else -> CyberLock.setEnabled(context, true)
+                }
+                readStates()
+            },
+            Tile("CLAVIER", "NETRUNNER", false) { context.open(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) },
+            Tile("TÉLÉPHONE", "APPLI PAR DÉFAUT", false) { context.open(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) },
         )
 
         Spacer(Modifier.height(16.dp))

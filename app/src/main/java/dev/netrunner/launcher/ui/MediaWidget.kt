@@ -43,8 +43,9 @@ private fun mmss(ms: Long): String {
 @Composable
 fun MediaWidget(track: NowPlaying, watcher: MediaWatcher) {
     var now by remember { mutableLongStateOf(android.os.SystemClock.elapsedRealtime()) }
-    LaunchedEffect(track.playing) {
-        while (track.playing) {
+    val active = rememberScreenActive()
+    LaunchedEffect(track.playing, active) {
+        while (track.playing && active) {
             now = android.os.SystemClock.elapsedRealtime()
             delay(500)
         }

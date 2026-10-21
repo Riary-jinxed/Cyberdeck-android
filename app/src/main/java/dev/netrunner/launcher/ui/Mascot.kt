@@ -1,11 +1,5 @@
 package dev.netrunner.launcher.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -36,24 +30,18 @@ enum class MascotMood { Idle, Thinking, Talking, Error }
  */
 @Composable
 fun Mascot(mood: MascotMood, modifier: Modifier = Modifier, size: Dp = 72.dp) {
-    val loop = rememberInfiniteTransition(label = "glitch")
-    val bob by loop.animateFloat(
-        initialValue = -1f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "bob",
-    )
-    val phase by loop.animateFloat(
-        initialValue = 0f, targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)), label = "phase",
-    )
-    val antenna by loop.animateFloat(
-        initialValue = 0.3f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "antenna",
-    )
+    // 15 fps is plenty for a bobbing head and keeps the GPU idle most of the time.
+    val t by rememberSlowClock(fps = 15)
+    val tau = (2 * Math.PI).toFloat()
+    val bob = sin(t / 3200f * tau)
+    val phase = (t % 900L) / 900f * tau
+    val antenna = 0.65f + 0.35f * sin(t / 1400f * tau)
+    val active = rememberScreenActive()
 
     var blink by remember { mutableStateOf(false) }
     var glitchShift by remember { mutableStateOf(0f) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    LaunchedEffect(active) {
+        while (active) {
             delay(Random.nextLong(2200, 5200))
             blink = true
             delay(120)

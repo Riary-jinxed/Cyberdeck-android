@@ -16,6 +16,8 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
 - **Widget musique** : Spotify (ou tout autre lecteur) avec pochette, titre, progression, lecture/pause/suivant.
 - **Contrôle du deck** : glisser vers le bas depuis le haut à droite ouvre un panneau Wi-Fi, données, Bluetooth, lampe, sonnerie, Ne pas déranger, rotation et volumes.
+- **Verrou cyber** : écran de verrouillage cyberdeck (horloge, batterie, RAM, musique, signaux entrants sans le contenu des messages). Glisser vers le haut passe la main au déverrouillage système (empreinte, visage ou code), la sécurité reste celle d'Android. À activer dans le panneau de contrôle (tuile « VERROU CYBER ») ou avec `lock on`.
+- **Sobre en batterie** : toutes les animations et boucles s'arrêtent dès que l'écran est éteint ou qu'une autre appli est au premier plan ; la mascotte tourne à 15 images/s au lieu de 120 ; aucun service en arrière-plan en plus de l'accès aux notifications.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
@@ -59,6 +61,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/WifiScreen.kt` | Liste des bornes et mode traque |
 | `system/ClaudeApp.kt` | Ouvre l'appli Claude |
 | `ui/Mascot.kt` | Mascotte GLITCH animée |
+| `ui/DeckChrome.kt` | Cadre HUD, barre RAM, séquence de démarrage |
+| `lock/`, `ui/LockScreen.kt` | Verrou cyber |
 | `call/` | Service d'appel (InCallService), notifications d'appel, contacts, journal |
 | `ui/HoloCallScreen.kt`, `ui/DialerScreen.kt` | Écran d'holo-appel et clavier téléphonique |
 | `keyboard/` | Clavier Netrunner (InputMethodService + Compose) |

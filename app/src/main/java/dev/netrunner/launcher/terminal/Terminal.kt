@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel.Panel
 import dev.netrunner.launcher.call.DialerActivity
+import dev.netrunner.launcher.lock.CyberLock
 import dev.netrunner.launcher.system.ClaudeApp
 import dev.netrunner.launcher.system.SystemInfo
 import dev.netrunner.launcher.system.toGb
@@ -86,6 +87,7 @@ class Terminal(
             "claude", "glitch", "chat", "ai", "ia" -> openClaude()
             "call", "dial", "tel" -> dial(args.joinToString(""))
             "keyboard", "kb", "clavier" -> keyboard()
+            "lock", "verrou" -> lock(args.firstOrNull())
             "stop" -> stop()
             "whoami" -> out(prompt.removeSuffix(":~$"), Tone.Ok)
             "date" -> out(LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss", Locale.getDefault())))
@@ -151,6 +153,26 @@ class Terminal(
         out("[holo] ouverture de la liaison ${number.ifBlank { "" }}".trimEnd(), Tone.Ok)
     }
 
+    private fun lock(arg: String?) {
+        when (arg) {
+            "off" -> {
+                CyberLock.setEnabled(context, false)
+                out("verrou cyber désactivé", Tone.Warn)
+            }
+            "on", null -> {
+                CyberLock.setEnabled(context, true)
+                val missing = CyberLock.missingStep(context)
+                if (missing == null) {
+                    out("verrou cyber actif : il apparaîtra à la prochaine mise en veille", Tone.Ok)
+                } else {
+                    context.startActivity(missing)
+                    out("autorisation requise : accorde-la puis éteins l'écran", Tone.Warn)
+                }
+            }
+            else -> out("usage : lock [on|off]", Tone.Error)
+        }
+    }
+
     private fun keyboard() {
         val imm = context.getSystemService(InputMethodManager::class.java)
         val enabled = imm.enabledInputMethodList.any { it.packageName == context.packageName }
@@ -178,6 +200,7 @@ class Terminal(
             "control         panneau de réglages rapides",
             "call [numéro]   ouvre la holo-liaison (appels)",
             "keyboard        active / choisit le clavier Netrunner",
+            "lock [on|off]   écran de verrouillage cyberdeck",
             "claude          ouvre l'appli Claude (ton compte)",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",
