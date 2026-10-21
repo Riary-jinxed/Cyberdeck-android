@@ -60,7 +60,7 @@ private fun HoloPad(modifier: Modifier, strength: Float = 1f, color: Color = Ask
 
 /** As//ka asleep while the deck is locked, with a few Z drifting up. */
 @Composable
-fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true) {
+fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true, art: Int = R.drawable.aska_chibi_sleep) {
     // Read while drawing only: each tick redraws, nothing is recomposed or laid out again.
     val clock = presenceClock(animated, fps = 10)
     val rise = with(LocalDensity.current) { 46.dp.toPx() }
@@ -74,7 +74,7 @@ fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true) {
             strength = 0.8f,
         )
         Image(
-            painterResource(R.drawable.aska_chibi_sleep),
+            painterResource(art),
             contentDescription = "As//ka dort",
             modifier = Modifier
                 .fillMaxSize()

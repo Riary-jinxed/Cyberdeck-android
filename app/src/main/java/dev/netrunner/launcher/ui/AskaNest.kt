@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.R
 import dev.netrunner.launcher.aska.AskaDate
+import dev.netrunner.launcher.aska.AskaDay
 import dev.netrunner.launcher.aska.AskaPet
 import dev.netrunner.launcher.aska.AskaPet.Mood
 import kotlin.math.sin
@@ -66,6 +67,13 @@ internal fun Mood.drawable(): Int = when (this) {
     Mood.Shy -> R.drawable.aska_chibi_shy
     Mood.Mischievous -> R.drawable.aska_chibi_mischievous
     Mood.Content -> R.drawable.aska_chibi_talking
+}
+
+/** Her pose when the phone runs low or charges; null keeps her mood's. */
+internal fun AskaDay.Moment.drawable(): Int? = when (this) {
+    AskaDay.Moment.LowBattery -> R.drawable.aska_chibi_lowbatt
+    AskaDay.Moment.Charging -> R.drawable.aska_chibi_charging
+    AskaDay.Moment.LateNight -> null
 }
 
 /** What floats up from her after a care. */
@@ -86,9 +94,13 @@ private fun Mood.particle(): String? = when (this) {
 @Composable
 fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier, onDate: (AskaDate.Scene) -> Unit = {}) {
     val active = rememberScreenActive()
+    val context = LocalContext.current
+    // The phone's battery, which can change her pose.
+    var moment by remember { mutableStateOf<AskaDay.Moment?>(null) }
     // Time passes while the nest is open too, slowly: a check per minute is plenty.
     LaunchedEffect(active) {
         while (active) {
+            moment = AskaDay.moment(context)
             pet.refresh()
             delay(60_000)
         }
@@ -147,7 +159,8 @@ fun AskaNest(pet: AskaPet, modifier: Modifier = Modifier, onDate: (AskaDate.Scen
                             .height(34.dp),
                         color = Color(looks.getValue(AskaPet.Slot.Pad).argb),
                     )
-                    NestChibi(mood, active, Modifier.fillMaxSize().padding(bottom = 10.dp)) { pet.pet() }
+                    val art = moment?.drawable()?.takeIf { reaction == null && mood != Mood.Sleeping } ?: mood.drawable()
+                    NestChibi(mood, art, active, Modifier.fillMaxSize().padding(bottom = 10.dp)) { pet.pet() }
                     reaction?.particle()?.let { Particles(it, key = pet.line) }
                 }
             }
@@ -412,11 +425,11 @@ private fun effects(treat: AskaPet.Treat) = listOfNotNull(
 ).joinToString(" · ")
 
 @Composable
-private fun NestChibi(mood: Mood, animated: Boolean, modifier: Modifier, onTouch: () -> Unit) {
+private fun NestChibi(mood: Mood, @DrawableRes art: Int, animated: Boolean, modifier: Modifier, onTouch: () -> Unit) {
     val clock = if (animated) rememberSlowClock(fps = 12) else remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     val lift = with(LocalDensity.current) { 6.dp.toPx() }
     Image(
-        painterResource(mood.drawable()),
+        painterResource(art),
         contentDescription = "As//ka",
         modifier = modifier
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTouch)
