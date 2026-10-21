@@ -149,7 +149,7 @@ fun AskaBubble(text: String, modifier: Modifier = Modifier) {
 
 /** On the home screen, the morning after: she pops up and tries to start a conversation. */
 @Composable
-fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, animated: Boolean = true) {
+fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, animated: Boolean = true, briefing: String? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -163,6 +163,10 @@ fun AskaMorningCard(greeting: String, onTalk: () -> Unit, onLater: () -> Unit, a
             Text("AS//KA // RÉVEIL", color = AskaColors.Pink, fontFamily = MonoFont, fontSize = 10.sp)
             Spacer(Modifier.height(2.dp))
             Text(greeting, color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, lineHeight = 18.sp)
+            briefing?.let {
+                Spacer(Modifier.height(5.dp))
+                Text(it, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 11.sp, lineHeight = 15.sp)
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

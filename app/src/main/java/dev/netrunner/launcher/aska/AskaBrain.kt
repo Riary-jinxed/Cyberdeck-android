@@ -131,6 +131,14 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             null -> Unit
         }
 
+        // The day, the notifications and the battery: read directly, no model needed.
+        when (AskaDay.parse(text)) {
+            AskaDay.Request.News -> return say(AskaDay.news(context))
+            AskaDay.Request.Briefing -> return say(AskaDay.briefing(context) ?: "Rien au programme aujourd'hui.")
+            AskaDay.Request.Battery -> return say(AskaDay.batteryText(context))
+            null -> Unit
+        }
+
         when (val request = memory.parse(text)) {
             is AskaMemory.Request.Remember -> {
                 memory.remember(request.fact)

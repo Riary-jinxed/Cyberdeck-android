@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.netrunner.launcher.aska.AskaDay
 import dev.netrunner.launcher.aska.AskaMorning
 import dev.netrunner.launcher.media.MediaWatcher
 import dev.netrunner.launcher.notify.NotificationHub
@@ -183,6 +184,10 @@ fun LockScreen(onUnlock: () -> Unit) {
                 AskaMorning.observe(context)
                 AskaMorning.isMorning(context)
             }
+            // Otherwise she mumbles in her sleep about the battery or the hour.
+            val mumble = remember(now.hour, now.minute) {
+                AskaDay.moment(context)?.let { AskaDay.momentLine(context, it, asleep = true) }
+            }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Spacer(Modifier.weight(1f))
                 if (morning) {
@@ -194,6 +199,14 @@ fun LockScreen(onUnlock: () -> Unit) {
                     )
                     AskaWaking(Modifier.size(width = 110.dp, height = 130.dp), animated = active)
                 } else {
+                    mumble?.let {
+                        AskaBubble(
+                            it,
+                            Modifier
+                                .weight(2f, fill = false)
+                                .padding(bottom = 60.dp, end = 4.dp),
+                        )
+                    }
                     AskaSleeping(Modifier.size(width = 130.dp, height = 120.dp), animated = active)
                 }
             }

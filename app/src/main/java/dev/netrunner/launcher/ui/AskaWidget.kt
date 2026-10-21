@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import dev.netrunner.launcher.aska.AskaDay
 import dev.netrunner.launcher.aska.AskaPet
 import dev.netrunner.launcher.aska.AskaPet.Mood
 import dev.netrunner.launcher.aska.AskaReminders
@@ -59,7 +60,9 @@ fun AskaWidget(pet: AskaPet, onOpen: () -> Unit) {
     val mood = pet.mood()
     // Her needs first; otherwise her line of the day.
     val daily = remember(resumed) { lineOfTheDay() }
-    val line = if (mood in NEEDS && pet.line.isNotEmpty()) pet.line else daily
+    // The phone first (low battery, charging, very late), then her needs, then her line of the day.
+    val moment = remember(resumed) { AskaDay.moment(context)?.let { AskaDay.momentLine(context, it) } }
+    val line = moment ?: if (mood in NEEDS && pet.line.isNotEmpty()) pet.line else daily
 
     Row(
         Modifier

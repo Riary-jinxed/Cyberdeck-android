@@ -343,11 +343,12 @@ class AskaPet(context: Context) {
     }
 
     private fun idleLine(): String = when (mood()) {
-        Mood.Sleeping -> "Zzz…"
+        Mood.Sleeping -> AskaDay.moment(appContext)?.let { AskaDay.momentLine(appContext, it, asleep = true) } ?: "Zzz…"
+        Mood.Content, Mood.Happy -> AskaDay.moment(appContext)?.let { AskaDay.momentLine(appContext, it) }
+            ?: if (mood() == Mood.Happy) "Héhé, tout va bien dans le meilleur des réseaux !" else "Je suis là. Tu me fais un câlin ?"
         Mood.Hungry -> "Mon estomac fait des bruits de modem… un macaron ?"
         Mood.Tired -> "*bâille* Mes circuits ramollissent…"
         Mood.Bored -> "On joue ? Je m'ennuie dans ce deck…"
-        Mood.Happy -> "Héhé, tout va bien dans le meilleur des réseaux !"
         else -> "Je suis là. Tu me fais un câlin ?"
     }
 
