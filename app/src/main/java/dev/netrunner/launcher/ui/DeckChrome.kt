@@ -125,7 +125,7 @@ private fun bootLines(handle: String, version: String) = listOf(
 fun BootSequence(onDone: () -> Unit) {
     val context = LocalContext.current
     val style = DeckSettings.bootStyle
-    if (style == BootStyle.Off) {
+    if (style == BootStyle.Off || dev.netrunner.launcher.system.Ripperdoc.active) {
         LaunchedEffect(Unit) { onDone() }
         return
     }

@@ -70,6 +70,7 @@ private const val Glyphs = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁ�
 fun LiveWallpaper(batteryLevel: Int, charging: Boolean, modifier: Modifier = Modifier) {
     val mode = Wallpaper.mode
     if (mode == WallpaperMode.Off || dev.netrunner.launcher.system.NightWatch.active) return
+    if (dev.netrunner.launcher.system.Ripperdoc.active) return
     val t by rememberSlowClock(fps = 10)
     val hour = remember(t / 60_000) { LocalTime.now().hour }
     val night = hour >= 20 || hour < 7
@@ -177,6 +178,7 @@ private fun CodeRain(t: Long, tint: Color, speed: Float, modifier: Modifier) {
 fun Modifier.crtGlitch(): Modifier = composed {
     // Netwatch night mode: no glitches, no flicker.
     if (dev.netrunner.launcher.system.NightWatch.active) return@composed Modifier
+    if (dev.netrunner.launcher.system.Ripperdoc.active) return@composed Modifier
     val active = rememberScreenActive()
     val t by rememberSlowClock(fps = 12)
     var jitter by remember { mutableFloatStateOf(0f) }

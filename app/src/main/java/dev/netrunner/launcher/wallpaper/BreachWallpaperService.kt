@@ -1,5 +1,6 @@
 package dev.netrunner.launcher.wallpaper
 
+import dev.netrunner.launcher.system.Ripperdoc
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
@@ -47,7 +48,10 @@ class BreachWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             this.visible = visible
             handler.removeCallbacks(frame)
-            if (visible) draw()
+            if (visible) {
+                Ripperdoc.refresh(applicationContext)
+                draw()
+            }
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -74,7 +78,8 @@ class BreachWallpaperService : WallpaperService() {
                 runCatching { holder.unlockCanvasAndPost(canvas) }
             }
             handler.removeCallbacks(frame)
-            if (visible) handler.postDelayed(frame, 125)
+            // Ripperdoc power saving: one still frame, no animation.
+            if (visible && !Ripperdoc.active) handler.postDelayed(frame, 125)
         }
 
         private fun render(canvas: Canvas, t: Long) {

@@ -100,8 +100,9 @@ fun GlitchText(
     var shift by remember { mutableFloatStateOf(0f) }
     var flicker by remember { mutableStateOf(false) }
     val active = rememberScreenActive()
-    LaunchedEffect(active) {
-        while (active) {
+    val lean = dev.netrunner.launcher.system.Ripperdoc.active
+    LaunchedEffect(active, lean) {
+        while (active && !lean) {
             delay(Random.nextLong(1800, 5000))
             repeat(Random.nextInt(3, 7)) {
                 shift = Random.nextFloat() * 10f - 5f
@@ -144,7 +145,8 @@ fun rememberScreenActive(): Boolean {
  */
 @Composable
 fun rememberSlowClock(fps: Int = 15): State<Long> {
-    val active = rememberScreenActive()
+    // Ripperdoc power saving freezes every clock-driven animation on its current frame.
+    val active = rememberScreenActive() && !dev.netrunner.launcher.system.Ripperdoc.active
     return produceState(0L, active) {
         val start = android.os.SystemClock.uptimeMillis() - value
         while (active) {

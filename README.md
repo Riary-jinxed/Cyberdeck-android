@@ -33,11 +33,12 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Messagerie SMS** : bouton « ✉ SMS » ou `sms`. Conversations façon messagerie du jeu (portraits, canaux, bulles angulaires), réponses rapides en options de dialogue et envoi par la SIM. L'appli SMS habituelle reste en place pour les MMS, le RCS et les notifications.
 - **Animation de démarrage** : styles BIOS, BREACH (matrice qui se résout en « accès autorisé ») ou CORPO (logo qui glitche), ou aucune ; affiche ton pseudo de runner. Dans Config.
 - **Fond d'écran système** : la grille de breach en fond d'écran animé Android, aussi sur l'écran verrouillé, aux couleurs de la faction et à 8 images/s.
-- **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons).
+- **Sonneries et sons** : 3 sonneries, 3 sons de notification et 1 alarme synthétisés sur le téléphone, à écouter puis installer par défaut en un appui (Config › Sonneries et sons). « Importer une musique » prend un morceau du téléphone : on choisit l'extrait (40 s max), on l'écoute, puis on le définit comme sonnerie ou notification. Le fichier découpé reste sur le téléphone, rien n'est envoyé ni inclus dans l'appli.
 - **Tuiles du volet** : mode furtif, verrou cyber, terminal et scan Wi-Fi dans les réglages rapides d'Android (ajout en un appui depuis Config).
 - **Widgets Android** : deuxième page de l'accueil (glisser sur la zone centrale), n'importe quel widget (agenda, Maps, Keep…) dans un cadre HUD, à déplacer, agrandir ou retirer.
 - **Dossiers et pages de quickhacks** : appui long sur un quickhack › « Nouveau dossier » ou « Ranger dans… » ; au-delà de 8 raccourcis, la grille défile en pages.
 - **Gestes personnalisables** : chaque glisser et le double-tap / appui long sur l'horloge se règlent dans Config › Gestes.
+- **Mode éco Ripperdoc** : coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur, et fige le fond d'écran animé. En Auto, il s'active sous 20 % de batterie (hors charge) ou avec l'économiseur d'Android ; il peut aussi rester toujours actif (Config › Mode éco Ripperdoc). Le HUD affiche alors RIPPERDOC://ÉCO.
 - **Profils Boulot / Perso** : chacun garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.
 - **Mode nuit Netwatch** : interface assombrie, sans fond animé ni glitchs, sur une plage horaire choisie.
 - **Spectre audio** : barres de visualiseur dans le widget musique (vrai son avec l'accès micro, animation sinon).
@@ -47,6 +48,20 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
+
+## Horloge Netrunner (appli à part)
+
+Une deuxième appli, dans le module `clock/` (package `dev.netrunner.clock`, APK séparé signé avec la même clé), pour remplacer l'horloge Xiaomi dans le même style.
+
+- **Horloge** plein écran et prochaine alarme.
+- **Alarmes** : jours de répétition, libellé, vibreur, répit réglable, volume progressif, arrêt automatique.
+- **Sonnerie au choix** : sonnerie du téléphone, sonnerie système, ou **musique importée** depuis le téléphone (MP3, M4A, OGG, FLAC…) avec l'extrait à jouer en boucle (début et fin). Le fichier est copié dans l'appli et ne quitte pas le téléphone.
+- **Écran de réveil** plein écran par-dessus l'écran verrouillé : glisser pour arrêter, bouton ou touches de volume pour le répit. Après une alarme du matin, retour à l'accueil pour qu'As//ka dise bonjour (désactivable).
+- **Minuteurs** (plusieurs à la fois, notification avec compte à rebours, pause, +1 min) et **chrono** avec tours.
+- **Fiable sur HyperOS** : vraies alarmes système (exactes, icône dans la barre d'état, reprogrammées au redémarrage et au changement d'heure) et une page CONFIG qui vérifie chaque réglage (notifications, plein écran, batterie, démarrage auto) avec accès direct.
+- **Compatible As//ka** : l'appli répond aux intents Android standard de l'horloge, donc « réveille-moi à 7h30 », « minuteur 10 min » ou « prochaine alarme ? » marchent avec elle. La première fois, choisis Horloge Netrunner puis « Toujours ».
+- **Sobre en batterie** : rien ne tourne en fond ; un service ne démarre que pendant qu'une alarme sonne.
+- **Mises à jour** : releases GitHub `horloge-vX.Y.Z` (jamais marquées « latest », pour ne pas gêner la mise à jour du launcher), installables depuis CONFIG › Mise à jour.
 
 ## Installer sur le téléphone
 
@@ -103,6 +118,8 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `ui/FeedScreen.kt`, `ui/MediaWidget.kt`, `ui/QuickPanel.kt` | Flux, widget musique, réglages rapides |
 | `sms/SmsStore.kt`, `ui/MessagesScreen.kt` | Lecture et envoi des SMS, messagerie |
 | `system/Tones.kt` | Synthèse et installation des sonneries |
+| `system/MusicTone.kt` | Découpe d'une musique importée en sonnerie |
+| `system/Ripperdoc.kt` | Mode éco (animations coupées) |
 | `tiles/DeckTiles.kt` | Tuiles du volet de réglages rapides |
 | `wallpaper/BreachWallpaperService.kt` | Fond d'écran animé système |
 
