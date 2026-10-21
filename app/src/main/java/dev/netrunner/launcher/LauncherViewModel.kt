@@ -29,7 +29,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
 
     /** Full-screen panel shown over the home HUD. */
-    enum class Panel { None, Terminal, Wifi, Chat }
+    enum class Panel { None, Terminal, Wifi, Chat, Feed, Quick }
 
     private val _panel = MutableStateFlow(Panel.None)
     val panel: StateFlow<Panel> = _panel.asStateFlow()

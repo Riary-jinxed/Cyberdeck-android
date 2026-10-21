@@ -73,6 +73,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel
 import dev.netrunner.launcher.LauncherViewModel.Panel
+import dev.netrunner.launcher.media.MediaWatcher
+import dev.netrunner.launcher.notify.NotificationHub
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import dev.netrunner.launcher.system.BatteryState
 import dev.netrunner.launcher.system.HomeRole
 import dev.netrunner.launcher.system.SystemInfo
@@ -102,6 +106,16 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     val panel by viewModel.panel.collectAsStateWithLifecycle()
     var drawerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val feed by NotificationHub.items.collectAsStateWithLifecycle()
+    val mediaWatcher = remember { MediaWatcher(context.applicationContext) }
+    val nowPlaying by mediaWatcher.nowPlaying.collectAsStateWithLifecycle()
+    var feedAccess by remember { mutableStateOf(NotificationHub.isAccessGranted(context)) }
+    LifecycleResumeEffect(Unit) {
+        feedAccess = NotificationHub.isAccessGranted(context)
+        if (feedAccess) mediaWatcher.start()
+        onPauseOrDispose { }
+    }
+    DisposableEffect(Unit) { onDispose { mediaWatcher.stop() } }
 
     // Re-checked every time we come back, e.g. after the user picked a home app in Settings.
     var isDefaultHome by remember { mutableStateOf(true) }
@@ -148,11 +162,17 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 .padding(horizontal = 20.dp, vertical = 12.dp)
                 .pointerInput(Unit) {
                     var total = 0f
+                    var fromTopRight = false
                     detectVerticalDragGestures(
-                        onDragStart = { total = 0f },
+                        onDragStart = { start ->
+                            total = 0f
+                            // Like HyperOS: pulling down from the top-right corner opens the control centre.
+                            fromTopRight = start.x > size.width * 0.55f && start.y < size.height * 0.3f
+                        },
                         onDragEnd = {
                             when {
                                 total < -120f -> drawerOpen = true
+                                total > 120f && fromTopRight -> viewModel.openPanel(Panel.Quick)
                                 total > 120f -> expandNotifications(context)
                             }
                         },
@@ -191,7 +211,22 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 6.dp),
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(12.dp))
+            // Music and incoming messages scroll between the clock and the shortcuts.
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                nowPlaying?.let { MediaWidget(it, mediaWatcher) }
+                if (feedAccess) {
+                    FeedPreview(feed) { viewModel.openPanel(Panel.Feed) }
+                } else {
+                    FeedAccessCard()
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             QuickhackGrid(
                 favorites = favorites,
                 onLaunch = viewModel::requestLaunch,
@@ -234,6 +269,28 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             TerminalScreen(terminal = viewModel.terminal, onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Feed,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            FeedScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Quick,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+        ) {
+            QuickPanel(
+                onClose = { viewModel.openPanel(Panel.None) },
+                onSystemShade = {
+                    viewModel.openPanel(Panel.None)
+                    expandNotifications(context)
+                },
+            )
         }
 
         AnimatedVisibility(

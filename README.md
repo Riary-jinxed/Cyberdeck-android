@@ -11,6 +11,9 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
 - **Scanner Wi-Fi** : toutes les bornes à portée (SSID, BSSID, dBm, canal, bande, sécurité, norme Wi-Fi, distance estimée) et un mode « traque » avec radar, tendance et bip type compteur Geiger pour retrouver une borne physiquement.
 - **GLITCH, l'IA du cyberdeck** : glisser vers la gauche ouvre un chat avec Claude (Claude Opus 5.5 via l'API Anthropic, clé API à fournir), avec une mascotte animée qui réagit pendant qu'elle réfléchit et répond.
+- **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
+- **Widget musique** : Spotify (ou tout autre lecteur) avec pochette, titre, progression, lecture/pause/suivant.
+- **Contrôle du deck** : glisser vers le bas depuis le haut à droite ouvre un panneau Wi-Fi, données, Bluetooth, lampe, sonnerie, Ne pas déranger, rotation et volumes.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
@@ -53,6 +56,9 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `chat/ChatSession.kt` | Conversation avec Claude (SDK Java Anthropic, streaming) |
 | `ui/ChatScreen.kt` | Interface de chat GLITCH |
 | `ui/Mascot.kt` | Mascotte GLITCH animée |
+| `notify/` | Service d'écoute des notifications et réponses rapides |
+| `media/MediaWatcher.kt` | Suivi et contrôle du lecteur audio actif |
+| `ui/FeedScreen.kt`, `ui/MediaWidget.kt`, `ui/QuickPanel.kt` | Flux, widget musique, réglages rapides |
 
 ## Idées pour la suite
 

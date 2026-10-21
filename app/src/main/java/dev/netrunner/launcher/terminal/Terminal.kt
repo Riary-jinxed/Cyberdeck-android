@@ -75,6 +75,8 @@ class Terminal(
             "clear", "cls" -> lines.clear()
             "exit", "quit" -> openPanel(Panel.None)
             "wifi", "wardrive" -> openPanel(Panel.Wifi)
+            "notifs", "feed", "messages" -> openPanel(Panel.Feed)
+            "control", "settings", "cc" -> openPanel(Panel.Quick)
             "glitch", "chat", "ai", "ia" -> openPanel(Panel.Chat)
             "stop" -> stop()
             "whoami" -> out(prompt.removeSuffix(":~$"), Tone.Ok)
@@ -137,6 +139,8 @@ class Terminal(
             "apps [filtre]   liste les applis installées",
             "open <appli>    lance une appli (ex : open spotify)",
             "wifi            scanner Wi-Fi et traque de borne",
+            "notifs          flux des notifications (SMS, WhatsApp, mails)",
+            "control         panneau de réglages rapides",
             "glitch          parle à GLITCH, l'IA du cyberdeck",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",
