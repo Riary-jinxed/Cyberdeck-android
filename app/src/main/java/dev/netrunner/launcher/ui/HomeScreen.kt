@@ -219,6 +219,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Gestures.Action.Feed -> viewModel.openPanel(Panel.Feed)
             Gestures.Action.Dialer -> context.startActivity(Intent(context, DialerActivity::class.java))
             Gestures.Action.Wifi -> viewModel.openPanel(Panel.Wifi)
+            Gestures.Action.Kit -> viewModel.openPanel(Panel.Kit)
             Gestures.Action.Ghost -> {
                 UiSound.play(context, UiSound.Cue.Glitch)
                 Ghost.toggle(context)
@@ -370,6 +371,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 HudButton("APPELS", Cp.Red, Modifier.weight(1f), HudGlyph.Phone) {
                     context.startActivity(Intent(context, DialerActivity::class.java))
                 }
+                HudButton("KIT", Cp.Cyan, Modifier.weight(0.8f), HudGlyph.Kit) { viewModel.openPanel(Panel.Kit) }
             }
         }
 
@@ -448,6 +450,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             MessagesScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Kit,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            KitScreen(onClose = { viewModel.openPanel(Panel.None) })
         }
 
         AnimatedVisibility(
@@ -918,7 +928,7 @@ private fun HudButton(label: String, color: Color, modifier: Modifier = Modifier
 
 private val SearchCommands = listOf(
     "scan", "ports", "ping", "ip", "wifi", "speedtest", "ghost", "theme", "wallpaper", "sound", "torch",
-    "timer", "calc", "qr", "lock", "keyboard", "call", "claude", "sysinfo", "battery", "notifs", "help",
+    "timer", "calc", "subnet", "kit", "qr", "lock", "keyboard", "call", "claude", "sysinfo", "battery", "notifs", "help",
 )
 
 private const val FrequentTab = -1

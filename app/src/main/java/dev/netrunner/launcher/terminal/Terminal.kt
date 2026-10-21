@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel.Panel
+import dev.netrunner.launcher.kit.Subnet
 import dev.netrunner.launcher.call.DialerActivity
 import dev.netrunner.launcher.lock.CyberLock
 import dev.netrunner.launcher.ui.Cp
@@ -110,6 +111,8 @@ class Terminal(
             "torch", "lampe" -> torch(args.firstOrNull())
             "timer", "minuteur" -> timer(args.joinToString(""))
             "calc", "=" -> calc(args.joinToString(" "))
+            "subnet", "cidr" -> subnet(args)
+            "kit", "inventaire", "inv", "checklist" -> openPanel(Panel.Kit)
             "qr" -> qrCode(args.joinToString(" "))
             "speedtest", "speed" -> runJob { speedtest() }
             "ghost", "furtif" -> ghost(args.firstOrNull())
@@ -237,6 +240,31 @@ class Terminal(
         if (seconds % 3600 >= 60) append("${seconds % 3600 / 60} min ")
         if (seconds % 60 > 0) append("${seconds % 60} s")
     }.trim()
+
+    /** subnet 192.168.1.0/24 [/26] : plan d'adressage, et découpage si un 2e préfixe est donné. */
+    private fun subnet(args: List<String>) {
+        val split = args.lastOrNull()?.takeIf { args.size > 1 && it.startsWith("/") }?.drop(1)?.toIntOrNull()
+        val spec = (if (split != null) args.dropLast(1) else args).joinToString(" ")
+        val info = Subnet.parse(spec)
+        if (info == null) {
+            out("usage : subnet 192.168.1.0/24 [/26]  ou  subnet 10.0.0.5 255.255.255.0", Tone.Error)
+            return
+        }
+        Subnet.report(info).forEach { (k, v) -> out("${k.padEnd(18, '.')} $v", Tone.Ok) }
+        if (split != null) {
+            val parts = Subnet.split(info, split)
+            if (parts.isEmpty()) {
+                out("découpage impossible : /$split doit être plus long que /${info.prefix}", Tone.Error)
+            } else {
+                val total = 1L shl (split - info.prefix)
+                out("découpage en /$split : $total sous-réseaux de ${parts.first().hosts} hôtes", Tone.Warn)
+                parts.forEach { p ->
+                    out("${Subnet.text(p.network)}/$split  ${Subnet.text(p.firstHost)} → ${Subnet.text(p.lastHost)}  bc ${Subnet.text(p.broadcast)}")
+                }
+                if (total > parts.size) out("… ${total - parts.size} de plus (voir le panneau KIT)", Tone.Dim)
+            }
+        }
+    }
 
     private fun calc(expression: String) {
         if (expression.isBlank()) {
@@ -414,6 +442,8 @@ class Terminal(
             "torch [on|off]  lampe torche",
             "timer <durée>   minuteur (ex : timer 5m, timer 1h30, timer 90s)",
             "calc <expr>     calculatrice (ex : calc (12+8)*1,2^2)",
+            "subnet <ip/n> [/m]  calculateur de sous-réseaux (ex : subnet 192.168.1.0/24 /26)",
+            "kit             inventaire, checklists et sous-réseaux",
             "qr <texte>      affiche un QR code (lien, texte, Wi-Fi…)",
             "speedtest       latence, débit descendant et montant",
             "claude          ouvre l'appli Claude (ton compte)",

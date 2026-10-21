@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.0.1"
+        versionCode = 15
+        versionName = "1.1.0"
     }
 
     // Stable key from the CI secrets, so each new APK installs over the previous one (and the
@@ -74,4 +74,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     implementation("com.google.zxing:core:3.5.3")
+    // Barcode / QR scanning for the equipment inventory (Google Play services UI, no camera permission).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }
