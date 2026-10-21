@@ -205,6 +205,12 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         }
     }
 
+    /** She speaks first, for her morning greeting. */
+    fun greet(text: String) {
+        if (lines.lastOrNull()?.text == text) return
+        say(text)
+    }
+
     fun stop() {
         replyJob?.cancel()
         voice.stop()

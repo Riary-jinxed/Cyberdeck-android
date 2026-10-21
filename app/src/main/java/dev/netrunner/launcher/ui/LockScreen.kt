@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.netrunner.launcher.aska.AskaMorning
 import dev.netrunner.launcher.media.MediaWatcher
 import dev.netrunner.launcher.notify.NotificationHub
 import dev.netrunner.launcher.system.SystemInfo
@@ -174,6 +176,25 @@ fun LockScreen(onUnlock: () -> Unit) {
                             )
                         }
                     }
+                }
+            }
+            // As//ka sleeps while the deck is locked, and is up on the morning after the alarm.
+            val morning = remember(now.hour, now.minute) {
+                AskaMorning.observe(context)
+                AskaMorning.isMorning(context)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                Spacer(Modifier.weight(1f))
+                if (morning) {
+                    AskaBubble(
+                        "Debout, runner ! Glisse vers le haut, j'ai un truc à te dire.",
+                        Modifier
+                            .weight(2f, fill = false)
+                            .padding(bottom = 70.dp, end = 4.dp),
+                    )
+                    AskaWaking(Modifier.size(width = 110.dp, height = 130.dp), animated = active)
+                } else {
+                    AskaSleeping(Modifier.size(width = 130.dp, height = 120.dp), animated = active)
                 }
             }
             Text(

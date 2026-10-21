@@ -42,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +68,8 @@ private val Prompts = listOf(
     "Qui es-tu ?",
     "Que sais-tu sur moi ?",
     "Raconte-moi Night City",
+    "Un macaron ?",
+    "Bonne nuit As//ka",
 )
 
 @Composable
@@ -82,7 +85,7 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(AskaColors.Void.copy(alpha = 0.985f))
+            .dragonScales()
             .scanlines()
             .systemBarsPadding()
             .displayCutoutPadding()
@@ -130,7 +133,7 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(AskaColors.Pink.copy(alpha = 0.6f))
+                .background(Brush.horizontalGradient(listOf(AskaColors.Pink, AskaColors.Magenta, Color.Transparent)))
         )
         if (showModels || noModel) {
             ModelBay(brain, Modifier.weight(1f))
@@ -192,13 +195,21 @@ private fun Chat(brain: AskaBrain, modifier: Modifier) {
             items(lines, key = { it.id }) { line -> Bubble(brain, line) }
         }
         Row(verticalAlignment = Alignment.Bottom) {
-            AskaChibi(
-                brain,
-                Modifier
-                    .size(84.dp)
-                    .padding(end = 6.dp, bottom = 2.dp),
-                animated = rememberScreenActive(),
-            )
+            Box(Modifier.size(width = 92.dp, height = 104.dp).padding(end = 6.dp)) {
+                AskaPad(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(18.dp)
+                )
+                AskaChibi(
+                    brain,
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 6.dp),
+                    animated = rememberScreenActive(),
+                )
+            }
             Column(Modifier.weight(1f)) {
                 Row(
                     Modifier
@@ -260,7 +271,15 @@ private fun Chat(brain: AskaBrain, modifier: Modifier) {
 
 @Composable
 private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (line.fromUser) Alignment.CenterEnd else Alignment.CenterStart) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (line.fromUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top,
+    ) {
+        if (!line.fromUser) {
+            AskaAvatar(Modifier.size(30.dp), animated = false)
+            Spacer(Modifier.width(6.dp))
+        }
         Column(
             Modifier
                 .widthIn(max = 320.dp)
@@ -269,28 +288,29 @@ private fun Bubble(brain: AskaBrain, line: AskaBrain.Line) {
                     brain.voice.speak(line.text, force = true)
                 }
                 .hudPanel(
-                    borderColor = if (line.fromUser) Cp.Cyan.copy(alpha = 0.5f) else AskaColors.Pink.copy(alpha = 0.7f),
-                    fill = if (line.fromUser) Cp.Panel else AskaColors.Panel,
+                    borderColor = if (line.fromUser) Cp.Cyan.copy(alpha = 0.5f) else AskaColors.Pink.copy(alpha = 0.75f),
+                    fill = if (line.fromUser) Cp.Panel.copy(alpha = 0.9f) else AskaColors.Panel.copy(alpha = 0.92f),
                     cut = 8.dp,
                 )
                 .padding(10.dp),
         ) {
             Text(
-                if (line.fromUser) "${DeckSettings.handle.uppercase()} //" else "AS//KA //",
+                if (line.fromUser) "${DeckSettings.handle.uppercase()} //" else "AS//KA ◆",
                 color = if (line.fromUser) Cp.Cyan else AskaColors.Pink,
                 fontFamily = MonoFont,
                 fontSize = 10.sp,
             )
-            Text(
-                when {
-                    line.text.isNotEmpty() -> line.text + if (line.done) "" else " ▌"
-                    else -> "▌"
-                },
-                color = Cp.Text,
-                fontFamily = HudFont,
-                fontSize = 15.sp,
-                lineHeight = 19.sp,
-            )
+            if (line.text.isEmpty() && !line.done) {
+                TypingDots()
+            } else {
+                Text(
+                    line.text + if (line.done) "" else " ▌",
+                    color = Cp.Text,
+                    fontFamily = HudFont,
+                    fontSize = 15.sp,
+                    lineHeight = 19.sp,
+                )
+            }
             line.action?.let { action ->
                 Spacer(Modifier.height(8.dp))
                 Text(action.summary, color = AskaColors.HotPink, fontFamily = MonoFont, fontSize = 12.sp)

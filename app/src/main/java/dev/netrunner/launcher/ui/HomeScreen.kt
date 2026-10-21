@@ -82,6 +82,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import dev.netrunner.launcher.aska.AskaMorning
 import dev.netrunner.launcher.AppCategory
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel
@@ -313,6 +314,31 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                     Modifier
                         .size(64.dp)
                         .clickable { viewModel.openPanel(Panel.Aska) },
+                    animated = panel == Panel.None && !drawerOpen,
+                )
+            }
+            // The morning after the alarm, As//ka pops up to start the day's conversation.
+            val homeContext = LocalContext.current
+            var morning by remember { mutableStateOf<String?>(null) }
+            LifecycleResumeEffect(Unit) {
+                AskaMorning.observe(homeContext)
+                morning = if (AskaMorning.isMorning(homeContext)) AskaMorning.greeting() else null
+                onPauseOrDispose { }
+            }
+            morning?.let { greeting ->
+                Spacer(Modifier.height(14.dp))
+                AskaMorningCard(
+                    greeting,
+                    onTalk = {
+                        AskaMorning.done(homeContext)
+                        morning = null
+                        viewModel.aska.greet(greeting)
+                        viewModel.openPanel(Panel.Aska)
+                    },
+                    onLater = {
+                        AskaMorning.done(homeContext)
+                        morning = null
+                    },
                     animated = panel == Panel.None && !drawerOpen,
                 )
             }
