@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cut-corner frame, as on the launcher icon -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FCEE0A"
+        android:strokeWidth="3"
+        android:pathData="M36,34 L66,34 L74,42 L74,74 L42,74 L34,66 L34,36 Z" />
+    <!-- Mountains -->
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M40,68 L50,54 L56,62 L60,57 L68,68 Z" />
+    <!-- Sun, in alert red -->
+    <path
+        android:fillColor="#FF003C"
+        android:pathData="M58,44 m-4,0 a4,4 0,1 1,8 0 a4,4 0,1 1,-8 0" />
+    <!-- Scanlines -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#0A0A12"
+        android:strokeWidth="1"
+        android:pathData="M40,58 L68,58 M40,62 L68,62 M40,66 L68,66" />
+</vector>
