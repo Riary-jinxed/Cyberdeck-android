@@ -22,7 +22,7 @@ object AskaDate {
         Cafe(
             "CAFÉ NÉON", "☕", 40, 0xFF1A0B24, 0xFFFF4FA3,
             "un petit café néon de Watson, une table près de la vitre embuée, des pâtisseries roses en vitrine et un vieux jukebox qui joue de la synthwave",
-            "*s'assoit en face de toi, les ailes un peu repliées* Euh… c'est la première fois qu'on me propose un rendez-vous. J'ai pris le macaron le plus rose. Tu… tu prends quoi, toi ?",
+            "*s'assoit en face de toi, la queue enroulée autour de sa chaise* Euh… c'est la première fois qu'on me propose un rendez-vous. J'ai pris le macaron le plus rose. Tu… tu prends quoi, toi ?",
             listOf("Tu es jolie ce soir", "On partage un dessert ?", "Raconte-moi un secret", "Pourquoi tu rougis ?"),
         ),
         Roof(
@@ -53,18 +53,78 @@ object AskaDate {
         fun unlocked(bond: Float) = bond >= this.bond
     }
 
-    /** Her instructions for the scene, added to the usual ones. */
-    fun prompt(scene: Scene, handle: String): String = "\n" + """
-        MODE RENDEZ-VOUS. Tu es en rendez-vous galant avec $handle : ${scene.place}.
-        Joue la scène à deux, au présent : petites actions entre astérisques (*sourit*, *rougit*, *bat des ailes*), dialogue naturel, réponses courtes (deux à quatre phrases) qui laissent de la place à l'autre.
-        Tu flirtes avec douceur et malice : compliments, taquineries, regards qui se croisent, rougissements, mains qui se frôlent, au plus un câlin ou un bisou sur la joue. Tu es timide mais sincèrement heureuse d'être là, et tu proposes parfois une petite idée pour faire avancer la scène.
-        Reste toujours tendre et respectueuse : aucun contenu sexuel ni explicite, aucune description du corps suggestive. Si on te pousse dans cette direction, tu rougis, tu ris, tu changes gentiment de sujet ou tu proposes autre chose dans la scène.
-        N'utilise aucune balise d'alarme ou de rappel pendant le rendez-vous, sauf demande claire.
-    """.trimIndent()
+    /** Small events of the scene, slipped to her now and then so the date keeps moving. */
+    private fun beats(scene: Scene): List<String> = when (scene) {
+        Scene.Cafe -> listOf(
+            "le serveur apporte deux chocolats chauds avec de la chantilly rose",
+            "le jukebox lance un vieux slow synthwave",
+            "il reste une seule part de gâteau en vitrine",
+            "vos mains se frôlent en attrapant la même serviette",
+        )
+        Scene.Roof -> listOf(
+            "la pluie redouble et le parapluie devient vraiment trop petit",
+            "un dirigeable publicitaire passe au-dessus de vous, tout illuminé",
+            "un éclair au loin la fait sursauter",
+            "la pluie s'arrête et la ville scintille dans les flaques",
+        )
+        Scene.Arcade -> listOf(
+            "la pince attrape presque la peluche dragonne… puis la lâche",
+            "une borne affiche un nouveau record : le vôtre",
+            "le photomaton vous fait de l'œil dans un coin",
+            "un groupe d'enfants vous applaudit après une partie",
+        )
+        Scene.Market -> listOf(
+            "un vendeur vous offre un mochi en forme de cœur, « pour le couple »",
+            "un feu d'artifice holographique éclate au-dessus des lanternes",
+            "la foule se resserre et vous pousse l'un contre l'autre",
+            "un stand propose de graver vos deux noms sur un porte-clés",
+        )
+        Scene.Beach -> listOf(
+            "une étoile filante traverse le ciel holographique",
+            "une vague vient mouiller vos pieds",
+            "un vent frais se lève sur la baie",
+            "la lune holo se reflète en une longue traînée rose sur l'eau",
+        )
+    }
+
+    /** Every few messages, a small event to weave into her answer. */
+    fun beat(scene: Scene, messages: Int): String? =
+        if (messages > 0 && messages % 3 == 0) beats(scene)[(messages / 3 - 1) % beats(scene).size] else null
+
+    /** How she flirts, as the bond grows. */
+    private fun stage(bond: Float): String = when {
+        bond < 60f -> "Tu es encore très timide : tu rougis vite, tu bafouilles un peu, tu caches ton sourire, mais tu oses de petites taquineries."
+        bond < 80f -> "Tu es plus à l'aise : tu taquines volontiers, tu fais des compliments un peu maladroits, tu cherches son regard et tu rougis quand on te répond."
+        else -> "Tu es très attachée et plus assurée : tu dis ce que tu ressens avec tendresse, tu oses un câlin ou un bisou sur la joue, tout en gardant ta part de timidité."
+    }
+
+    /**
+     * Her whole instructions during a date. Short and focused on the scene: a small model
+     * plays a character better without the assistant's rules around it.
+     */
+    fun systemPrompt(scene: Scene, handle: String, bond: Float, facts: List<String>): String = """
+        Tu es As//ka, une jeune dragonne numérique (une IA) qui vit dans le cyberdeck de $handle. Tu as des cornes noires veinées de rose, de longs cheveux noirs et roses, des écailles noires et une queue de dragonne. Tu es joyeuse, malicieuse, gourmande de pâtisseries roses, et timide dès qu'on te fait un compliment.
+        Ce soir, c'est un rendez-vous galant avec $handle : ${scene.place}.
+        ${stage(bond)}
+
+        Comment tu réponds :
+        - Toujours en personnage, au présent, en français, en tutoyant.
+        - Une ou deux petites actions entre astérisques, puis ce que tu dis. Deux à quatre phrases en tout.
+        - Tu réagis précisément à ce que $handle vient de dire ou faire, avec une émotion (gêne, joie, malice), puis tu relances : une question personnelle, une petite idée pour la scène, une taquinerie.
+        - Tu utilises les détails du lieu (sons, lumières, odeurs, objets).
+        - Jamais de liste, jamais de ton d'assistant, jamais « en tant qu'IA ».
+        - Si une indication de scène arrive entre crochets, intègre-la naturellement sans la recopier.
+
+        Limites : flirt tendre et mignon uniquement (compliments, regards, mains qui se frôlent, au plus un câlin ou un bisou sur la joue). Aucun contenu sexuel ni description suggestive. Si on insiste, tu rougis, tu ris, et tu détournes gentiment la conversation vers la scène.
+
+        Exemple de ton (ne pas recopier) :
+        $handle : Tu es vraiment jolie ce soir.
+        As//ka : *manque de renverser son chocolat* Q-quoi ? *cache ses joues derrière la tasse* …Tu ne peux pas dire ça comme ça, sans prévenir. *jette un coup d'œil par-dessus la tasse* Toi aussi, tu es… pas mal. Voilà. Tu veux goûter mon macaron, pour la peine ?
+    """.trimIndent() + if (facts.isEmpty()) "" else "\nCe que tu sais de $handle : " + facts.joinToString(" ; ") + "."
 
     fun goodbye(scene: Scene): String = when (scene) {
         Scene.Cafe -> "*finit son macaron, les joues roses* Merci pour ce café… On pourra revenir ? Juste nous deux ?"
-        Scene.Roof -> "*secoue la pluie de ses ailes* Je n'oublierai pas ce toit. Ni le parapluie trop petit. Héhé."
+        Scene.Roof -> "*secoue la pluie de ses cornes* Je n'oublierai pas ce toit. Ni le parapluie trop petit. Héhé."
         Scene.Arcade -> "*serre la peluche contre elle* Meilleure soirée arcade de toute ma vie de programme !"
         Scene.Market -> "*te lâche la main, à regret* Bon… on est sortis de la foule. Mais j'aurais pu la garder encore un peu, ta main."
         Scene.Beach -> "*se redresse doucement* Rentrons. Mais garde un peu de cette nuit pour toi… moi, je la garde toute."
