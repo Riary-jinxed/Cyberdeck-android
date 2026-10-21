@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.netrunner.launcher.R
 import dev.netrunner.launcher.aska.AskaDay
 import dev.netrunner.launcher.aska.AskaMorning
 import dev.netrunner.launcher.media.MediaWatcher
@@ -185,9 +186,8 @@ fun LockScreen(onUnlock: () -> Unit) {
                 AskaMorning.isMorning(context)
             }
             // Otherwise she mumbles in her sleep about the battery or the hour.
-            val mumble = remember(now.hour, now.minute) {
-                AskaDay.moment(context)?.let { AskaDay.momentLine(context, it, asleep = true) }
-            }
+            val moment = remember(now.hour, now.minute) { AskaDay.moment(context) }
+            val mumble = moment?.let { AskaDay.momentLine(context, it, asleep = true) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Spacer(Modifier.weight(1f))
                 if (morning) {
@@ -207,7 +207,12 @@ fun LockScreen(onUnlock: () -> Unit) {
                                 .padding(bottom = 60.dp, end = 4.dp),
                         )
                     }
-                    AskaSleeping(Modifier.size(width = 130.dp, height = 120.dp), animated = active)
+                    AskaSleeping(
+                        Modifier.size(width = 130.dp, height = 120.dp),
+                        animated = active,
+                        // Out of battery, she slumps instead of sleeping.
+                        art = if (moment == AskaDay.Moment.LowBattery) R.drawable.aska_chibi_lowbatt else R.drawable.aska_chibi_sleep,
+                    )
                 }
             }
             Text(

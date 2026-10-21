@@ -61,8 +61,8 @@ fun AskaWidget(pet: AskaPet, onOpen: () -> Unit) {
     // Her needs first; otherwise her line of the day.
     val daily = remember(resumed) { lineOfTheDay() }
     // The phone first (low battery, charging, very late), then her needs, then her line of the day.
-    val moment = remember(resumed) { AskaDay.moment(context)?.let { AskaDay.momentLine(context, it) } }
-    val line = moment ?: if (mood in NEEDS && pet.line.isNotEmpty()) pet.line else daily
+    val moment = remember(resumed) { AskaDay.moment(context) }
+    val line = moment?.let { AskaDay.momentLine(context, it) } ?: if (mood in NEEDS && pet.line.isNotEmpty()) pet.line else daily
 
     Row(
         Modifier
@@ -80,7 +80,7 @@ fun AskaWidget(pet: AskaPet, onOpen: () -> Unit) {
                 color = Color(pet.looks.getValue(AskaPet.Slot.Pad).argb),
             )
             Image(
-                painterResource(mood.drawable()),
+                painterResource(moment?.drawable()?.takeIf { mood != Mood.Sleeping } ?: mood.drawable()),
                 contentDescription = "As//ka",
                 modifier = Modifier
                     .fillMaxSize()
