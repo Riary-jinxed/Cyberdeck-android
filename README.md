@@ -63,6 +63,16 @@ Une deuxième appli, dans le module `clock/` (package `dev.netrunner.clock`, APK
 - **Sobre en batterie** : rien ne tourne en fond ; un service ne démarre que pendant qu'une alarme sonne.
 - **Mises à jour** : releases GitHub `horloge-vX.Y.Z` (jamais marquées « latest », pour ne pas gêner la mise à jour du launcher), installables depuis CONFIG › Mise à jour.
 
+## Calcul Netrunner (appli à part)
+
+Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK séparé signé avec la même clé). Elle partage avec les futures applis du deck le module `deck/` (factions, polices, widgets HUD, mises à jour).
+
+- **Scientifique** : priorités, parenthèses (fermées toutes seules), trigonométrie en degrés ou radians et fonctions inverses (touche 2ND), ln, log, eˣ, 10ˣ, puissances, racines, factorielle, pourcentage, mod, π, e, notation EE, ANS et multiplication implicite (`2π`, `3(4+1)`). Résultat en direct pendant la saisie, historique des 50 derniers calculs, appui long pour copier.
+- **Programmeur** : entiers 8, 16, 32 ou 64 bits, signés ou non, saisie en HEX, DEC, OCT ou BIN avec les quatre bases affichées en même temps, AND, OR, XOR, NOT, NAND, NOR, décalages, MOD, et grille de bits à toucher pour les inverser.
+- **Réseau** : calcul de sous-réseau IPv4 (masque, wildcard, réseau, broadcast, plage d'hôtes, type d'adresse), vue binaire, découpage en sous-réseaux et préfixe pour un nombre d'hôtes. Tout est calculé sur le téléphone.
+- **Raccourci calculatrice** : l'appli répond au raccourci « calculatrice » d'Android.
+- **Mises à jour** : releases GitHub `calc-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
