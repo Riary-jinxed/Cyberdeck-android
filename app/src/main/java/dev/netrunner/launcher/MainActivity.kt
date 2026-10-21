@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
             "settings" -> LauncherViewModel.Panel.Settings
             "messages" -> LauncherViewModel.Panel.Messages
             "kit" -> LauncherViewModel.Panel.Kit
+            "aska" -> LauncherViewModel.Panel.Aska
             else -> return false
         }
         intent.removeExtra(EXTRA_PANEL)

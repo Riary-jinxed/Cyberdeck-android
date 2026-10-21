@@ -215,6 +215,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Gestures.Action.Quick -> viewModel.openPanel(Panel.Quick)
             Gestures.Action.Terminal -> viewModel.openPanel(Panel.Terminal)
             Gestures.Action.Claude -> ClaudeApp.open(context)
+            Gestures.Action.Aska -> viewModel.openPanel(Panel.Aska)
             Gestures.Action.Messages -> viewModel.openPanel(Panel.Messages)
             Gestures.Action.Feed -> viewModel.openPanel(Panel.Feed)
             Gestures.Action.Dialer -> context.startActivity(Intent(context, DialerActivity::class.java))
@@ -295,15 +296,26 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 DefaultHomeBanner(onClick = makeDefault)
             }
             Spacer(Modifier.height(28.dp))
-            // Double tap on the clock: ghost mode on or off.
-            Box(
-                Modifier.pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = { runAction(Gestures.actionFor(Gestures.Gesture.DoubleTap)) },
-                        onLongPress = { runAction(Gestures.actionFor(Gestures.Gesture.LongPress)) },
-                    )
-                }
-            ) { ClockBlock() }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Double tap on the clock: ghost mode on or off.
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = { runAction(Gestures.actionFor(Gestures.Gesture.DoubleTap)) },
+                                onLongPress = { runAction(Gestures.actionFor(Gestures.Gesture.LongPress)) },
+                            )
+                        }
+                ) { Column { ClockBlock() } }
+                // As//ka watches over the deck: touch her sigil to talk.
+                AskaSigil(
+                    Modifier
+                        .size(64.dp)
+                        .clickable { viewModel.openPanel(Panel.Aska) },
+                    animated = panel == Panel.None && !drawerOpen,
+                )
+            }
             Spacer(Modifier.height(20.dp))
             LiveFeed()
             update?.let { release ->
@@ -466,6 +478,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             WifiScreen(onClose = { viewModel.openPanel(Panel.None) })
+        }
+
+        AnimatedVisibility(
+            visible = panel == Panel.Aska,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            AskaScreen(brain = viewModel.aska, onClose = { viewModel.openPanel(Panel.None) })
         }
 
         slots.filterIsInstance<QuickSlot.Dir>().firstOrNull { it.folder.id == openFolder }?.let { dir ->

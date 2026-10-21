@@ -5,6 +5,7 @@ import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.system.UiSound
 import dev.netrunner.launcher.terminal.Terminal
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
 
     /** Full-screen panel shown over the home HUD. */
-    enum class Panel { None, Terminal, Wifi, Feed, Quick, Settings, Messages, Kit }
+    enum class Panel { None, Terminal, Wifi, Feed, Quick, Settings, Messages, Kit, Aska }
 
     /** The boot log plays once per launcher process, not on every return home. */
     var booted = false
@@ -47,6 +48,9 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         launch = ::requestLaunch,
         openPanel = ::openPanel,
     )
+
+    /** As//ka, the local AI. Her model is only loaded while her panel is open. */
+    val aska = AskaBrain(app, viewModelScope)
 
     // Keeps the app list in sync when something is installed, updated or removed.
     private val packageCallback = object : LauncherApps.Callback() {
@@ -154,5 +158,6 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         repo.unregisterCallback(packageCallback)
+        aska.release()
     }
 }
