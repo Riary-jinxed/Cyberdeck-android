@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Icons drawn in the game's HUD style: straight cuts, chamfered corners, no rounded shapes. */
-enum class HudGlyph { Phone, Message, Wifi }
+enum class HudGlyph { Phone, Message, Wifi, Kit }
 
 @Composable
 fun HudIcon(glyph: HudGlyph, color: Color, modifier: Modifier = Modifier, size: Dp = 18.dp) {
@@ -26,6 +26,7 @@ fun HudIcon(glyph: HudGlyph, color: Color, modifier: Modifier = Modifier, size: 
             HudGlyph.Phone -> phone(u, color)
             HudGlyph.Message -> message(u, color)
             HudGlyph.Wifi -> wifi(u, color)
+            HudGlyph.Kit -> kit(u, color)
         }
     }
 }
@@ -63,6 +64,14 @@ private fun DrawScope.message(u: Float, color: Color) {
     line(u, color, 2f, 2f to 5f, 12f to 12.5f, 17f to 8.75f)
     drawPath(poly(u, 19f to 2f, 23f to 2f, 23f to 6f), color)
     line(u, color, 1.4f, 5f to 16f, 9f to 16f)
+}
+
+/** Field case: chamfered box, handle and a latch block. */
+private fun DrawScope.kit(u: Float, color: Color) {
+    line(u, color, 2f, 2f to 9f, 5f to 6f, 19f to 6f, 22f to 9f, 22f to 21f, 2f to 21f, 2f to 9f)
+    line(u, color, 2f, 8f to 6f, 8f to 3f, 16f to 3f, 16f to 6f)
+    line(u, color, 1.6f, 2f to 13f, 22f to 13f)
+    drawRect(color, Offset(10f * u, 11f * u), androidx.compose.ui.geometry.Size(4f * u, 4f * u))
 }
 
 /** Signal as three chevrons narrowing to a square node. */

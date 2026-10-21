@@ -43,6 +43,7 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Spectre audio** : barres de visualiseur dans le widget musique (vrai son avec l'accès micro, animation sinon).
 - **Sauvegarde** : export et restauration de toute la config dans un fichier JSON.
 - **Mise à jour intégrée** : Netrunner lit la dernière release GitHub, télécharge l'APK et lance l'installation. Chaque push sur `main` publie une release. Pour que les mises à jour s'installent par-dessus, ajoute les secrets `KEYSTORE_BASE64` et `KEYSTORE_PASSWORD` (clé de signature stable) au dépôt.
+- **Kit de terrain** (bouton KIT ou `kit`) : inventaire matériel avec scan des codes-barres et QR (fiche avec numéro de série, emplacement, état, notes, recherche et export CSV), checklists d'intervention à partir de modèles personnalisables, et calculateur de sous-réseaux (aussi `subnet 192.168.1.0/24 /26`). Tout reste en local sur le téléphone.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
 - **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.

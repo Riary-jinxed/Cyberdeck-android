@@ -34,6 +34,8 @@ object ConfigBackup {
             }
             root.put(name, values)
         }
+        // Field kit data (inventory and checklists) travels with the config.
+        java.io.File(context.filesDir, "kit.json").takeIf { it.exists() }?.let { root.put("kit", JSONObject(it.readText())) }
         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(root.toString(2).toByteArray()) } ?: error("no stream")
     }.isSuccess
 
@@ -57,6 +59,7 @@ object ConfigBackup {
             }
             edit.commit()
         }
+        root.optJSONObject("kit")?.let { java.io.File(context.filesDir, "kit.json").writeText(it.toString()) }
     }.isSuccess
 
     /** Restarts the launcher so every screen reads the restored settings (and the boot plays again). */
