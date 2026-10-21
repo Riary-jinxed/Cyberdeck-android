@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,7 @@ import dev.netrunner.deck.SectionTitle
 import dev.netrunner.deck.hudFieldColors
 import dev.netrunner.deck.hudPanel
 import dev.netrunner.files.data.FileOps
+import dev.netrunner.files.data.Zip
 import dev.netrunner.files.system.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -52,6 +54,8 @@ fun SearchTab(explorer: Explorer, onReveal: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf(emptyList<File>()) }
     var running by remember { mutableStateOf(false) }
+    var preview by remember { mutableStateOf<Pair<File, PreviewType>?>(null) }
+    val scope = rememberCoroutineScope()
     val root = explorer.dir
 
     LaunchedEffect(query, root, explorer.showHidden, explorer.version) {
@@ -106,7 +110,7 @@ fun SearchTab(explorer: Explorer, onReveal: () -> Unit) {
                 Row(
                     Modifier.fillMaxWidth().combinedClickable(
                         // Folders open in the explorer; files open directly, long press shows where they are.
-                        onClick = { if (f.isDirectory) { explorer.go(f); onReveal() } else Storage.open(context, f) },
+                        onClick = { if (f.isDirectory) { explorer.go(f); onReveal() } else previewType(f)?.let { preview = f to it } ?: Storage.open(context, f) },
                         onLongClick = { f.parentFile?.let { explorer.go(it); explorer.selection = setOf(f); onReveal() } },
                     ).padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -124,6 +128,12 @@ fun SearchTab(explorer: Explorer, onReveal: () -> Unit) {
             }
         }
         Text("Appui long : afficher dans l'explorateur.", color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+    preview?.let { (file, type) ->
+        PreviewDialog(file, type, onDismiss = { preview = null }) {
+            preview = null
+            scope.fileOp(context, explorer, "Archive extraite") { Zip.extract(file, file.parentFile!!) }
+        }
     }
 }
 
