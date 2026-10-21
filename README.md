@@ -72,6 +72,7 @@ Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK 
 - **Scientifique** : priorités, parenthèses (fermées toutes seules), trigonométrie en degrés ou radians et fonctions inverses (touche 2ND), ln, log, eˣ, 10ˣ, puissances, racines, factorielle, pourcentage, mod, π, e, notation EE, ANS et multiplication implicite (`2π`, `3(4+1)`). Résultat en direct pendant la saisie, historique des 50 derniers calculs, appui long pour copier.
 - **Programmeur** : entiers 8, 16, 32 ou 64 bits, signés ou non, saisie en HEX, DEC, OCT ou BIN avec les quatre bases affichées en même temps, AND, OR, XOR, NOT, NAND, NOR, décalages, MOD, et grille de bits à toucher pour les inverser.
 - **Réseau** : calcul de sous-réseau IPv4 (masque, wildcard, réseau, broadcast, plage d'hôtes, type d'adresse), vue binaire, découpage en sous-réseaux et préfixe pour un nombre d'hôtes. Tout est calculé sur le téléphone.
+- **Conversion** : longueur, masse, température, volume, surface, vitesse, données, temps, énergie, pression et angle, plus les devises (taux de la BCE, gardés hors connexion). La valeur s'affiche dans toutes les unités à la fois et peut être un calcul (`12*3`).
 - **Raccourci calculatrice** : l'appli répond au raccourci « calculatrice » d'Android.
 - **Mises à jour** : releases GitHub `calc-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 

@@ -30,7 +30,9 @@ fun SettingsTab() {
             "• Appui long sur un résultat ou une base pour le copier.\n" +
                 "• Appui long sur ⌫ pour tout effacer.\n" +
                 "• 2ND donne les fonctions inverses, eˣ, 10ˣ, x³, ∛, EE, |x| et mod.\n" +
-                "• En PROG, touche un bit pour l'inverser, et une base pour y saisir.",
+                "• En PROG, touche un bit pour l'inverser, et une base pour y saisir.\n" +
+                "• En CONVERT, touche une ligne pour en faire l'unité de départ ; la valeur peut être un calcul (12*3).\n" +
+                "• Les taux de change viennent de la BCE et restent disponibles hors connexion.",
             color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(vertical = 6.dp),
         )
         Spacer(Modifier.height(18.dp))
