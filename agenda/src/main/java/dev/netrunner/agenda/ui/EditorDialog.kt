@@ -244,3 +244,38 @@ fun EditorDialog(state: AgendaState, contract: Contract, onClose: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun ReadOnly(c: Contract, zone: ZoneId) {
+    Column(Modifier.fillMaxWidth().hudPanel(borderColor = contractColor(c).copy(alpha = 0.6f)).padding(14.dp)) {
+        Text(c.title, color = Cp.Text, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text(
+            ContractTime.longDate(ContractTime.startDate(c, zone)) + " · " + ContractTime.timeRange(c, zone),
+            color = Cp.Yellow, fontFamily = MonoFont, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp),
+        )
+        if (c.calendarName.isNotBlank()) Text(c.calendarName, color = Cp.Dim, fontFamily = HudFont, fontSize = 14.sp)
+        c.location?.let { Text("⌖ $it", color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)) }
+        c.description?.let { Text(it, color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)) }
+        if (c.source == Contract.Source.ASKA && c.done) Text("Fait.", color = Cp.Cyan, fontFamily = HudFont, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun Field(label: String, value: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(modifier) {
+        Text(label.ifEmpty { " " }, color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
+        HudButton(value, color = Cp.Cyan, size = 17.sp, modifier = Modifier.fillMaxWidth(), onClick = onClick)
+    }
+}
+
+@Composable
+private fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        labels.forEachIndexed { i, label ->
+            HudButton(label, color = if (i == selected) Cp.Yellow else Cp.Dim, filled = i == selected, size = 13.sp) { onSelect(i) }
+        }
+    }
+}
