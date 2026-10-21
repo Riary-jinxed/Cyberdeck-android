@@ -86,6 +86,17 @@ Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`,
 - Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
 - **Mises à jour** : releases GitHub `files-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
+## Agenda Netrunner (appli à part)
+
+Agenda dans le module `agenda/` (package `dev.netrunner.agenda`, même clé de signature), branché sur le calendrier d'Android : tout reste synchronisé avec Google Agenda.
+
+- **Contrats** : les 60 prochains jours, jour par jour, en cartes de mission (horaire, agenda d'origine, lieu, compte à rebours « DANS 2 H », « EN COURS »), aux couleurs de chaque agenda.
+- **Mois** : grille du mois avec un point par contrat, et la liste du jour choisi.
+- **Signer un contrat** : titre, journée entière ou horaires, lieu, briefing, rappel (5 min à 1 jour) et agenda de destination. Modification et suppression, bouton « Naviguer » vers Maps. Les événements récurrents s'affichent en lecture seule.
+- **Rappels d'As//ka** : affichés en rose parmi les contrats, lus depuis le launcher (permission de signature `dev.netrunner.permission.READ_REMINDERS`).
+- **Compatible** : ouvre les contrats du HUD du launcher, et répond aux intents Android standard de création d'événement (`ACTION_INSERT`), donc As//ka ou une autre appli peuvent pré-remplir un contrat.
+- **Mises à jour** : releases GitHub `agenda-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
