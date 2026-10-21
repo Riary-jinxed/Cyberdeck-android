@@ -7,7 +7,9 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Build
 import android.provider.MediaStore
+import android.widget.MediaController
 import android.widget.Toast
+import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -33,6 +35,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.netrunner.deck.Cp
@@ -82,7 +86,9 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
     var chrome by remember { mutableStateOf(true) }
     var info by remember { mutableStateOf(false) }
     var zoomed by remember { mutableStateOf(false) }
+    var playing by remember { mutableStateOf(false) }
     val current = items.getOrNull(pager.currentPage)
+    LaunchedEffect(pager.currentPage) { playing = false }
 
     val deleteRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
@@ -110,7 +116,11 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             BackHandler(enabled = info) { info = false }
             HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !zoomed, key = { items[it].id.let { id -> if (id >= 0) id else it.toLong() } }) { page ->
-                Page(items[page], holo && !items[page].isVideo, active = page == pager.currentPage, onZoom = { zoomed = it }, onTap = { chrome = !chrome })
+                val active = page == pager.currentPage
+                Page(
+                    items[page], holo && !items[page].isVideo, active = active, playing = active && playing,
+                    onPlay = { playing = it }, onZoom = { zoomed = it }, onTap = { chrome = !chrome },
+                )
             }
 
             if (chrome && current != null) {
@@ -132,7 +142,8 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     if (current.isVideo) {
-                        Chip("▶ LIRE", Cp.Yellow) { openExternal(context, current, Intent.ACTION_VIEW) }
+                        Chip(if (playing) "■ STOP" else "▶ LIRE", Cp.Yellow) { playing = !playing }
+                        Chip("OUVRIR AVEC", Cp.Cyan) { openExternal(context, current, Intent.ACTION_VIEW) }
                     } else {
                         Chip(if (holo) "HOLO ✓" else "HOLO", if (holo) Cp.Yellow else Cp.Cyan) { holo = !holo }
                     }
@@ -180,7 +191,10 @@ fun Viewer(state: GalleryState, items: List<MediaRepo.Media>, start: Int, onClos
 }
 
 @Composable
-private fun Page(media: MediaRepo.Media, holo: Boolean, active: Boolean, onZoom: (Boolean) -> Unit, onTap: () -> Unit) {
+private fun Page(
+    media: MediaRepo.Media, holo: Boolean, active: Boolean, playing: Boolean,
+    onPlay: (Boolean) -> Unit, onZoom: (Boolean) -> Unit, onTap: () -> Unit,
+) {
     val context = LocalContext.current
     val maxSide = LocalConfiguration.current.let { maxOf(it.screenWidthDp, it.screenHeightDp) } * 3
     // Thumbnail first, then the full picture.
@@ -200,9 +214,9 @@ private fun Page(media: MediaRepo.Media, holo: Boolean, active: Boolean, onZoom:
     val image = full ?: thumb
     Box(
         Modifier.fillMaxSize()
-            .pointerInput(media.id) {
+            .pointerInput(media.id, playing) {
                 detectTapGestures(
-                    onTap = { onTap() },
+                    onTap = { if (media.isVideo && !playing) onPlay(true) else onTap() },
                     onDoubleTap = {
                         if (media.isVideo) return@detectTapGestures
                         scale = if (scale > 1f) 1f else 2.5f
@@ -222,8 +236,36 @@ private fun Page(media: MediaRepo.Media, holo: Boolean, active: Boolean, onZoom:
                     .then(if (holo) Modifier.scanlines(Color.Black.copy(alpha = 0.28f), 3.dp).vignette() else Modifier),
             )
         }
-        if (media.isVideo) Text("▶", color = Cp.Yellow, fontSize = 64.sp)
+        if (media.isVideo && playing) {
+            VideoPlayer(media, onEnd = { onPlay(false) })
+        } else if (media.isVideo) {
+            Text("▶", color = Cp.Yellow, fontSize = 64.sp)
+        }
     }
+}
+
+/** Plays a video in place with the system's VideoView and its play/seek controls. */
+@Composable
+private fun VideoPlayer(media: MediaRepo.Media, onEnd: () -> Unit) {
+    AndroidView(
+        factory = { ctx ->
+            VideoView(ctx).apply {
+                val controls = MediaController(ctx)
+                controls.setAnchorView(this)
+                setMediaController(controls)
+                setOnPreparedListener { start(); controls.show(2500) }
+                setOnCompletionListener { onEnd() }
+                setOnErrorListener { _, _, _ ->
+                    Toast.makeText(ctx, "Lecture impossible, essaie « Ouvrir avec »", Toast.LENGTH_SHORT).show()
+                    onEnd()
+                    true
+                }
+                setVideoURI(media.uri)
+            }
+        },
+        onRelease = { it.stopPlayback() },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 private fun Modifier.vignette(): Modifier = drawWithContent {
@@ -240,12 +282,15 @@ private fun InfoLine(label: String, value: String) {
 }
 
 private fun openExternal(context: android.content.Context, m: MediaRepo.Media, action: String) {
-    val intent = Intent(action).setDataAndType(m.uri, m.mime)
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    // Read access only: the gallery doesn't own other apps' media, and passing on a write
+    // grant it doesn't hold makes startActivity throw a SecurityException.
+    val intent = Intent(action).setDataAndType(m.uri, m.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     try {
         context.startActivity(Intent.createChooser(intent, m.name))
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(context, "Aucune appli disponible", Toast.LENGTH_SHORT).show()
+    } catch (_: SecurityException) {
+        Toast.makeText(context, "Accès refusé à ce fichier", Toast.LENGTH_SHORT).show()
     }
 }
 
