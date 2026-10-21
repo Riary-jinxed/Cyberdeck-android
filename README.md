@@ -10,12 +10,14 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 - **Lancement en ligne de commande** : chaque appli s'ouvre après une courte séquence « jack-in » façon terminal.
 - **Terminal intégré** : `scan` (appareils du réseau Wi-Fi), `ports`, `ping`, `ip`, `sysinfo`, `battery`, `apps`, `open <appli>`.
 - **Scanner Wi-Fi** : toutes les bornes à portée (SSID, BSSID, dBm, canal, bande, sécurité, norme Wi-Fi, distance estimée) et un mode « traque » avec radar, tendance et bip type compteur Geiger pour retrouver une borne physiquement.
-- **GLITCH, l'IA du cyberdeck** : glisser vers la gauche ouvre un chat avec Claude (Claude Opus 5.5 via l'API Anthropic, clé API à fournir), avec une mascotte animée qui réagit pendant qu'elle réfléchit et répond.
+- **Claude** : glisser vers la gauche (ou toucher la mascotte GLITCH) ouvre l'appli Claude officielle, connectée à ton compte. Commande terminal : `claude`.
+- **Holo-liaison (appels)** : Netrunner peut devenir l'appli Téléphone. Appels entrants et sortants façon holo-appel du jeu (portrait hologramme, décrocher/refuser, micro, haut-parleur, clavier DTMF, mise en attente, raccrocher), écran d'appel au-dessus de l'écran verrouillé, clavier, journal et contacts.
+- **Clavier Netrunner** : clavier AZERTY néon (majuscules, verrouillage, chiffres et symboles, accents par appui long, effacement continu, flèches de curseur). À activer dans Paramètres › Clavier, ou avec la commande `keyboard`.
 - **Flux entrant** : notifications (SMS, WhatsApp, mails, appels manqués) dans le HUD, avec ouverture, suppression et réponse rapide intégrée.
 - **Widget musique** : Spotify (ou tout autre lecteur) avec pochette, titre, progression, lecture/pause/suivant.
 - **Contrôle du deck** : glisser vers le bas depuis le haut à droite ouvre un panneau Wi-Fi, données, Bluetooth, lampe, sonnerie, Ne pas déranger, rotation et volumes.
 - **Écran d'accueil par défaut** : un bandeau rouge s'affiche tant que Netrunner n'est pas l'écran d'accueil, un appui ouvre le bon réglage.
-- **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications.
+- **Gestes** : glisser vers le haut ouvre le tiroir, vers le bas ouvre les notifications, vers la droite ouvre le terminal, vers la gauche ouvre Claude.
 - Mise à jour automatique de la liste quand tu installes ou supprimes une appli.
 
 ## Installer sur le téléphone
@@ -23,6 +25,8 @@ Un écran d'accueil Android inspiré de l'interface de Cyberpunk 2077 : jaune n�
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
 2. Copie l'APK sur le téléphone et ouvre-le (autorise l'installation depuis le gestionnaire de fichiers).
 3. Appuie sur le bouton Accueil, ou va dans Paramètres › Applications › Applications par défaut › **Écran d'accueil**, et choisis **Netrunner**.
+
+Pour les appels : Dialer (bouton « APPELS ») › « Définir Netrunner comme appli Téléphone ». Pour revenir à l'appli Xiaomi : Paramètres › Applications › Applications par défaut › **Téléphone**.
 
 Sur HyperOS, les gestes plein écran fonctionnent avec un launcher tiers, mais l'animation des applis récentes est un peu plus simple qu'avec le launcher Xiaomi. Pour revenir en arrière, rechoisis « Écran d'accueil système » au même endroit.
 
@@ -53,9 +57,11 @@ Avec Android Studio (Ladybug ou plus récent) : ouvre le dossier, laisse Gradle 
 | `system/HomeRole.kt` | Demande à devenir l'écran d'accueil |
 | `wifi/WifiScanner.kt` | Scan des bornes Wi-Fi, estimation de distance |
 | `ui/WifiScreen.kt` | Liste des bornes et mode traque |
-| `chat/ChatSession.kt` | Conversation avec Claude (SDK Java Anthropic, streaming) |
-| `ui/ChatScreen.kt` | Interface de chat GLITCH |
+| `system/ClaudeApp.kt` | Ouvre l'appli Claude |
 | `ui/Mascot.kt` | Mascotte GLITCH animée |
+| `call/` | Service d'appel (InCallService), notifications d'appel, contacts, journal |
+| `ui/HoloCallScreen.kt`, `ui/DialerScreen.kt` | Écran d'holo-appel et clavier téléphonique |
+| `keyboard/` | Clavier Netrunner (InputMethodService + Compose) |
 | `notify/` | Service d'écoute des notifications et réponses rapides |
 | `media/MediaWatcher.kt` | Suivi et contrôle du lecteur audio actif |
 | `ui/FeedScreen.kt`, `ui/MediaWidget.kt`, `ui/QuickPanel.kt` | Flux, widget musique, réglages rapides |

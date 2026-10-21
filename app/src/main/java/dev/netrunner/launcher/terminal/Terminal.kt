@@ -1,6 +1,10 @@
 package dev.netrunner.launcher.terminal
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -8,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.netrunner.launcher.AppEntry
 import dev.netrunner.launcher.LauncherViewModel.Panel
+import dev.netrunner.launcher.call.DialerActivity
+import dev.netrunner.launcher.system.ClaudeApp
 import dev.netrunner.launcher.system.SystemInfo
 import dev.netrunner.launcher.system.toGb
 import kotlinx.coroutines.CancellationException
@@ -77,7 +83,9 @@ class Terminal(
             "wifi", "wardrive" -> openPanel(Panel.Wifi)
             "notifs", "feed", "messages" -> openPanel(Panel.Feed)
             "control", "settings", "cc" -> openPanel(Panel.Quick)
-            "glitch", "chat", "ai", "ia" -> openPanel(Panel.Chat)
+            "claude", "glitch", "chat", "ai", "ia" -> openClaude()
+            "call", "dial", "tel" -> dial(args.joinToString(""))
+            "keyboard", "kb", "clavier" -> keyboard()
             "stop" -> stop()
             "whoami" -> out(prompt.removeSuffix(":~$"), Tone.Ok)
             "date" -> out(LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss", Locale.getDefault())))
@@ -128,6 +136,33 @@ class Terminal(
         }
     }
 
+    private fun openClaude() {
+        if (ClaudeApp.open(context)) {
+            out("[jack-in] liaison avec Claude...", Tone.Ok)
+        } else {
+            out("appli Claude introuvable : ouverture du Play Store", Tone.Warn)
+        }
+    }
+
+    private fun dial(number: String) {
+        val intent = Intent(context, DialerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (number.isNotBlank()) intent.data = Uri.fromParts("tel", number, null)
+        context.startActivity(intent)
+        out("[holo] ouverture de la liaison ${number.ifBlank { "" }}".trimEnd(), Tone.Ok)
+    }
+
+    private fun keyboard() {
+        val imm = context.getSystemService(InputMethodManager::class.java)
+        val enabled = imm.enabledInputMethodList.any { it.packageName == context.packageName }
+        if (enabled) {
+            imm.showInputMethodPicker()
+            out("choisis « Clavier Netrunner » dans la liste", Tone.Ok)
+        } else {
+            context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            out("active « Clavier Netrunner », puis relance « keyboard »", Tone.Warn)
+        }
+    }
+
     private fun help() {
         listOf(
             "scan            balaye ton réseau local et liste les appareils",
@@ -141,7 +176,9 @@ class Terminal(
             "wifi            scanner Wi-Fi et traque de borne",
             "notifs          flux des notifications (SMS, WhatsApp, mails)",
             "control         panneau de réglages rapides",
-            "glitch          parle à GLITCH, l'IA du cyberdeck",
+            "call [numéro]   ouvre la holo-liaison (appels)",
+            "keyboard        active / choisit le clavier Netrunner",
+            "claude          ouvre l'appli Claude (ton compte)",
             "stop            interrompt la commande en cours",
             "clear / exit    efface l'écran / ferme le terminal",
         ).forEach { out(it) }

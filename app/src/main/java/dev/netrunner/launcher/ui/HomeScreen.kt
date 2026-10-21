@@ -77,8 +77,10 @@ import dev.netrunner.launcher.media.MediaWatcher
 import dev.netrunner.launcher.notify.NotificationHub
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import dev.netrunner.launcher.call.DialerActivity
 import dev.netrunner.launcher.system.BatteryState
 import dev.netrunner.launcher.system.HomeRole
+import dev.netrunner.launcher.system.ClaudeApp
 import dev.netrunner.launcher.system.SystemInfo
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -178,12 +180,17 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         },
                     ) { _, dragAmount -> total += dragAmount }
                 }
-                // Swipe left: GLITCH slides in from the right edge.
+                // Swipe left opens the Claude app, swipe right slides the terminal in.
                 .pointerInput(Unit) {
                     var total = 0f
                     detectHorizontalDragGestures(
                         onDragStart = { total = 0f },
-                        onDragEnd = { if (total < -120f) viewModel.openPanel(Panel.Chat) },
+                        onDragEnd = {
+                            when {
+                                total < -120f -> ClaudeApp.open(context)
+                                total > 120f -> viewModel.openPanel(Panel.Terminal)
+                            }
+                        },
                     ) { _, dragAmount -> total += dragAmount }
                 }
         ) {
@@ -197,15 +204,15 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Mascot(
-                    mood = viewModel.chat.mood,
+                    mood = MascotMood.Idle,
                     size = 64.dp,
-                    modifier = Modifier.clickable { viewModel.openPanel(Panel.Chat) },
+                    modifier = Modifier.clickable { ClaudeApp.open(context) },
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f)) { LiveFeed() }
             }
             Text(
-                "◄ GLISSE À GAUCHE POUR PARLER À GLITCH",
+                "◄ CLAUDE · GLISSE · TERMINAL ►",
                 color = Cp.Dim,
                 fontFamily = HudFont,
                 fontSize = 10.sp,
@@ -240,8 +247,10 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HudButton("[ SCAN WI-FI ] ((•))", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
-                HudButton("[ GLITCH ] ◄", Cp.Red, Modifier.weight(1f)) { viewModel.openPanel(Panel.Chat) }
+                HudButton("[ WI-FI ] ((•))", Cp.Cyan, Modifier.weight(1f)) { viewModel.openPanel(Panel.Wifi) }
+                HudButton("[ APPELS ] ☎", Cp.Red, Modifier.weight(1f)) {
+                    context.startActivity(Intent(context, DialerActivity::class.java))
+                }
             }
         }
 
@@ -265,8 +274,8 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Terminal,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
+            enter = slideInHorizontally { -it } + fadeIn(),
+            exit = slideOutHorizontally { -it } + fadeOut(),
         ) {
             TerminalScreen(terminal = viewModel.terminal, onClose = { viewModel.openPanel(Panel.None) })
         }
@@ -299,14 +308,6 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             WifiScreen(onClose = { viewModel.openPanel(Panel.None) })
-        }
-
-        AnimatedVisibility(
-            visible = panel == Panel.Chat,
-            enter = slideInHorizontally { it } + fadeIn(),
-            exit = slideOutHorizontally { it } + fadeOut(),
-        ) {
-            ChatScreen(session = viewModel.chat, onClose = { viewModel.openPanel(Panel.None) })
         }
 
         launching?.let { app ->

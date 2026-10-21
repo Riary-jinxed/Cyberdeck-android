@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Netrunner</string>
+    <string name="keyboard_name">Clavier Netrunner</string>
+    <string name="keyboard_subtype">Français (AZERTY Netrunner)</string>
 </resources>

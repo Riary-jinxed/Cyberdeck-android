@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.terminal.Terminal
 import dev.netrunner.launcher.terminal.Tone
 
-private val QuickCommands = listOf("help", "scan", "wifi", "glitch", "ports", "ping 1.1.1.1", "ip", "sysinfo", "battery", "apps", "stop", "clear")
+private val QuickCommands = listOf("help", "scan", "wifi", "claude", "call", "keyboard", "ports", "ping 1.1.1.1", "ip", "sysinfo", "battery", "apps", "stop", "clear")
 
 @Composable
 fun TerminalScreen(terminal: Terminal, onClose: () -> Unit) {

@@ -5,7 +5,6 @@ import android.content.pm.LauncherApps
 import android.os.UserHandle
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import dev.netrunner.launcher.chat.ChatSession
 import dev.netrunner.launcher.terminal.Terminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +28,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     val launching: StateFlow<AppEntry?> = _launching.asStateFlow()
 
     /** Full-screen panel shown over the home HUD. */
-    enum class Panel { None, Terminal, Wifi, Chat, Feed, Quick }
+    enum class Panel { None, Terminal, Wifi, Feed, Quick }
 
     private val _panel = MutableStateFlow(Panel.None)
     val panel: StateFlow<Panel> = _panel.asStateFlow()
@@ -41,8 +40,6 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
         launch = ::requestLaunch,
         openPanel = { _panel.value = it },
     )
-
-    val chat = ChatSession(app, viewModelScope)
 
     // Keeps the app list in sync when something is installed, updated or removed.
     private val packageCallback = object : LauncherApps.Callback() {
