@@ -114,6 +114,7 @@ class Terminal(
             "calc", "=" -> calc(args.joinToString(" "))
             "subnet", "cidr" -> subnet(args)
             "kit", "inventaire", "inv", "checklist" -> openPanel(Panel.Kit)
+            "stats", "usage" -> openPanel(Panel.Stats)
             "qr" -> qrCode(args.joinToString(" "))
             "speedtest", "speed" -> runJob { speedtest() }
             "ghost", "furtif" -> ghost(args.firstOrNull())
@@ -450,6 +451,7 @@ class Terminal(
             "calc <expr>     calculatrice (ex : calc (12+8)*1,2^2)",
             "subnet <ip/n> [/m]  calculateur de sous-réseaux (ex : subnet 192.168.1.0/24 /26)",
             "kit             inventaire, checklists et sous-réseaux",
+            "stats           temps d'écran, applis, batterie par jour",
             "qr <texte>      affiche un QR code (lien, texte, Wi-Fi…)",
             "speedtest       latence, débit descendant et montant",
             "aska            parle à As//ka, l'IA locale (alarmes aussi)",

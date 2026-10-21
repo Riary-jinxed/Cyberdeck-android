@@ -43,6 +43,13 @@ object Diagnostics {
                 { open(it, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
             ),
             Check(
+                "Données d'utilisation",
+                "Écran STATS : temps d'écran et applis les plus utilisées",
+                UsageReport.granted(context),
+                { UsageReport.openAccessSettings(it) },
+                optional = true,
+            ),
+            Check(
                 "Appli Téléphone",
                 "Holo-appels entrants et sortants",
                 roles?.isRoleHeld(RoleManager.ROLE_DIALER) == true,
