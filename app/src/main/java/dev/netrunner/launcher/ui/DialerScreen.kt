@@ -177,7 +177,11 @@ private fun KeypadTab(number: String, onNumber: (String) -> Unit, onCall: () -> 
                 .padding(vertical = 18.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("☎ OUVRIR LA LIAISON", color = Cp.Cyan, fontFamily = HudFont, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HudIcon(HudGlyph.Phone, Cp.Cyan, size = 20.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("OUVRIR LA LIAISON", color = Cp.Cyan, fontFamily = HudFont, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }
@@ -270,7 +274,7 @@ private fun ListRow(icon: String, iconColor: androidx.compose.ui.graphics.Color,
             Text(title, color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
         }
-        Text("☎", color = Cp.Cyan, fontSize = 18.sp)
+        HudIcon(HudGlyph.Phone, Cp.Cyan, size = 18.dp)
     }
 }
 
