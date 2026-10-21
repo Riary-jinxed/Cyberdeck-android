@@ -83,17 +83,17 @@ fun AskaChibi(brain: AskaBrain, modifier: Modifier = Modifier, animated: Boolean
     }
 
     val clock = if (animated) rememberSlowClock(fps = 12) else remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    val t by clock
-    val seconds = t / 1000f
     val lift = with(LocalDensity.current) { 3.dp.toPx() }
-    // Livelier while she talks, a slow breath otherwise.
-    val speed = if (mood == AskaMood.Talking) 7f else 1.8f
+    val talking = mood == AskaMood.Talking
     Image(
         painterResource(mood.drawable),
         contentDescription = "As//ka",
+        // The clock is read while drawing only: each tick redraws her, nothing is recomposed.
         modifier = modifier.graphicsLayer {
-            translationY = -lift * ((sin(seconds * speed) + 1f) / 2f)
-            if (mood == AskaMood.Talking) {
+            val seconds = clock.value / 1000f
+            // Livelier while she talks, a slow breath otherwise.
+            translationY = -lift * ((sin(seconds * if (talking) 7f else 1.8f) + 1f) / 2f)
+            if (talking) {
                 val s = 1f + 0.02f * sin(seconds * 13f)
                 scaleX = s
                 scaleY = s

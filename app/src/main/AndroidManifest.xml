@@ -87,6 +87,12 @@
             </intent-filter>
         </activity>
 
+        <!-- As//ka's model, in its own process: running out of memory only stops her, not the launcher. -->
+        <service
+            android:name=".aska.AskaEngineService"
+            android:exported="false"
+            android:process=":aska" />
+
         <!-- Mirrors notifications into the HUD and unlocks media session control. -->
         <service
             android:name=".notify.NetrunnerNotificationService"

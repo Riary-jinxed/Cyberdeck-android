@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -61,10 +60,8 @@ private fun HoloPad(modifier: Modifier, strength: Float = 1f) {
 /** As//ka asleep while the deck is locked, with a few Z drifting up. */
 @Composable
 fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true) {
-    val t by presenceClock(animated, fps = 10)
-    val seconds = t / 1000f
-    // A slow breath.
-    val breath = 1f + 0.015f * sin(seconds * 1.6f)
+    // Read while drawing only: each tick redraws, nothing is recomposed or laid out again.
+    val clock = presenceClock(animated, fps = 10)
     val rise = with(LocalDensity.current) { 46.dp.toPx() }
     val drift = with(LocalDensity.current) { 18.dp.toPx() }
     Box(modifier) {
@@ -82,23 +79,27 @@ fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true) {
                 .fillMaxSize()
                 .padding(bottom = 6.dp)
                 .graphicsLayer {
-                    scaleY = breath
+                    // A slow breath.
+                    scaleY = 1f + 0.015f * sin(clock.value / 1000f * 1.6f)
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                 },
         )
         // Three Z, one after the other, growing as they float away.
         repeat(3) { i ->
-            val p = ((seconds * 0.35f) + i / 3f) % 1f
             Text(
                 "Z",
                 color = AskaColors.HotPink,
                 fontFamily = DisplayFont,
                 fontWeight = FontWeight.Black,
-                fontSize = (12 + 8 * p).sp,
+                fontSize = 20.sp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 30.dp, end = 10.dp)
                     .graphicsLayer {
+                        val seconds = clock.value / 1000f
+                        val p = ((seconds * 0.35f) + i / 3f) % 1f
+                        scaleX = 0.6f + 0.4f * p
+                        scaleY = scaleX
                         translationY = -rise * p
                         translationX = drift * p + 4f * sin(seconds * 2f + i)
                         alpha = if (animated) sin(PI.toFloat() * p) else if (i == 1) 0.8f else 0f
@@ -111,8 +112,7 @@ fun AskaSleeping(modifier: Modifier = Modifier, animated: Boolean = true) {
 /** As//ka just awake, stretching, bouncing a little. */
 @Composable
 fun AskaWaking(modifier: Modifier = Modifier, animated: Boolean = true) {
-    val t by presenceClock(animated, fps = 12)
-    val seconds = t / 1000f
+    val clock = presenceClock(animated, fps = 12)
     val lift = with(LocalDensity.current) { 4.dp.toPx() }
     Box(modifier) {
         HoloPad(
@@ -127,7 +127,7 @@ fun AskaWaking(modifier: Modifier = Modifier, animated: Boolean = true) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = 6.dp)
-                .graphicsLayer { translationY = -lift * ((sin(seconds * 3f) + 1f) / 2f) },
+                .graphicsLayer { translationY = -lift * ((sin(clock.value / 1000f * 3f) + 1f) / 2f) },
         )
     }
 }
@@ -225,11 +225,11 @@ fun Modifier.dragonScales(): Modifier = drawWithCache {
 /** Three pink dots taking turns, while she has not written anything yet. */
 @Composable
 fun TypingDots(animated: Boolean = true) {
-    val t by presenceClock(animated, fps = 8)
-    val step = (t / 300 % 3).toInt()
+    val clock = presenceClock(animated, fps = 8)
     Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(vertical = 4.dp)) {
         repeat(3) { i ->
             Canvas(Modifier.size(7.dp)) {
+                val step = (clock.value / 300 % 3).toInt()
                 drawCircle(AskaColors.Pink.copy(alpha = if (i == step) 1f else 0.3f))
             }
         }
