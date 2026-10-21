@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cut-corner frame, as on the launcher icon -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FCEE0A"
+        android:strokeWidth="3"
+        android:pathData="M36,34 L66,34 L74,42 L74,74 L42,74 L34,66 L34,36 Z" />
+    <!-- Prompt and text lines -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2.5"
+        android:pathData="M41,44 L46,48 L41,52 M50,52 L66,52 M41,59 L66,59 M41,66 L58,66" />
+    <!-- Cursor, in alert red -->
+    <path
+        android:fillColor="#FF003C"
+        android:pathData="M61,64 L66,64 L66,68 L61,68 Z" />
+</vector>
