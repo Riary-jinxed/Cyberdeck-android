@@ -1,6 +1,7 @@
 package dev.netrunner.weather.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,12 +19,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,7 +40,9 @@ import dev.netrunner.deck.SectionTitle
 import dev.netrunner.deck.hudPanel
 import dev.netrunner.deck.scanlines
 import dev.netrunner.weather.data.Forecast
+import dev.netrunner.weather.R
 import dev.netrunner.weather.data.Sky
+import dev.netrunner.weather.data.WeatherRepo
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -86,6 +92,9 @@ private fun Current(f: Forecast) {
     val c = f.current
     val (label, glyph) = Sky.describe(c.code, c.isDay)
     val today = f.days.firstOrNull()
+    val context = LocalContext.current
+    val aska = remember { WeatherRepo.showAska(context) }
+    val mood = Sky.mood(c)
     Column(Modifier.padding(top = 10.dp).fillMaxWidth().hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.6f), cut = 12.dp).scanlines(Cp.Background.copy(alpha = 0.2f), 3.dp).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(Sky.temp(c.temp), color = Cp.Yellow, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 72.sp)
@@ -94,6 +103,10 @@ private fun Current(f: Forecast) {
                 Text(label, color = Cp.Text, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 if (today != null) Text("${Sky.temp(today.min)} / ${Sky.temp(today.max)}", color = Cp.Dim, fontFamily = MonoFont, fontSize = 14.sp)
             }
+            if (aska) Image(painterResource(chibi(mood)), "As//ka", Modifier.height(120.dp))
+        }
+        if (aska) {
+            Text("AS//KA > ${Sky.quip(mood)}", color = Cp.Yellow.copy(alpha = 0.9f), fontFamily = MonoFont, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
         }
         if (today != null) {
             Text("> ${Sky.advice(today, c)}", color = Cp.Cyan, fontFamily = MonoFont, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
@@ -193,4 +206,18 @@ private fun Days(days: List<Forecast.Day>) {
             }
         }
     }
+}
+
+/** One pose of As//ka per [Sky.mood]. */
+private fun chibi(mood: String): Int = when (mood) {
+    "storm" -> R.drawable.aska_weather_storm
+    "snow" -> R.drawable.aska_weather_snow
+    "rain" -> R.drawable.aska_weather_rain
+    "fog" -> R.drawable.aska_weather_cloudy // until her fog pose is ready
+    "wind" -> R.drawable.aska_weather_cloudy // until her wind pose is ready
+    "heat" -> R.drawable.aska_weather_heat
+    "cold" -> R.drawable.aska_weather_cold
+    "night" -> R.drawable.aska_weather_night
+    "cloudy" -> R.drawable.aska_weather_cloudy
+    else -> R.drawable.aska_weather_sun
 }
