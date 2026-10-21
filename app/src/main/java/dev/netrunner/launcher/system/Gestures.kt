@@ -8,7 +8,7 @@ object Gestures {
     enum class Gesture(val label: String, val default: Action) {
         SwipeUp("Glisser vers le haut", Action.Drawer),
         SwipeDown("Glisser vers le bas", Action.Notifications),
-        SwipeLeft("Glisser vers la gauche", Action.Claude),
+        SwipeLeft("Glisser vers la gauche", Action.Hub),
         SwipeRight("Glisser vers la droite", Action.Terminal),
         DoubleTap("Double-tap sur l'horloge", Action.Ghost),
         LongPress("Appui long sur l'horloge", Action.Settings),
@@ -16,6 +16,7 @@ object Gestures {
 
     enum class Action(val label: String) {
         Drawer("Réseau (applis)"),
+        Hub("Applis du deck"),
         Notifications("Notifications système"),
         Quick("Contrôle du deck"),
         Terminal("Terminal"),
@@ -40,6 +41,13 @@ object Gestures {
         if (loaded && !force) return
         loaded = true
         val p = prefs(context)
+        // 1.3.1: swipe left moved from the Claude app to the deck hub (Claude is a shortcut there).
+        if (!p.getBoolean("gestures_hub", false)) {
+            p.edit().putBoolean("gestures_hub", true).apply()
+            if (p.getString("gesture_${Gesture.SwipeLeft.name}", null) == Action.Claude.name) {
+                p.edit().remove("gesture_${Gesture.SwipeLeft.name}").apply()
+            }
+        }
         Gesture.entries.forEach { g ->
             bindings[g] = Action.entries.firstOrNull { it.name == p.getString("gesture_${g.name}", null) } ?: g.default
         }

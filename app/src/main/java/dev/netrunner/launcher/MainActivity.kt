@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
             "aska" -> LauncherViewModel.Panel.Aska
             "nest" -> LauncherViewModel.Panel.Aska.also { dev.netrunner.launcher.aska.AskaPetCalls.openNest = true }
             "stats" -> LauncherViewModel.Panel.Stats
+            "hub" -> LauncherViewModel.Panel.Hub
             else -> return false
         }
         intent.removeExtra(EXTRA_PANEL)
