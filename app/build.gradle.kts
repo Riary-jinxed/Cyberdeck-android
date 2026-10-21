@@ -12,16 +12,29 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 13
+        versionName = "1.0.0"
+    }
+
+    // Stable key from the CI secrets, so each new APK installs over the previous one (and the
+    // built-in updater works). Without the secrets, builds fall back to the debug key.
+    val keystore = System.getenv("NETRUNNER_KEYSTORE")?.takeIf { file(it).exists() }
+    signingConfigs {
+        if (keystore != null) {
+            create("netrunner") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("NETRUNNER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("NETRUNNER_KEY_ALIAS") ?: "netrunner"
+                keyPassword = System.getenv("NETRUNNER_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Signed with the debug key so the APK installs directly; use your own key to publish.
-            signingConfig = signingConfigs.getByName("debug")
+            // Off: keeps stack traces readable while the launcher is still moving fast.
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName(if (keystore != null) "netrunner" else "debug")
         }
     }
 
@@ -35,6 +48,18 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "META-INF/INDEX.LIST",
+                "META-INF/versions/9/module-info.class",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -47,4 +72,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
+    implementation("com.google.zxing:core:3.5.3")
 }
