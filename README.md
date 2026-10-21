@@ -82,6 +82,8 @@ Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`,
 
 - **Explorateur façon terminal** : invite `runner@deck:~/Download$`, raccourcis (interne, Download, DCIM, images, documents, musique, vidéos, carte SD ou clé USB), dossiers dépliables sur place avec les traits de `tree`, couleurs par type de fichier, tri par nom, date, taille ou type, fichiers cachés au choix.
 - **Actions** : appui long pour sélectionner, puis copier, couper et coller, renommer, supprimer (avec confirmation), infos (taille d'un dossier, droits), nouveau dossier, ouverture avec l'appli adaptée.
+- **Aperçu intégré** des images, des fichiers texte et du contenu des zip, avec « Ouvrir avec » et partage.
+- **Zip** : compresser la sélection en archive, extraire une archive dans un nouveau dossier (les chemins qui sortent du dossier sont refusés).
 - **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
 - **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
 - Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
