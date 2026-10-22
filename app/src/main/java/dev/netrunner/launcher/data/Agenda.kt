@@ -15,11 +15,16 @@ object Agenda {
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
     fun upcoming(context: Context, hours: Int = 48, limit: Int = 4): List<Contract> {
-        if (!granted(context)) return emptyList()
         val now = System.currentTimeMillis()
+        return between(context, now, now + hours * 3_600_000L, limit)
+    }
+
+    /** Events overlapping [from, to], oldest first. */
+    fun between(context: Context, from: Long, to: Long, limit: Int, match: (Contract) -> Boolean = { true }): List<Contract> {
+        if (!granted(context)) return emptyList()
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
-            ContentUris.appendId(it, now)
-            ContentUris.appendId(it, now + hours * 3_600_000L)
+            ContentUris.appendId(it, from)
+            ContentUris.appendId(it, to)
         }.build()
         val out = mutableListOf<Contract>()
         runCatching {
@@ -37,8 +42,8 @@ object Agenda {
             )?.use { c ->
                 while (c.moveToNext() && out.size < limit) {
                     val end = c.getLong(3)
-                    if (end < now) continue
-                    out += Contract(
+                    if (end < from) continue
+                    val e = Contract(
                         id = c.getLong(0),
                         title = c.getString(1)?.ifBlank { null } ?: "Contrat sans nom",
                         begin = c.getLong(2),
@@ -46,6 +51,7 @@ object Agenda {
                         allDay = c.getInt(4) == 1,
                         location = c.getString(5)?.ifBlank { null },
                     )
+                    if (match(e)) out += e
                 }
             }
         }

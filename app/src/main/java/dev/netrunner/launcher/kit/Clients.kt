@@ -20,7 +20,53 @@ data class Client(
     val instructions: String,
     val notes: String,
     val updated: Long,
+    val contracts: List<ClientContract> = emptyList(),
+    val quotes: List<Quote> = emptyList(),
 )
+
+/** A contract with the client (maintenance, support hours…). Dates are local midnights, 0 when unset. */
+data class ClientContract(
+    val id: String,
+    val ref: String,
+    val kind: String,
+    val start: Long,
+    val end: Long,
+    val amount: String,
+    val notes: String,
+) {
+    enum class State { Upcoming, Active, Ending, Expired }
+
+    fun state(now: Long = System.currentTimeMillis()): State = when {
+        start > 0 && now < start -> State.Upcoming
+        end > 0 && now >= end + DAY -> State.Expired
+        end > 0 && end - now < 30 * DAY -> State.Ending
+        else -> State.Active
+    }
+
+    /** Whole days left before the end date, for "expire dans n j". */
+    fun daysLeft(now: Long = System.currentTimeMillis()): Long = if (end == 0L) -1 else ((end + DAY - now) / DAY).coerceAtLeast(0)
+}
+
+enum class QuoteState(val id: String, val label: String) {
+    Draft("draft", "Brouillon"), Sent("sent", "Envoyé"), Accepted("accepted", "Accepté"), Refused("refused", "Refusé");
+
+    companion object {
+        fun of(id: String?) = entries.firstOrNull { it.id == id } ?: Draft
+    }
+}
+
+/** A quote sent (or to send) to the client. */
+data class Quote(
+    val id: String,
+    val ref: String,
+    val label: String,
+    val date: Long,
+    val amount: String,
+    val state: QuoteState,
+    val notes: String,
+)
+
+private const val DAY = 86_400_000L
 
 /**
  * Customer sheets, kept in kit_clients.json. An intervention belongs to a client through its
@@ -45,6 +91,18 @@ object Clients {
                     o.getString("id"), o.optString("name"), o.optString("contact"), o.optString("phone"),
                     o.optString("email"), o.optString("address"), o.optString("access"), o.optString("instructions"),
                     o.optString("notes"), o.optLong("updated"),
+                    o.optJSONArray("contracts").objects().map {
+                        ClientContract(
+                            it.optString("id"), it.optString("ref"), it.optString("kind"), it.optLong("start"),
+                            it.optLong("end"), it.optString("amount"), it.optString("notes"),
+                        )
+                    },
+                    o.optJSONArray("quotes").objects().map {
+                        Quote(
+                            it.optString("id"), it.optString("ref"), it.optString("label"), it.optLong("date"),
+                            it.optString("amount"), QuoteState.of(it.optString("state")), it.optString("notes"),
+                        )
+                    },
                 )
             }
         }
@@ -55,6 +113,14 @@ object Clients {
             JSONObject().put("id", c.id).put("name", c.name).put("contact", c.contact).put("phone", c.phone)
                 .put("email", c.email).put("address", c.address).put("access", c.access)
                 .put("instructions", c.instructions).put("notes", c.notes).put("updated", c.updated)
+                .put("contracts", JSONArray(c.contracts.map {
+                    JSONObject().put("id", it.id).put("ref", it.ref).put("kind", it.kind).put("start", it.start)
+                        .put("end", it.end).put("amount", it.amount).put("notes", it.notes)
+                }))
+                .put("quotes", JSONArray(c.quotes.map {
+                    JSONObject().put("id", it.id).put("ref", it.ref).put("label", it.label).put("date", it.date)
+                        .put("amount", it.amount).put("state", it.state.id).put("notes", it.notes)
+                }))
         }))
         runCatching {
             val f = file(context)
@@ -74,6 +140,29 @@ object Clients {
         save(context)
     }
 
+    private fun edit(context: Context, clientId: String, change: (Client) -> Client) {
+        items.firstOrNull { it.id == clientId }?.let { upsert(context, change(it)) }
+    }
+
+    fun putContract(context: Context, clientId: String, contract: ClientContract) = edit(context, clientId) { c ->
+        val list = c.contracts.filterNot { it.id == contract.id } + contract
+        c.copy(contracts = list.sortedByDescending { it.start })
+    }
+
+    fun removeContract(context: Context, clientId: String, id: String) =
+        edit(context, clientId) { c -> c.copy(contracts = c.contracts.filterNot { it.id == id }) }
+
+    fun putQuote(context: Context, clientId: String, quote: Quote) = edit(context, clientId) { c ->
+        val list = c.quotes.filterNot { it.id == quote.id } + quote
+        c.copy(quotes = list.sortedByDescending { it.date })
+    }
+
+    fun removeQuote(context: Context, clientId: String, id: String) =
+        edit(context, clientId) { c -> c.copy(quotes = c.quotes.filterNot { it.id == id }) }
+
+    /** Contract and quote references, for the client search. */
+    fun refsOf(c: Client): List<String> = c.contracts.flatMap { listOf(it.ref, it.kind) } + c.quotes.flatMap { listOf(it.ref, it.label) }
+
     fun delete(context: Context, id: String) {
         items.removeAll { it.id == id }
         save(context)
@@ -91,4 +180,6 @@ object Clients {
             .sortedByDescending { it.started }
 
     fun sitesOf(name: String): List<String> = interventionsOf(name).map { it.site.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
+    private fun JSONArray?.objects(): List<JSONObject> = this?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }.orEmpty()
 }

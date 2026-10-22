@@ -248,7 +248,7 @@ private fun InterventionEditor(existing: Intervention?, onDone: (String?) -> Uni
             }
         }
         item { KitField("Ticket / référence", ticket, { ticket = it }) }
-        if (existing != null) item { KitField("Notes", notes, { notes = it }, singleLine = false) }
+        if (existing != null) item { KitField("Résumé de l'intervention", notes, { notes = it }, singleLine = false) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 KitButton(if (existing == null) "CRÉER" else "ENREGISTRER", Cp.Yellow, Modifier.weight(1f), filled = true) { save(false) }
@@ -354,7 +354,7 @@ private fun InterventionView(i: Intervention, onBack: () -> Unit) {
         item { ConsumedBlock(i) }
 
         if (i.notes.isNotBlank()) {
-            item { SectionTitle("NOTES") }
+            item { SectionTitle("RÉSUMÉ") }
             item { Text(i.notes, color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp) }
         }
 

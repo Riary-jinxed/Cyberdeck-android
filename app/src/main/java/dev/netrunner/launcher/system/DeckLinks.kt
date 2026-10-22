@@ -44,8 +44,10 @@ object DeckLinks {
     }
 
     /** A new event ("contract"), in Agenda Netrunner when installed. */
-    fun newEvent(context: Context) {
+    fun newEvent(context: Context, title: String? = null, location: String? = null) {
         val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+        title?.takeIf { it.isNotBlank() }?.let { intent.putExtra(CalendarContract.Events.TITLE, it) }
+        location?.takeIf { it.isNotBlank() }?.let { intent.putExtra(CalendarContract.Events.EVENT_LOCATION, it) }
         if (installed(context, AGENDA) && start(context, Intent(intent).setPackage(AGENDA))) return
         start(context, intent)
     }
