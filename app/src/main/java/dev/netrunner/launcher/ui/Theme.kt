@@ -27,7 +27,7 @@ data class Palette(
 )
 
 /** Background pattern drawn behind the HUD, one per faction. */
-enum class Motif { Grid, Pinstripe, Hazard, Dots, Rings, Stencil, Plain }
+enum class Motif { Grid, Pinstripe, Hazard, Dots, Rings, Stencil, Spray, Plain }
 
 /** Which corners the HUD panels cut. */
 enum class PanelCut { Diagonal, Mirror, Octagon, Tab, Notch }
@@ -88,8 +88,9 @@ enum class Faction(
     ),
     Barghest(
         "barghest", "BARGHEST",
-        Palette(Color(0xFFE8392B), Color(0xFFC9B27C), Color(0xFFFF2244), Color(0xFF080907), Color(0xFF141611), Color(0xFF6A6C5A), Color(0xFFE9E6DA)),
-        Motif.Stencil, PanelCut.Notch, "DOGTOWN APPARTIENT À BARGHEST",
+        // Acid green spray paint over black and gunmetal, like the militia's tagged armour.
+        Palette(Color(0xFFA4D63A), Color(0xFFB9BEC2), Color(0xFFFF3B30), Color(0xFF0A0B0A), Color(0xFF161816), Color(0xFF5E6559), Color(0xFFE7EAE2)),
+        Motif.Spray, PanelCut.Notch, "DOGTOWN APPARTIENT À BARGHEST",
         ClockFace.Mono, Frame.Reticle, "DOGTOWN", glitch = false,
     ),
     Ghost(
