@@ -74,6 +74,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         }
     }
     private var loadedModel: String? = null
+    /** Roughly what the model's current conversation holds, in characters. */
+    private var sentChars = 0
     private var sleepJob: Job? = null
     private var replyJob: Job? = null
     private var nextId = 0L
@@ -130,7 +132,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val text = input.trim()
         if (text.isEmpty() || state == State.Thinking) return
         voice.stop()
-        add(Line(nextId++, fromUser = true, text = text))
+        val asked = Line(nextId++, fromUser = true, text = text)
+        add(asked)
         date?.let { scene ->
             dateMessages++
             // Asked for a photo during a date: she sends hers, no model needed.
@@ -218,17 +221,35 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 // An old exchange about the same thing, if there is one: her memory of past talks.
                 val past = pastForRecall()
                 val souvenir = withContext(Dispatchers.Default) { AskaRecall.recall(context, text, past, DeckSettings.handle) }
-                val message = listOfNotNull(text, souvenir, beat?.let { "[Indication de scène : $it]" }).joinToString("\n\n")
-                engine.send(message).collect { chunk ->
-                    buffer.append(chunk)
-                    // The screen follows at most ten times a second: the model needs the CPU more.
-                    val now = System.currentTimeMillis()
-                    if (now - shownAt < UI_REFRESH_MS) return@collect
-                    shownAt = now
-                    val shown = visible(buffer.toString())
-                    replace(reply.id, Line(reply.id, false, shown, done = false))
-                    voice.feed(shown, final = false)
+                // A small model ends every answer with a question: one out of two at most.
+                val pause = scene?.let { lastReply(asked.id)?.contains('?') } == true
+                val message = listOfNotNull(
+                    text,
+                    souvenir,
+                    beat?.let { "[Indication de scène, à glisser seulement si ça ne casse pas le moment : $it]" },
+                    if (pause) "[Cette fois, pas de question : laisse l'action se dérouler, décris ce que tu fais et ressens.]" else null,
+                ).joinToString("\n\n")
+                // Before its context is full (the answer would come back empty, « … »), start
+                // over from the recent lines.
+                if (sentChars + message.length > SESSION_CHARS) resetConversation()
+                for (attempt in 0..1) {
+                    buffer.clear()
+                    engine.send(message).collect { chunk ->
+                        buffer.append(chunk)
+                        // The screen follows at most ten times a second: the model needs the CPU more.
+                        val now = System.currentTimeMillis()
+                        if (now - shownAt < UI_REFRESH_MS) return@collect
+                        shownAt = now
+                        val shown = visible(buffer.toString())
+                        replace(reply.id, Line(reply.id, false, shown, done = false))
+                        voice.feed(shown, final = false)
+                    }
+                    val (clean, action) = AskaAlarms.extractTag(visible(buffer.toString()))
+                    if (clean.isNotBlank() || action != null || attempt == 1) break
+                    // Nothing came out: the context was full after all. Once more, on a fresh one.
+                    resetConversation()
                 }
+                sentChars += message.length + buffer.length
                 voice.feed(visible(buffer.toString()), final = true)
                 val (clean, action) = AskaAlarms.extractTag(visible(buffer.toString()))
                 replace(
@@ -365,10 +386,17 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     }
 
     private fun resetConversation(keepHistory: Boolean = true) {
-        val recent = if (keepHistory || date != null) recentForContext() else emptyList()
-        // Warmer during a date: livelier, less predictable answers.
-        engine.converse(systemPrompt(), recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()), if (date != null) 0.9f else 0.7f)
+        // Without the message waiting for its answer: it is about to be sent.
+        val recent = if (keepHistory || date != null) recentForContext().dropLastWhile { it.fromUser } else emptyList()
+        val system = systemPrompt()
+        sentChars = system.length + recent.sumOf { it.text.length }
+        // A little warmer during a date: livelier, yet it keeps track of the scene.
+        engine.converse(system, recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()), if (date != null) 0.8f else 0.7f)
     }
+
+    /** Her last finished answer before the message [before]. */
+    private fun lastReply(before: Long): String? =
+        lines.lastOrNull { !it.fromUser && it.done && it.id < before }?.text
 
     /** The saved conversation without its latest lines, which the model already has. */
     private fun pastForRecall(): List<Pair<Boolean, String>> =
@@ -490,6 +518,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         private const val MAX_LINES = 1000
         /** About 1 500 tokens of past conversation handed back to the model when it reloads. */
         private const val CONTEXT_CHARS = 6000
+        /** About 3000 tokens of French: under the usual 4096-token context, with room for an answer. */
+        private const val SESSION_CHARS = 9000
         private const val UI_REFRESH_MS = 100L
         /** Lines of the conversation left out of her recall: they are still in her context. */
         private const val RECENT_LINES = 30
