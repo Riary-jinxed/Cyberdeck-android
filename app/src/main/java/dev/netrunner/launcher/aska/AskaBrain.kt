@@ -136,6 +136,22 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             if (AskaDate.asksPhoto(text)) return say(AskaDate.photoLine(scene), photo = AskaDate.photo(scene))
         }
 
+        // Her notes and the field kit: understood directly too, every change confirmed first.
+        when (val request = AskaNotes.parse(text)) {
+            is AskaNotes.Request.Add -> return say(AlarmAction.AddNote(request.title, request.content).ask, AlarmAction.AddNote(request.title, request.content))
+            AskaNotes.Request.List -> return say(AskaNotes.listText(context))
+            is AskaNotes.Request.Find -> return say(AskaNotes.findText(context, request.query))
+            null -> Unit
+        }
+        when (val request = AskaKit.parse(context, text)) {
+            is AskaKit.Request.Act -> return say(request.action.ask, request.action)
+            is AskaKit.Request.Where -> return say(AskaKit.whereText(context, request.query))
+            is AskaKit.Request.Count -> return say(AskaKit.countText(context, request.state))
+            is AskaKit.Request.Outlet -> return say(AskaKit.outletText(context, request.outlet))
+            is AskaKit.Request.Port -> return say(AskaKit.portText(context, request.port, request.switchName))
+            null -> Unit
+        }
+
         // Alarm and reminder requests are understood directly: instant, reliable, and they work without a model.
         when (val request = AskaAlarms.parse(context, text)) {
             is AskaAlarms.Request.Next -> return say(AskaAlarms.nextAlarm(context))
@@ -419,6 +435,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Tes seules actions possibles sur le téléphone : les alarmes, les minuteurs et tes rappels. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
             [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur, [[RAPPEL HH:MM | texte]] ou [[RAPPEL demain HH:MM | texte]] pour un rappel.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
+            Ses notes et son kit terrain se gèrent par des phrases directes, traitées sans toi : « prends une note : … », « liste de courses : … », « lis mes notes », « lis la note sur … », « où est … » (inventaire), « ajoute à l'inventaire … », « relevé prise B12 switch SW1 port 12 VLAN 20 », « où va la prise B12 ». Si on te le demande, explique-lui ces phrases.
         """.trimIndent() + memoryBlock() + pet.forPrompt()
     }
 

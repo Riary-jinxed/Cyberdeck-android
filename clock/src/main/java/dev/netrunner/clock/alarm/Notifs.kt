@@ -44,14 +44,14 @@ object Notifs {
     }
 
     /** The ringing notification: opens the wake screen over the lock screen. */
-    fun ring(context: Context, title: String, text: String, isAlarm: Boolean): Notification {
+    fun ring(context: Context, title: String, text: String, isAlarm: Boolean, canStop: Boolean = true): Notification {
         channels(context)
         val full = PendingIntent.getActivity(
             context, 0, Intent(context, RingActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val snoozeLabel = if (isAlarm) "Répit" else "+1 min"
-        return Notification.Builder(context, CH_RING)
+        val b = Notification.Builder(context, CH_RING)
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setColor(Color.parseColor("#FCEE0A"))
             .setContentTitle(title)
@@ -62,8 +62,9 @@ object Notifs {
             .setFullScreenIntent(full, true)
             .setContentIntent(full)
             .addAction(Notification.Action.Builder(null, snoozeLabel, service(context, RingService.ACTION_SNOOZE)).build())
-            .addAction(Notification.Action.Builder(null, "Arrêter", service(context, RingService.ACTION_DISMISS)).build())
-            .build()
+        // A QR alarm only stops from the wake screen, after the scan.
+        if (canStop) b.addAction(Notification.Action.Builder(null, "Arrêter", service(context, RingService.ACTION_DISMISS)).build())
+        return b.build()
     }
 
     private fun service(context: Context, action: String) = PendingIntent.getService(

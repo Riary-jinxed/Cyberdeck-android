@@ -49,8 +49,6 @@
         android:name="dev.netrunner.permission.KIT"
         android:label="Ouvrir le kit de terrain de Netrunner"
         android:protectionLevel="signature" />
-    <!-- Kit sheet → note in Notes Netrunner (its provider, same signing key). -->
-    <uses-permission android:name="dev.netrunner.permission.WRITE_NOTES" />
 
     <permission
         android:name="dev.netrunner.permission.READ_REMINDERS"
@@ -62,6 +60,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- As//ka reads and adds notes in Notes Netrunner (signature permissions, same key). -->
+    <uses-permission android:name="dev.netrunner.permission.READ_NOTES" />
+    <uses-permission android:name="dev.netrunner.permission.WRITE_NOTES" />
+
     <uses-feature android:name="android.software.live_wallpaper" android:required="false" />
 
     <!-- Lets the launcher see every app that has a launcher icon. -->
@@ -72,6 +74,8 @@
         </intent>
         <package android:name="com.anthropic.claude" />
         <package android:name="dev.netrunner.notes" />
+        <!-- Notes Netrunner's provider, for As//ka. -->
+        <provider android:authorities="dev.netrunner.notes.provider" />
         <!-- As//ka's ears: lets the app find the speech recognizer (Android 11+). -->
         <intent>
             <action android:name="android.speech.RecognitionService" />

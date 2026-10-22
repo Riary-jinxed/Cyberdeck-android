@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.clock"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
     }
 
     // Same key as the launcher (CI secrets), so each new APK installs over the previous one.
@@ -60,4 +60,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    // QR / barcode scan to stop an alarm (Google Play services UI, no camera permission).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }
