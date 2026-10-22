@@ -78,6 +78,7 @@ object AskaDay {
         } else {
             parts += "Rien au programme aujourd'hui. Une journée libre !"
         }
+        AskaBriefing.todayHint(context)?.let { parts += it }
         battery(context)?.let { b ->
             parts += when {
                 b.charging -> "Batterie ${b.percent} %, en charge."

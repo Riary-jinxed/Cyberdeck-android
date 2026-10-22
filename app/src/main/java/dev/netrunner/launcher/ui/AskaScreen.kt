@@ -87,6 +87,7 @@ private val Prompts = listOf(
     "Allume la lampe",
     "Minuteur 10 min",
     "Lis mes notes",
+    "Prépare mon intervention",
     "Qui es-tu ?",
     "Que sais-tu sur moi ?",
     "Raconte-moi Night City",

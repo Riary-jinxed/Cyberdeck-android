@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -143,6 +144,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             is AskaNotes.Request.Find -> return say(AskaNotes.findText(context, request.query))
             null -> Unit
         }
+        AskaBriefing.parse(text)?.let { return say(AskaBriefing.text(context, it)) }
         when (val request = AskaKit.parse(context, text)) {
             is AskaKit.Request.Act -> return say(request.action.ask, request.action)
             is AskaKit.Request.Where -> return say(AskaKit.whereText(context, request.query))
@@ -157,6 +159,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             is AskaAlarms.Request.Next -> return say(AskaAlarms.nextAlarm(context))
             is AskaAlarms.Request.Reminders -> return say(AskaAlarms.remindersText(context))
             is AskaAlarms.Request.NeedTime -> return say("Je te le rappelle quand ? Par exemple « rappelle-moi de … à 15h », « demain à 9h » ou « dans 20 minutes ».")
+            is AskaAlarms.Request.NeedContractTime -> return say("Pour quand, ce contrat ? Par exemple « ajoute une intervention demain à 14h chez Dupont ».")
             is AskaAlarms.Request.Act -> {
                 if (!request.action.needsConfirm) return say(AskaAlarms.run(context, request.action))
                 return say(request.action.ask, request.action)
@@ -212,7 +215,11 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 // During a date, a small event of the scene now and then, for her only.
                 val scene = date
                 val beat = scene?.let { AskaDate.beat(it, dateMessages) }
-                engine.send(if (beat == null) text else "$text\n\n[Indication de scène : $beat]").collect { chunk ->
+                // An old exchange about the same thing, if there is one: her memory of past talks.
+                val past = pastForRecall()
+                val souvenir = withContext(Dispatchers.Default) { AskaRecall.recall(context, text, past, DeckSettings.handle) }
+                val message = listOfNotNull(text, souvenir, beat?.let { "[Indication de scène : $it]" }).joinToString("\n\n")
+                engine.send(message).collect { chunk ->
                     buffer.append(chunk)
                     // The screen follows at most ten times a second: the model needs the CPU more.
                     val now = System.currentTimeMillis()
@@ -268,6 +275,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val scene = date ?: return
         stop()
         date = null
+        AskaRecall.saveDate(context, scene, dateTalk.filter { it.fromUser }.map { it.text })
         dateTalk.clear()
         pet.dated(scene, dateMessages)
         say(AskaDate.goodbye(scene))
@@ -362,6 +370,10 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         engine.converse(systemPrompt(), recent.map { it.fromUser to it.text }, AskaModels.thinks(loadedModel.orEmpty()), if (date != null) 0.9f else 0.7f)
     }
 
+    /** The saved conversation without its latest lines, which the model already has. */
+    private fun pastForRecall(): List<Pair<Boolean, String>> =
+        talk.filter { it.done && it.text.isNotEmpty() && it.text != GREETING }.dropLast(RECENT_LINES).map { it.fromUser to it.text }
+
     /** The latest exchanges that fit in the model's context, oldest first. */
     private fun recentForContext(): List<Line> {
         val picked = ArrayDeque<Line>()
@@ -424,7 +436,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         raw.replace(Regex("(?s)<think>.*?(</think>|$)"), "").trimStart()
 
     private fun systemPrompt(): String {
-        date?.let { return AskaDate.systemPrompt(it, DeckSettings.handle, pet.stats.bond, memory.facts, DeckSettings.adultDates) }
+        date?.let { return AskaDate.systemPrompt(it, DeckSettings.handle, pet.stats.bond, memory.facts, DeckSettings.adultDates) + AskaRecall.datesForPrompt(context, DeckSettings.handle) }
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.FRENCH))
         return """
             Tu es As//ka, un programme indépendant : une IA draconique qui a élu domicile dans le cyberdeck de ${DeckSettings.handle}.
@@ -435,8 +447,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
             Tes seules actions possibles sur le téléphone : les alarmes, les minuteurs et tes rappels. Si on te demande clairement d'en créer un, termine ta réponse par une balise, exactement sous cette forme :
             [[ALARME HH:MM]] ou [[ALARME HH:MM | libellé]] pour une alarme, [[MINUTEUR minutes]] pour un minuteur, [[RAPPEL HH:MM | texte]] ou [[RAPPEL demain HH:MM | texte]] pour un rappel.
             L'utilisateur confirmera avant l'exécution. N'utilise jamais ces balises dans un autre cas, et ne prétends jamais faire autre chose.
-            Ses notes et son kit terrain se gèrent par des phrases directes, traitées sans toi : « prends une note : … », « liste de courses : … », « lis mes notes », « lis la note sur … », « où est … » (inventaire), « ajoute à l'inventaire … », « relevé prise B12 switch SW1 port 12 VLAN 20 », « où va la prise B12 ». Si on te le demande, explique-lui ces phrases.
-        """.trimIndent() + memoryBlock() + pet.forPrompt()
+            Ses notes, son agenda et son kit terrain se gèrent par des phrases directes, traitées sans toi : « ajoute une intervention demain à 14h chez Dupont » (agenda), « briefing Dupont » ou « prépare mon intervention » (fiche client, historique, checklist), « prends une note : … », « liste de courses : … », « lis mes notes », « lis la note sur … », « où est … » (inventaire), « ajoute à l'inventaire … », « relevé prise B12 switch SW1 port 12 VLAN 20 », « où va la prise B12 ». Si on te le demande, explique-lui ces phrases.
+        """.trimIndent() + memoryBlock() + AskaRecall.datesForPrompt(context, DeckSettings.handle, count = 1) + pet.forPrompt()
     }
 
     private fun memoryBlock(): String =
@@ -479,6 +491,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         /** About 1 500 tokens of past conversation handed back to the model when it reloads. */
         private const val CONTEXT_CHARS = 6000
         private const val UI_REFRESH_MS = 100L
+        /** Lines of the conversation left out of her recall: they are still in her context. */
+        private const val RECENT_LINES = 30
         private const val GPU_BROKEN = "aska_gpu_broken"
     }
 }
