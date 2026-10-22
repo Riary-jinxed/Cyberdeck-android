@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import android.provider.CalendarContract
 import dev.netrunner.launcher.kit.CableRecord
 import dev.netrunner.launcher.kit.Equipment
 import java.text.Normalizer
@@ -41,6 +42,9 @@ sealed class AlarmAction {
     object GhostMode : AlarmAction() {
         override val ask = "Je bascule le mode furtif ? Valide."
     }
+    data class AddContract(val title: String, val at: Long, val location: String?) : AlarmAction() {
+        override val ask = "Je te l'ouvre dans l'Agenda, prérempli ? Valide, puis enregistre-le là-bas."
+    }
     data class AddNote(val title: String, val content: String) : AlarmAction() {
         override val ask = "Je l'écris dans tes notes ? Valide."
     }
@@ -68,6 +72,7 @@ sealed class AlarmAction {
             is OpenApp -> "OUVRIR ${label.uppercase()}"
             is Torch -> if (on) "ALLUMER LA LAMPE" else "ÉTEINDRE LA LAMPE"
             GhostMode -> "BASCULER LE MODE FURTIF"
+            is AddContract -> "CONTRAT ${Reminder(0, at, title).whenLabel.uppercase(Locale.FRENCH)} · « $title »" + (location?.let { " · ${it.uppercase(Locale.FRENCH)}" } ?: "")
             is AddNote -> "NOTE" + (if (title.isNotBlank()) " « $title »" else "") + " · " + content.lines().joinToString(" · ") { it.removePrefix("[ ] ") }.take(120)
             is AddEquipment -> "INVENTAIRE + ${item.name.uppercase()}" + (if (item.location.isNotBlank()) " · ${item.location.uppercase()}" else "") + " · ${item.state.uppercase()}"
             is SetEquipmentState -> "${item.name.uppercase()} → ${state.uppercase()}"
@@ -90,6 +95,7 @@ object AskaAlarms {
             }
             is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> return AskaActions.run(context, action)
             is AlarmAction.AddNote -> return AskaNotes.add(context, action.title, action.content)
+            is AlarmAction.AddContract -> return openContract(context, action)
             is AlarmAction.AddEquipment, is AlarmAction.SetEquipmentState, is AlarmAction.AddCable -> return AskaKit.run(context, action)
             else -> Unit
         }
@@ -110,7 +116,7 @@ object AskaAlarms {
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             AlarmAction.Show -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
             is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode,
-            is AlarmAction.AddNote, is AlarmAction.AddEquipment, is AlarmAction.SetEquipmentState, is AlarmAction.AddCable -> error("handled above")
+            is AlarmAction.AddNote, is AlarmAction.AddContract, is AlarmAction.AddEquipment, is AlarmAction.SetEquipmentState, is AlarmAction.AddCable -> error("handled above")
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(intent)
@@ -148,7 +154,28 @@ object AskaAlarms {
         object Reminders : Request()
         /** A reminder without a time: she asks when. */
         object NeedTime : Request()
+        /** A contract without a time: she asks when. */
+        object NeedContractTime : Request()
     }
+
+    /** Opens the Agenda (or any calendar app) on a new event, filled in: the runner saves it there. */
+    private fun openContract(context: Context, action: AlarmAction.AddContract): String {
+        val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, action.at)
+            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, action.at + 3_600_000L)
+            .putExtra(CalendarContract.Events.TITLE, action.title.replaceFirstChar { it.uppercase() })
+            .apply { action.location?.let { putExtra(CalendarContract.Events.EVENT_LOCATION, it) } }
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val agenda = Intent(intent).setPackage(AGENDA)
+        return try {
+            context.startActivity(if (agenda.resolveActivity(context.packageManager) != null) agenda else intent)
+            "Je l'ai ouvert dans l'Agenda : vérifie et enregistre."
+        } catch (_: ActivityNotFoundException) {
+            "Aucun agenda ne répond. Installe l'Agenda Netrunner depuis Réglages › Applis du deck."
+        }
+    }
+
+    private const val AGENDA = "dev.netrunner.agenda"
 
     /** Her reminders, numbered as "supprime le rappel 2" expects. */
     fun remindersText(context: Context): String {
@@ -212,12 +239,18 @@ object AskaAlarms {
     private val CLOCK_MORNING = Regex("\\b(du|ce) matin\\b")
 
     /** "Rappelle-moi d'appeler le client à 15h" → "appeler le client". */
-    private fun reminderText(input: String): String {
-        var s = input.trim()
-        val trigger = Regex(
+    private fun reminderText(input: String): String = cleanText(
+        input,
+        Regex(
             "(?i)^.*?\\b(rappelle[- ]?(moi|nous)|tu peux me rappeler|peux-tu me rappeler|fais[- ]moi penser|pense à me rappeler|pense a me rappeler" +
                 "|n'oublie pas de me rappeler|(mets?|met|crée|cree|ajoute|programme)[- ]?(moi )?un rappel( pour)?)\\s*"
-        )
+        ),
+        "ton rappel",
+    )
+
+    /** The words left once the request and its date are taken out. */
+    private fun cleanText(input: String, trigger: Regex, fallback: String): String {
+        var s = input.trim()
         s = s.replace(trigger, "")
         val removals = listOf(
             "(?i)\\bdans\\s+(une demi[- ]heure|une?\\s+(heure|minute)s?|\\d+\\s*(h|heures?|min|minutes?|mn|secondes?|sec|s)\\b(\\s*\\d+)?)",
@@ -228,7 +261,7 @@ object AskaAlarms {
         removals.forEach { s = s.replace(Regex(it), " ") }
         s = s.replace(Regex("\\s+"), " ").trim().trim(',', '.', '!', '?', ':', ' ')
         s = s.replace(Regex("(?i)^(de |d'|d’|que |qu'|qu’|pour |à |a )"), "").trim()
-        return s.replaceFirstChar { it.lowercase() }.ifEmpty { "ton rappel" }.take(80)
+        return s.replaceFirstChar { it.lowercase() }.ifEmpty { fallback }.take(80)
     }
 
     private val ALARM_WORDS = Regex("\\b(alarme|alarmes|reveil|reveille|reveiller|sonnerie|alarm|wake)")
@@ -237,9 +270,36 @@ object AskaAlarms {
     private val NEXT_WORDS = Regex("prochaine alarme|prochain reveil|a quelle heure (je me reveille|sonne|mon reveil)")
     private val SHOW_WORDS = Regex("\\b(montre|affiche|liste|ouvre|voir)\\b.*\\b(alarmes?|reveils?|horloge)|mes alarmes")
 
+    private val CONTRACT_WORDS = Regex(
+        "\\b(ajoute|ajouter|mets|met|mettre|cree|creer|programme|planifie|cale|caler|inscris|note|noter)[- ]?(moi |nous )?(un |une |le |la |mon |ma )?(contrat|rendez-vous|rdv|intervention|reunion)\\b" +
+            "|\\b(ajoute|mets|met|inscris|note)[- ]?(le |la |ca |moi )?(dans|a|sur) (l'|mon |ton )agenda\\b"
+    )
+
+    /** "Ajoute un contrat demain à 14h chez Dupont" → an event to fill in the Agenda. */
+    private fun parseContract(input: String, t: String): Request? {
+        if (!CONTRACT_WORDS.containsMatchIn(t)) return null
+        val at = reminderTime(t) ?: return Request.NeedContractTime
+        val location = Regex("(?i)\\bchez\\s+(.+?)(?=\\s+(?:à|a|vers|pour|demain|après|apres|aujourd'hui|ce |cet |le |lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\\b|[,.;!?]|$)")
+            .find(input)?.groupValues?.get(1)?.trim()?.ifEmpty { null }
+        val trigger = Regex(
+            "(?i)^.*?\\b((ajoute|ajouter|mets|met|mettre|crée|cree|créer|creer|programme|planifie|cale|caler|inscris|note|noter)[- ]?(moi |nous )?(un |une |le |la |mon |ma )?" +
+                "(contrat|rendez-vous|rdv|intervention|réunion|reunion)|(ajoute|mets|met|inscris|note)[- ]?(le |la |ça |ca |moi )?(dans|à|a|sur) (l'|mon |ton )agenda)\\s*(:\\s*)?"
+        )
+        val kind = Regex("(?i)\\b(contrat|rendez-vous|rdv|intervention|réunion|reunion)\\b").find(input)?.value
+            ?.replaceFirstChar { it.uppercase() }?.let { if (it.equals("rdv", true)) "Rendez-vous" else it } ?: "Contrat"
+        val rest = cleanText(input, trigger, "")
+        val title = when {
+            rest.isEmpty() -> kind + (location?.let { " chez $it" } ?: "")
+            rest.startsWith("chez ") -> "$kind $rest"
+            else -> rest
+        }
+        return Request.Act(AlarmAction.AddContract(title, at, location))
+    }
+
     fun parse(context: Context, input: String): Request? {
         val t = normalize(input)
         parseReminder(context, input, t)?.let { return it }
+        parseContract(input, t)?.let { return it }
         val alarm = ALARM_WORDS.containsMatchIn(t)
         val timer = TIMER_WORDS.containsMatchIn(t)
         if (!alarm && !timer) return AskaActions.parse(context, input)?.let { Request.Act(it) }
