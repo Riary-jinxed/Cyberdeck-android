@@ -227,6 +227,26 @@ private fun InterventionEditor(existing: Intervention?, onDone: (String?) -> Uni
             }
         }
         item { KitField("Client", client, { client = it }) }
+        val clientHints = dev.netrunner.launcher.kit.Clients.knownNames()
+            .filter { client.isNotBlank() && it.contains(client.trim(), ignoreCase = true) && !it.equals(client.trim(), ignoreCase = true) }.take(6)
+        if (clientHints.isNotEmpty()) {
+            item {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    clientHints.forEach { n ->
+                        Text(
+                            n,
+                            color = Cp.Cyan,
+                            fontFamily = HudFont,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.5f), cut = 4.dp)
+                                .clickable { client = n }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+        }
         item { KitField("Ticket / référence", ticket, { ticket = it }) }
         if (existing != null) item { KitField("Notes", notes, { notes = it }, singleLine = false) }
         item {
@@ -291,6 +311,8 @@ private fun InterventionView(i: Intervention, onBack: () -> Unit) {
             )
         }
 
+        item { ClientReminder(i) }
+
         item { SectionTitle("JOURNAL") }
         item { JournalInput(entry, { entry = it }) { Logbook.addEntry(context, i.id, entry); entry = "" } }
         items(i.journal.reversed(), key = { "j${it.at}${it.text.hashCode()}" }) { e ->
@@ -328,6 +350,8 @@ private fun InterventionView(i: Intervention, onBack: () -> Unit) {
             }
         }
         item { TemplateChips { t -> Logbook.startChecklist(context, i.id, t)?.let { openRun = it.id } } }
+
+        item { ConsumedBlock(i) }
 
         if (i.notes.isNotBlank()) {
             item { SectionTitle("NOTES") }
@@ -611,6 +635,8 @@ internal fun FocusScreen(onOpenKit: () -> Unit, onOpenSheet: (String) -> Unit) {
                 }
             }
         }
+
+        item { ClientReminder(i) }
 
         // Checklist, one tap per step.
         if (runs.size > 1) {

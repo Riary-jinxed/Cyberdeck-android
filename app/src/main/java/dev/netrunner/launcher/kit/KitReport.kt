@@ -147,6 +147,10 @@ object KitReport {
             w.section("Checklist ${run.name} · ${run.done.size}/${run.steps.size}")
             run.steps.forEachIndexed { k, step -> w.text((if (k in run.done) "[x] " else "[ ] ") + "${k + 1}. $step", gapAfter = 1f) }
         }
+        if (i.consumed.isNotEmpty()) {
+            w.section("Consommables")
+            i.consumed.forEach { w.text("${it.qty} ${it.unit}  ${it.name}", w.mono, 1f) }
+        }
         siteSections(w, i.site)
         if (i.notes.isNotBlank()) {
             w.section("Notes")

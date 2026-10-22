@@ -130,7 +130,7 @@ fun qrLabelBitmap(text: String, title: String, lines: List<String> = emptyList()
 }
 
 /** Shares [bitmap] as a PNG (label printer apps, messages, print service). */
-fun shareBitmap(context: android.content.Context, bitmap: android.graphics.Bitmap, name: String) {
+fun shareBitmap(context: android.content.Context, bitmap: android.graphics.Bitmap, name: String, title: String = "Partager l'étiquette") {
     runCatching {
         val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
         val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(60).ifBlank { "etiquette" }
@@ -142,7 +142,7 @@ fun shareBitmap(context: android.content.Context, bitmap: android.graphics.Bitma
             .putExtra(android.content.Intent.EXTRA_STREAM, uri)
             .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(
-            android.content.Intent.createChooser(send, "Partager l'étiquette").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            android.content.Intent.createChooser(send, title).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }.onFailure {
         android.widget.Toast.makeText(context, "Partage impossible", android.widget.Toast.LENGTH_SHORT).show()

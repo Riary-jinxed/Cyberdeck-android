@@ -59,31 +59,48 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+private val InventoryParts = listOf("Matériel", "Consommables")
+private val LogParts = listOf("Interventions", "Clients", "Temps")
+
 private enum class KitTab(val label: String) {
     Inventory("INVENTAIRE"), Logbook("CARNET"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),
-    Addressing("ADRESSAGE"), Racks("BAIES"), Subnet("IP / CIDR"), Calc("CALCULS"),
+    Addressing("ADRESSAGE"), Racks("BAIES"), Maps("CARTES"), Subnet("IP / CIDR"), Calc("CALCULS"),
     Memo("MÉMO"), Tools("OUTILS"),
 }
 
 /**
- * Field kit for the technician: equipment inventory, intervention logbook and focus mode, checklists, cable survey,
- * config templates and switch config generator, addressing plan, racks, offline memo, IPv4/IPv6
- * calculator, PoE / fibre / MAC calculations and admin tools. Everything stays on the phone.
+ * Field kit for the technician: equipment inventory and consumables, intervention logbook with
+ * focus mode, clients and time spent, checklists, cable survey, config templates and switch
+ * config generator, addressing plan, racks, network map and Wi-Fi coverage survey, offline memo,
+ * IPv4/IPv6 calculator, PoE / fibre / MAC calculations, admin tools and backup. Everything stays
+ * on the phone.
  */
 @Composable
 fun KitScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     remember {
-        KitStore.load(context.applicationContext)
-        Logbook.load(context.applicationContext)
+        val app = context.applicationContext
+        KitStore.load(app)
+        Logbook.load(app)
+        dev.netrunner.launcher.kit.NetPlan.load(app)
+        dev.netrunner.launcher.kit.Clients.load(app)
+        dev.netrunner.launcher.kit.Stock.load(app)
+        dev.netrunner.launcher.kit.Coverage.load(app)
     }
     var tab by remember { mutableStateOf(if (Logbook.focusId != null) KitTab.Logbook else KitTab.Inventory) }
     var logOpen by remember { mutableStateOf<String?>(null) }
+    var logPart by remember { mutableStateOf(LogParts[0]) }
+    var inventoryPart by remember { mutableStateOf(InventoryParts[0]) }
     // During an intervention in focus the kit opens on the focus screen; KIT ► shows the tabs.
     var kitInFocus by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Logbook.focusId, Logbook.focusRequest) { kitInFocus = false }
     // A code sent by the Scanner or a note: its sheet lives in the inventory.
-    androidx.compose.runtime.LaunchedEffect(KitStore.request) { if (KitStore.request != null) tab = KitTab.Inventory }
+    androidx.compose.runtime.LaunchedEffect(KitStore.request) {
+        if (KitStore.request != null) {
+            tab = KitTab.Inventory
+            inventoryPart = InventoryParts[0]
+        }
+    }
 
     Column(
         Modifier
@@ -103,6 +120,7 @@ fun KitScreen(onClose: () -> Unit) {
                 onOpenSheet = { id ->
                     kitInFocus = true
                     tab = KitTab.Logbook
+                    logPart = LogParts[0]
                     logOpen = id
                 },
             )
@@ -141,8 +159,24 @@ fun KitScreen(onClose: () -> Unit) {
         }
         Spacer(Modifier.height(10.dp))
         when (tab) {
-            KitTab.Inventory -> InventoryTab()
-            KitTab.Logbook -> LogbookTab(logOpen, onOpen = { logOpen = it })
+            KitTab.Inventory -> Column {
+                KitChips(InventoryParts, inventoryPart) { inventoryPart = it }
+                Spacer(Modifier.height(8.dp))
+                if (inventoryPart == InventoryParts[0]) InventoryTab() else StockTab()
+            }
+            KitTab.Logbook -> Column {
+                // An open sheet takes the whole tab; the sub-tabs come back with the list.
+                if (logOpen == null) {
+                    KitChips(LogParts, logPart) { logPart = it }
+                    Spacer(Modifier.height(8.dp))
+                }
+                when {
+                    logOpen != null || logPart == LogParts[0] -> LogbookTab(logOpen, onOpen = { logOpen = it })
+                    logPart == LogParts[1] -> ClientsView(onOpenIntervention = { id -> logPart = LogParts[0]; logOpen = id })
+                    else -> TimeView()
+                }
+            }
+            KitTab.Maps -> MapsTab()
             KitTab.Checklists -> ChecklistsTab()
             KitTab.Cables -> CablesTab()
             KitTab.Configs -> ConfigsTab()

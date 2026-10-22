@@ -16,6 +16,9 @@ import java.io.File
 /** A timestamped line of the intervention journal ("switch remplacé", "client prévenu"…). */
 data class LogEntry(val at: Long, val text: String)
 
+/** Consumables taken from the stock during an intervention (name kept for the report). */
+data class Usage(val stockId: String, val name: String, val unit: String, val qty: Int)
+
 /** One visit on a site: who, when, what was done, with photos and the checklists run there. */
 data class Intervention(
     val id: String,
@@ -32,6 +35,7 @@ data class Intervention(
     val photos: List<String>,
     /** Checklist runs (KitStore.runs) done during this intervention. */
     val runIds: List<String>,
+    val consumed: List<Usage> = emptyList(),
 ) {
     val open get() = ended == 0L
 }
@@ -77,6 +81,11 @@ object Logbook {
                         }.orEmpty(),
                         o.optJSONArray("photos").strings(),
                         o.optJSONArray("runs").strings(),
+                        o.optJSONArray("consumed")?.let { u ->
+                            (0 until u.length()).map { u.getJSONObject(it) }.map {
+                                Usage(it.optString("stock"), it.optString("name"), it.optString("unit"), it.optInt("qty"))
+                            }
+                        }.orEmpty(),
                     )
                 }
             }
@@ -92,6 +101,9 @@ object Logbook {
                     .put("journal", JSONArray(i.journal.map { JSONObject().put("at", it.at).put("text", it.text) }))
                     .put("photos", JSONArray(i.photos))
                     .put("runs", JSONArray(i.runIds))
+                    .put("consumed", JSONArray(i.consumed.map {
+                        JSONObject().put("stock", it.stockId).put("name", it.name).put("unit", it.unit).put("qty", it.qty)
+                    }))
             }))
             .put("focus", focusId.orEmpty())
         runCatching {
@@ -103,6 +115,10 @@ object Logbook {
     }
 
     fun get(id: String?) = items.firstOrNull { it.id == id }
+
+    /** Open intervention on [site], newest first: where a map or a survey can be filed. */
+    fun openOn(site: String): Intervention? =
+        items.filter { it.open && it.site.isNotBlank() && it.site.trim().equals(site.trim(), ignoreCase = true) }.maxByOrNull { it.started }
 
     /** Sites already known anywhere in the kit, to pick from instead of retyping. */
     fun knownSites(): List<String> =
@@ -171,13 +187,31 @@ object Logbook {
         return run
     }
 
+    /** Takes [qty] of a stock item for the intervention, noted in its journal. */
+    fun consume(context: Context, id: String, item: StockItem, qty: Int) {
+        if (qty <= 0) return
+        Stock.adjust(context, item.id, -qty)
+        edit(context, id) { i ->
+            val k = i.consumed.indexOfFirst { it.stockId == item.id }
+            val list = if (k >= 0) i.consumed.toMutableList().also { it[k] = it[k].copy(qty = it[k].qty + qty) }
+            else i.consumed + Usage(item.id, item.name, item.unit, qty)
+            i.copy(consumed = list, journal = i.journal + LogEntry(System.currentTimeMillis(), "Consommé : $qty ${item.unit} ${item.name}"))
+        }
+    }
+
+    /** Cancels a consumption line and puts the quantity back in stock. */
+    fun unconsume(context: Context, id: String, usage: Usage) {
+        Stock.adjust(context, usage.stockId, usage.qty)
+        edit(context, id) { it.copy(consumed = it.consumed - usage) }
+    }
+
     fun runsOf(i: Intervention): List<ChecklistRun> = i.runIds.mapNotNull { r -> KitStore.runs.firstOrNull { it.id == r } }
 
     /** Copies a picked image, downscaled to 1600 px and re-encoded, into the intervention folder. */
-    fun importPhoto(context: Context, id: String, uri: Uri): Boolean {
+    fun importPhoto(context: Context, id: String, uri: Uri, maxSide: Int = 1600): Boolean {
         val i = get(id) ?: return false
         if (i.photos.size >= MaxPhotos) return false
-        val bitmap = decode(context, uri, 1600) ?: return false
+        val bitmap = decode(context, uri, maxSide) ?: return false
         val name = "p" + KitStore.newId() + ".jpg"
         val out = photo(context, id, name)
         out.parentFile?.mkdirs()
@@ -247,6 +281,7 @@ object Logbook {
             i.journal.forEach { appendLine("${format(it.at)}  ${it.text}") }
         }
         runsOf(i).forEach { r -> appendLine("Checklist ${r.name} : ${r.done.size}/${r.steps.size}") }
+        i.consumed.forEach { appendLine("Consommé : ${it.qty} ${it.unit} ${it.name}") }
         if (i.notes.isNotBlank()) {
             appendLine()
             appendLine(i.notes)
