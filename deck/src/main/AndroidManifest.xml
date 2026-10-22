@@ -12,7 +12,8 @@
     <uses-permission android:name="dev.netrunner.permission.THEME" />
 
     <queries>
-        <provider android:authorities="dev.netrunner.launcher.theme" />
+        <!-- Package query rather than a provider query: two provider entries clash in the merger. -->
+        <package android:name="dev.netrunner.launcher" />
     </queries>
 
     <application>
