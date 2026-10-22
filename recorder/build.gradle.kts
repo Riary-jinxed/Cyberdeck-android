@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.recorder"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
         // Vosk ships native code per ABI: the deck phone is arm64 only.
         ndk { abiFilters += "arm64-v8a" }
     }

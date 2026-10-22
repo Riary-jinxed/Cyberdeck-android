@@ -68,7 +68,7 @@ Une deuxième appli, dans le module `clock/` (package `dev.netrunner.clock`, APK
 
 ## Calcul Netrunner (appli à part)
 
-Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK séparé signé avec la même clé). Elle partage avec les futures applis du deck le module `deck/` (factions, polices, widgets HUD, mises à jour).
+Une troisième appli, dans le module `calc/` (package `dev.netrunner.calc`, APK séparé signé avec la même clé). Elle partage avec les futures applis du deck le module `deck/` (factions, polices, widgets HUD, mises à jour). Toutes les applis du deck reprennent les 7 factions du launcher (couleurs, motif de fond, découpe des panneaux, glitch) et suivent automatiquement celle choisie dans le launcher, lue à chaque retour dans l'appli via son fournisseur `content://dev.netrunner.launcher.theme/current` (permission signature `dev.netrunner.permission.THEME`) ; CONFIG › Faction permet de garder un thème propre à une appli.
 
 - **Scientifique** : priorités, parenthèses (fermées toutes seules), trigonométrie en degrés ou radians et fonctions inverses (touche 2ND), ln, log, eˣ, 10ˣ, puissances, racines, factorielle, pourcentage, mod, π, e, notation EE, ANS et multiplication implicite (`2π`, `3(4+1)`). Résultat en direct pendant la saisie, historique des 50 derniers calculs, appui long pour copier.
 - **Programmeur** : entiers 8, 16, 32 ou 64 bits, signés ou non, saisie en HEX, DEC, OCT ou BIN avec les quatre bases affichées en même temps, AND, OR, XOR, NOT, NAND, NOR, décalages, MOD, et grille de bits à toucher pour les inverser.

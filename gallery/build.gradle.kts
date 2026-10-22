@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.gallery"
         minSdk = 29
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.2.0"
+        versionCode = 5
+        versionName = "0.2.1"
     }
 
     // Same key as the launcher (CI secrets), so each new APK installs over the previous one.

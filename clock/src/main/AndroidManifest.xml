@@ -18,7 +18,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Reads the launcher's faction, so the clock follows its theme. Same signing key only. -->
+    <permission
+        android:name="dev.netrunner.permission.THEME"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="dev.netrunner.permission.THEME" />
+
     <queries>
+        <provider android:authorities="dev.netrunner.launcher.theme" />
         <package android:name="com.android.deskclock" />
         <package android:name="com.google.android.deskclock" />
     </queries>
