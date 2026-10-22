@@ -56,7 +56,7 @@ import java.time.LocalDate
 // ---------------------------------------------------------------------------------- shared
 
 @Composable
-private fun BackRow(title: String, subtitle: String = "", onBack: () -> Unit) {
+internal fun BackRow(title: String, subtitle: String = "", onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title.uppercase(), color = Cp.Yellow, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -52,6 +52,7 @@ import dev.netrunner.launcher.kit.ChecklistTemplate
 import dev.netrunner.launcher.kit.Equipment
 import dev.netrunner.launcher.kit.KitNotes
 import dev.netrunner.launcher.kit.KitStore
+import dev.netrunner.launcher.kit.Logbook
 import dev.netrunner.launcher.kit.Subnet
 import dev.netrunner.launcher.system.UiSound
 import java.time.Instant
@@ -59,21 +60,28 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private enum class KitTab(val label: String) {
-    Inventory("INVENTAIRE"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),
+    Inventory("INVENTAIRE"), Logbook("CARNET"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),
     Addressing("ADRESSAGE"), Racks("BAIES"), Subnet("IP / CIDR"), Calc("CALCULS"),
     Memo("MÉMO"), Tools("OUTILS"),
 }
 
 /**
- * Field kit for the technician: equipment inventory, intervention checklists, cable survey,
+ * Field kit for the technician: equipment inventory, intervention logbook and focus mode, checklists, cable survey,
  * config templates and switch config generator, addressing plan, racks, offline memo, IPv4/IPv6
  * calculator, PoE / fibre / MAC calculations and admin tools. Everything stays on the phone.
  */
 @Composable
 fun KitScreen(onClose: () -> Unit) {
     val context = LocalContext.current
-    remember { KitStore.load(context.applicationContext) }
-    var tab by remember { mutableStateOf(KitTab.Inventory) }
+    remember {
+        KitStore.load(context.applicationContext)
+        Logbook.load(context.applicationContext)
+    }
+    var tab by remember { mutableStateOf(if (Logbook.focusId != null) KitTab.Logbook else KitTab.Inventory) }
+    var logOpen by remember { mutableStateOf<String?>(null) }
+    // During an intervention in focus the kit opens on the focus screen; KIT ► shows the tabs.
+    var kitInFocus by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Logbook.focusId, Logbook.focusRequest) { kitInFocus = false }
     // A code sent by the Scanner or a note: its sheet lives in the inventory.
     androidx.compose.runtime.LaunchedEffect(KitStore.request) { if (KitStore.request != null) tab = KitTab.Inventory }
 
@@ -89,6 +97,22 @@ fun KitScreen(onClose: () -> Unit) {
     ) {
         PanelHeader(title = "// KIT DE TERRAIN", accent = Cp.Yellow, onClose = onClose)
         Spacer(Modifier.height(8.dp))
+        if (Logbook.focusId != null && !kitInFocus) {
+            FocusScreen(
+                onOpenKit = { kitInFocus = true },
+                onOpenSheet = { id ->
+                    kitInFocus = true
+                    tab = KitTab.Logbook
+                    logOpen = id
+                },
+            )
+            return@Column
+        }
+        if (Logbook.focusId != null) {
+            BackHandler { kitInFocus = false }
+            FocusBanner(onReturn = { kitInFocus = false })
+            Spacer(Modifier.height(8.dp))
+        }
         KitTab.entries.chunked(4).forEachIndexed { rowIndex, row ->
         if (rowIndex > 0) Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -118,6 +142,7 @@ fun KitScreen(onClose: () -> Unit) {
         Spacer(Modifier.height(10.dp))
         when (tab) {
             KitTab.Inventory -> InventoryTab()
+            KitTab.Logbook -> LogbookTab(logOpen, onOpen = { logOpen = it })
             KitTab.Checklists -> ChecklistsTab()
             KitTab.Cables -> CablesTab()
             KitTab.Configs -> ConfigsTab()
@@ -501,7 +526,7 @@ private fun ChecklistsTab() {
 }
 
 @Composable
-private fun ProgressBar(done: Int, total: Int, color: Color) {
+internal fun ProgressBar(done: Int, total: Int, color: Color) {
     Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         repeat(total.coerceAtLeast(1)) { i ->
             Box(
@@ -515,7 +540,7 @@ private fun ProgressBar(done: Int, total: Int, color: Color) {
 }
 
 @Composable
-private fun RunView(run: ChecklistRun, onBack: () -> Unit) {
+internal fun RunView(run: ChecklistRun, onBack: () -> Unit) {
     val context = LocalContext.current
     var report by remember { mutableStateOf(false) }
     if (report) {
