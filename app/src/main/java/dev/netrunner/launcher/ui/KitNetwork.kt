@@ -269,7 +269,14 @@ internal fun ConfigsTab() {
     var vendor by remember { mutableStateOf("Tous") }
     var open by remember { mutableStateOf<ConfigTemplate?>(null) }
     var editing by remember { mutableStateOf<ConfigTemplate?>(null) }
+    var generator by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    if (generator) {
+        BackHandler { generator = false }
+        SwitchGenerator(onBack = { generator = false })
+        return
+    }
 
     editing?.let { t ->
         BackHandler { editing = null }
@@ -287,6 +294,9 @@ internal fun ConfigsTab() {
 
     val all = KitStore.allConfigs()
     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+            KitButton("⚙ GÉNÉRER UNE CONFIG DE SWITCH COMPLÈTE ►", Cp.Yellow, Modifier.fillMaxWidth(), filled = true) { generator = true }
+        }
         item { KitChips(listOf("Tous", "Cisco", "HP / Aruba", "Ubiquiti"), vendor) { vendor = it } }
         item {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {

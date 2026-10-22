@@ -59,13 +59,15 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private enum class KitTab(val label: String) {
-    Inventory("INVENTAIRE"), Checklists("CHECKLISTS"), Cables("CÂBLES"),
-    Configs("CONFIGS"), Memo("MÉMO"), Subnet("IP / CIDR"), Calc("CALCULS"),
+    Inventory("INVENTAIRE"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),
+    Addressing("ADRESSAGE"), Racks("BAIES"), Subnet("IP / CIDR"), Calc("CALCULS"),
+    Memo("MÉMO"), Tools("OUTILS"),
 }
 
 /**
  * Field kit for the technician: equipment inventory, intervention checklists, cable survey,
- * config templates, offline memo, IPv4/IPv6 calculator and PoE / fibre / MAC calculations. Everything stays on the phone.
+ * config templates and switch config generator, addressing plan, racks, offline memo, IPv4/IPv6
+ * calculator, PoE / fibre / MAC calculations and admin tools. Everything stays on the phone.
  */
 @Composable
 fun KitScreen(onClose: () -> Unit) {
@@ -122,6 +124,9 @@ fun KitScreen(onClose: () -> Unit) {
             KitTab.Memo -> MemoTab()
             KitTab.Subnet -> IpTab()
             KitTab.Calc -> CalcTab()
+            KitTab.Addressing -> AddressingTab()
+            KitTab.Racks -> RacksTab()
+            KitTab.Tools -> ToolsTab()
         }
     }
 }
@@ -512,6 +517,12 @@ private fun ProgressBar(done: Int, total: Int, color: Color) {
 @Composable
 private fun RunView(run: ChecklistRun, onBack: () -> Unit) {
     val context = LocalContext.current
+    var report by remember { mutableStateOf(false) }
+    if (report) {
+        BackHandler { report = false }
+        ReportSheet(run, onBack = { report = false })
+        return
+    }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -558,6 +569,9 @@ private fun RunView(run: ChecklistRun, onBack: () -> Unit) {
                         textDecoration = if (done) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
                     )
                 }
+            }
+            item {
+                KitButton("RAPPORT PDF ►", Cp.Yellow, Modifier.fillMaxWidth().padding(top = 8.dp), filled = true) { report = true }
             }
             item {
                 KitButton("SUPPRIMER CETTE INTERVENTION", Cp.Red, Modifier.fillMaxWidth().padding(top = 8.dp)) {

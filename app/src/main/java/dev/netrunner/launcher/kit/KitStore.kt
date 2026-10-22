@@ -178,6 +178,8 @@ object KitStore {
         // Cables keep their survey, they just lose the link.
         cables.replaceAll { if (it.equipmentId == id) it.copy(equipmentId = "") else it }
         save(context)
+        NetPlan.load(context)
+        NetPlan.forgetEquipment(context, id)
     }
 
     fun search(query: String): List<Equipment> {

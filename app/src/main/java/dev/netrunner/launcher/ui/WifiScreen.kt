@@ -85,6 +85,7 @@ fun WifiScreen(onClose: () -> Unit) {
     var locationOn by remember { mutableStateOf(locationEnabled(context)) }
     var tracked by remember { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf("") }
+    var view by remember { mutableStateOf("BORNES") }
 
     val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         granted = hasPermissions(context)
@@ -146,6 +147,16 @@ fun WifiScreen(onClose: () -> Unit) {
             }
 
             else -> {
+                KitChips(listOf("BORNES", "CANAUX", "CONNEXION"), view) { view = it }
+                Spacer(Modifier.height(8.dp))
+                if (view == "CANAUX") {
+                    ChannelView(points)
+                    return@Column
+                }
+                if (view == "CONNEXION") {
+                    ConnectionView(points)
+                    return@Column
+                }
                 if (throttled) {
                     Text(
                         "⚠ Android limite les scans (4 / 2 min). Pour un suivi en direct : Options développeur › désactive « Limitation de la recherche Wi-Fi ».",
