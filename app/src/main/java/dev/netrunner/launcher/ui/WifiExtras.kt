@@ -172,8 +172,9 @@ internal fun ConnectionView(points: List<AccessPoint>) {
     val context = LocalContext.current
     var lan by remember { mutableStateOf<LanInfo?>(null) }
     var speed by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    val active = rememberScreenActive()
+    LaunchedEffect(active) {
+        while (active) {
             lan = withContext(Dispatchers.IO) { NetTools.lanInfo(context) }
             speed = NetTools.wifiSignal(context)
             delay(2000)

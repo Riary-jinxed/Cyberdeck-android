@@ -206,14 +206,17 @@ fun QuickPanel(onClose: () -> Unit, onSystemShade: () -> Unit, onSettings: () ->
         )
         Text("// ALLÉGEANCE", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        TileRow(
-            *Faction.entries.filter { it != Faction.Ghost }.map { f ->
-                Tile(f.label, if (Cp.faction == f) "ACTIF" else "", Cp.faction == f) {
-                    UiSound.play(context, UiSound.Cue.Glitch)
-                    Cp.select(context, f)
-                }
-            }.toTypedArray()
-        )
+        Faction.entries.filter { it != Faction.Ghost }.chunked(3).forEachIndexed { row, factions ->
+            if (row > 0) Spacer(Modifier.height(8.dp))
+            TileRow(
+                *factions.map { f ->
+                    Tile(f.label, if (Cp.faction == f) "ACTIF" else "", Cp.faction == f) {
+                        UiSound.play(context, UiSound.Cue.Glitch)
+                        Cp.select(context, f)
+                    }
+                }.toTypedArray()
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
         VolumeSlider("MÉDIA", AudioManager.STREAM_MUSIC, audio)

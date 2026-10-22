@@ -98,8 +98,10 @@ fun WifiScreen(onClose: () -> Unit) {
     LaunchedEffect(Unit) {
         if (!granted) permissionRequest.launch(requiredPermissions())
     }
-    DisposableEffect(granted) {
-        if (granted) scanner.start(scope)
+    // Scanning only while the screen is in front: Wi-Fi scans are costly on the radio.
+    val active = rememberScreenActive()
+    DisposableEffect(granted, active) {
+        if (granted && active) scanner.start(scope)
         onDispose { scanner.stop() }
     }
 

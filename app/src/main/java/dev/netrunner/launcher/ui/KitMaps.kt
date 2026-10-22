@@ -302,8 +302,9 @@ private fun SurveyView(s: Survey, onBack: () -> Unit) {
             Logbook.decode(context, android.net.Uri.fromFile(Coverage.plan(context, s.id)), 1600)?.asImageBitmap()
         }
     }
-    val live by produceState<Pair<Int, Int>?>(null) {
-        while (true) {
+    val active = rememberScreenActive()
+    val live by produceState<Pair<Int, Int>?>(null, active) {
+        while (active) {
             value = NetTools.wifiSignal(context)
             delay(2000)
         }

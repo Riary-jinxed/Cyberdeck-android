@@ -164,10 +164,28 @@ class NetrunnerKeyboardService : InputMethodService(), LifecycleOwner, SavedStat
 
     private var lastCorrection: Pair<String, String>? = null
 
+    /** When the last space after a word was typed, for the double-space full stop. */
+    private var spaceAfterWordAt = 0L
+
     private val actions = object : KeyboardActions {
         override fun type(text: String) {
             // Auto-correction: on a space or punctuation, a word the checker flags as a typo is
             // replaced by its recommended suggestion. Backspace right after restores the original.
+            // Double space after a word gives ". ", like other keyboards (text fields only).
+            val now = android.os.SystemClock.uptimeMillis()
+            if (text == " " && field.value.kind == FieldKind.Text && now - spaceAfterWordAt < 1200) {
+                spaceAfterWordAt = 0L
+                val ic = currentInputConnection
+                val before = ic?.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+                if (ic != null && before.length == 2 && before[1] == ' ' && before[0].isLetterOrDigit()) {
+                    lastCorrection = null
+                    ic.beginBatchEdit()
+                    ic.deleteSurroundingText(1, 0)
+                    ic.commitText(". ", 1)
+                    ic.endBatchEdit()
+                    return
+                }
+            }
             val s = suggestions.value
             val fix = s.autoFix
             if (fix != null && field.value.autocorrect && text.length == 1 && text[0] in " .,;:!?\n" && currentWord() == s.word) {
@@ -176,7 +194,14 @@ class NetrunnerKeyboardService : InputMethodService(), LifecycleOwner, SavedStat
             } else {
                 lastCorrection = null
             }
-            currentInputConnection?.commitText(text, 1)
+            val ic = currentInputConnection
+            val wordBefore = text == " " && ic?.getTextBeforeCursor(1, 0)?.firstOrNull()?.isLetterOrDigit() == true
+            ic?.commitText(text, 1)
+            spaceAfterWordAt = if (wordBefore) now else 0L
+        }
+
+        override fun contextAction(id: Int) {
+            currentInputConnection?.performContextMenuAction(id)
         }
 
         override fun pickSuggestion(text: String) {
@@ -184,6 +209,7 @@ class NetrunnerKeyboardService : InputMethodService(), LifecycleOwner, SavedStat
             if (word.isEmpty() || currentWord() != word) return
             replaceWord(word, "$text ")
             lastCorrection = null
+            spaceAfterWordAt = android.os.SystemClock.uptimeMillis()
         }
 
         override fun backspace() {
@@ -233,6 +259,8 @@ class NetrunnerKeyboardService : InputMethodService(), LifecycleOwner, SavedStat
 interface KeyboardActions {
     fun type(text: String)
     fun pickSuggestion(text: String)
+    /** Paste, select all, copy: android.R.id values for the editor's context menu. */
+    fun contextAction(id: Int)
     fun backspace()
     fun enter()
     fun cursor(left: Boolean)

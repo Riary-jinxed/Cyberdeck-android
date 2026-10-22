@@ -32,6 +32,7 @@ class NetrunnerNotificationService : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        handler.removeCallbacks(pending)
         NotificationHub.detach(this)
         screenOff?.let { runCatching { unregisterReceiver(it) } }
         screenOff = null
@@ -40,9 +41,19 @@ class NetrunnerNotificationService : NotificationListenerService() {
         Ice.stop()
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = refresh()
+    override fun onNotificationPosted(sbn: StatusBarNotification) = refreshSoon()
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) = refresh()
+    override fun onNotificationRemoved(sbn: StatusBarNotification) = refreshSoon()
+
+    // Players and downloads repost their notification several times a second: one rebuild of
+    // the feed per burst is enough.
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pending = Runnable { refresh() }
+
+    private fun refreshSoon() {
+        handler.removeCallbacks(pending)
+        handler.postDelayed(pending, 250)
+    }
 
     private fun refresh() {
         val active = runCatching { activeNotifications }.getOrNull() ?: return

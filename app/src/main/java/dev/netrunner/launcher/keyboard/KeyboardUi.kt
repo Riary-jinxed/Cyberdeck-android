@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +27,18 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -35,9 +48,11 @@ import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.ui.Cp
 import dev.netrunner.launcher.ui.HudFont
 import dev.netrunner.launcher.ui.hudPanel
+import dev.netrunner.launcher.ui.hudShape
 import dev.netrunner.launcher.ui.scanlines
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 private enum class Layer { Letters, Symbols, More, Numpad }
 private enum class Shift { Off, Once, Locked }
@@ -86,11 +101,22 @@ fun KeyboardUi(field: FieldInfo, suggestions: Suggestions, actions: KeyboardActi
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Header: brand, cursor keys, accent strip, keyboard switch.
+        // Suggestion bar: full width above everything, always there so the keys never jump.
+        SuggestionBar(
+            suggestions = if (field.spellcheck) suggestions else Suggestions(),
+            onPick = { pick ->
+                tap()
+                actions.pickSuggestion(pick)
+                if (shift == Shift.Once) shift = Shift.Off
+            },
+            onTool = { id -> tap(); actions.contextAction(id) },
+        )
+
+        // Controls: brand (or the accents of a long-pressed letter), cursor keys, switch, hide.
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(34.dp),
+                .height(32.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -101,37 +127,33 @@ fun KeyboardUi(field: FieldInfo, suggestions: Suggestions, actions: KeyboardActi
                         label = if (shift != Shift.Off) a.uppercase() else a.toString(),
                         color = Cp.Yellow,
                         modifier = Modifier.weight(1f),
+                        height = 32.dp,
                         onTap = { tap(); typeChar(a) },
                     )
                 }
-                Key("✕", Cp.Red, Modifier.weight(1f), onTap = { accents = null })
+                Key("✕", Cp.Red, Modifier.weight(1f), height = 32.dp, onTap = { accents = null })
             } else {
-                if (field.spellcheck && suggestions.word.isNotEmpty()) {
-                    SuggestionStrip(suggestions, Modifier.weight(1f)) { pick ->
-                        tap()
-                        actions.pickSuggestion(pick)
-                        if (shift == Shift.Once) shift = Shift.Off
-                    }
-                } else {
-                    Text(
-                        "◢ NETRUNNER//KB",
-                        color = Cp.Yellow,
-                        fontFamily = HudFont,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f).padding(start = 6.dp),
-                    )
-                }
+                Text(
+                    "◢ ${Cp.faction.label}//KB",
+                    color = Cp.Yellow,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                )
                 Key(
                     if (layer == Layer.Numpad) "ABC" else "123",
                     Cp.Cyan,
                     Modifier.weight(0.6f),
+                    height = 32.dp,
                     onTap = { tap(); layer = if (layer == Layer.Numpad) Layer.Letters else Layer.Numpad },
                 )
-                Key("◄", Cp.Cyan, Modifier.weight(0.5f), repeat = true, onTap = { actions.cursor(left = true) })
-                Key("►", Cp.Cyan, Modifier.weight(0.5f), repeat = true, onTap = { actions.cursor(left = false) })
-                Key("🌐", Cp.Dim, Modifier.weight(0.5f), onTap = { actions.switchKeyboard() })
-                Key("▼", Cp.Dim, Modifier.weight(0.5f), onTap = { actions.hide() })
+                Key("◄", Cp.Cyan, Modifier.weight(0.5f), height = 32.dp, repeat = true, onTap = { actions.cursor(left = true) })
+                Key("►", Cp.Cyan, Modifier.weight(0.5f), height = 32.dp, repeat = true, onTap = { actions.cursor(left = false) })
+                Key("🌐", Cp.Dim, Modifier.weight(0.5f), height = 32.dp, onTap = { actions.switchKeyboard() })
+                Key("▼", Cp.Dim, Modifier.weight(0.5f), height = 32.dp, onTap = { actions.hide() })
             }
         }
 
@@ -186,7 +208,11 @@ fun KeyboardUi(field: FieldInfo, suggestions: Suggestions, actions: KeyboardActi
                 else -> ','
             }
             CharKey(side, shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it }
-            Key("━━ ESPACE ━━", Cp.Dim, Modifier.weight(4f), onTap = { tap(); typeChar(' ') })
+            SpaceKey(
+                Modifier.weight(4f),
+                onSpace = { tap(); typeChar(' ') },
+                onSlide = { left -> tap(); actions.cursor(left) },
+            )
             CharKey('.', shift, Modifier.weight(1f), ::tap, ::typeChar) { accents = it }
             Key(field.enterLabel, Cp.Background, Modifier.weight(1.6f), filled = true, fill = Cp.Yellow, onTap = {
                 tap()
@@ -197,36 +223,147 @@ fun KeyboardUi(field: FieldInfo, suggestions: Suggestions, actions: KeyboardActi
     }
 }
 
-/** Spell checker strip: the typed word (red when it looks wrong) and up to three corrections. */
+/**
+ * Suggestion bar: three equal slots, the typed word on the left (tap to keep it as is), the
+ * best correction in the middle (filled when it will replace the word on the next space) and
+ * the runner-up on the right. Long words shrink, then end with "…", never cut at the start.
+ * With nothing to suggest it holds paste, select all and copy.
+ */
 @Composable
-private fun SuggestionStrip(s: Suggestions, modifier: Modifier, onPick: (String) -> Unit) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SuggestionBar(suggestions: Suggestions, onPick: (String) -> Unit, onTool: (Int) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(42.dp)
+            .hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.45f), fill = Cp.Panel, cut = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val word = suggestions.word
+        if (word.isEmpty()) {
+            Slot("⎘ COLLER", Cp.Cyan) { onTool(android.R.id.paste) }
+            Divider()
+            Slot("▣ TOUT SÉLECT.", Cp.Dim) { onTool(android.R.id.selectAll) }
+            Divider()
+            Slot("⧉ COPIER", Cp.Dim) { onTool(android.R.id.copy) }
+            return@Row
+        }
+        val best = suggestions.options.getOrNull(0)
+        val second = suggestions.options.getOrNull(1)
+        val typed = "«$word»"
+        val typedColor = if (suggestions.typo) Cp.Red else Cp.Dim
+        if (best == null) {
+            Slot("", Cp.Dim, onTap = null)
+            Divider()
+            Slot(typed, typedColor) { onPick(word) }
+            Divider()
+            Slot("", Cp.Dim, onTap = null)
+        } else {
+            Slot(typed, typedColor) { onPick(word) }
+            Divider()
+            Slot(best, Cp.Yellow, filled = best == suggestions.autoFix) { onPick(best) }
+            Divider()
+            Slot(second.orEmpty(), Cp.Yellow, onTap = second?.let { s -> { onPick(s) } })
+        }
+    }
+}
+
+@Composable
+private fun RowScope.Slot(text: String, color: Color, filled: Boolean = false, onTap: (() -> Unit)?) {
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .padding(3.dp)
+            .then(if (filled) Modifier.background(color, hudShape(6.dp)) else Modifier)
+            .then(if (onTap != null) Modifier.pointerInput(text) { detectTapGestures(onTap = { onTap() }) } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(
-            s.word,
-            color = if (s.typo) Cp.Red else Cp.Dim,
+            text,
+            color = if (filled) Cp.Background else color,
             fontFamily = HudFont,
-            fontSize = 13.sp,
+            fontSize = when {
+                text.length > 14 -> 12.sp
+                text.length > 10 -> 14.sp
+                else -> 16.sp
+            },
             fontWeight = FontWeight.Bold,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         )
-        s.options.forEach { option ->
-            val auto = option == s.autoFix
-            Text(
-                option,
-                color = if (auto) Cp.Background else Cp.Yellow,
-                fontFamily = HudFont,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.6f), fill = if (auto) Cp.Yellow else Cp.Panel, cut = 5.dp)
-                    .pointerInput(option) { detectTapGestures(onTap = { onPick(option) }) }
-                    .padding(vertical = 5.dp),
+    }
+}
+
+@Composable
+private fun Divider() {
+    Box(
+        Modifier
+            .width(1.dp)
+            .height(22.dp)
+            .background(Cp.Cyan.copy(alpha = 0.25f))
+    )
+}
+
+/**
+ * Space bar that also moves the cursor: slide a finger along it and the cursor follows,
+ * one character per step, without lifting.
+ */
+@Composable
+private fun SpaceKey(modifier: Modifier, onSpace: () -> Unit, onSlide: (left: Boolean) -> Unit) {
+    var pressed by remember { mutableStateOf(false) }
+    var sliding by remember { mutableStateOf(false) }
+    val space by rememberUpdatedState(onSpace)
+    val slide by rememberUpdatedState(onSlide)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .hudPanel(
+                borderColor = if (pressed) Cp.Yellow else Cp.Cyan.copy(alpha = 0.35f),
+                fill = if (pressed && !sliding) Cp.Yellow.copy(alpha = 0.85f) else Cp.Panel,
+                cut = 6.dp,
             )
-        }
+            .pointerInput(Unit) {
+                val step = 12.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    pressed = true
+                    var anchor = down.position.x
+                    var slid = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val x = change.position.x
+                        if (!slid && abs(x - down.position.x) > viewConfiguration.touchSlop) {
+                            slid = true
+                            sliding = true
+                            anchor = x
+                        }
+                        if (slid) {
+                            while (x - anchor >= step) { slide(false); anchor += step }
+                            while (anchor - x >= step) { slide(true); anchor -= step }
+                            change.consume()
+                        }
+                    }
+                    if (!slid) space()
+                    pressed = false
+                    sliding = false
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (sliding) "◄ CURSEUR ►" else "━━ ESPACE ━━",
+            color = if (pressed && !sliding) Cp.Background else if (sliding) Cp.Yellow else Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -274,6 +411,7 @@ private fun CharKey(
         label = label,
         color = Cp.Text,
         modifier = modifier,
+        preview = true,
         onTap = { tap(); type(c) },
         onLong = Accents[c]?.let { variants -> { showAccents(variants) } },
     )
@@ -291,10 +429,13 @@ private fun Key(
     filled: Boolean = false,
     fill: Color = Cp.Cyan,
     repeat: Boolean = false,
+    height: Dp = 46.dp,
+    preview: Boolean = false,
     onLong: (() -> Unit)? = null,
     onTap: () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
+    val measurer = rememberTextMeasurer()
     val currentTap by rememberUpdatedState(onTap)
     val currentLong by rememberUpdatedState(onLong)
     val scope = rememberCoroutineScope()
@@ -304,10 +445,36 @@ private fun Key(
         else -> Cp.Panel
     }
     val textColor = if (pressed) Cp.Background else color
+    val bubbleFill = Cp.Panel
+    val bubbleText = Cp.Yellow
     Box(
         modifier
+            .zIndex(if (pressed) 1f else 0f)
             .fillMaxWidth()
-            .height(46.dp)
+            .height(height)
+            // Letters show an enlarged copy above the finger while pressed, as the key itself is hidden under it.
+            .drawWithContent {
+                drawContent()
+                if (preview && pressed) {
+                    val bw = size.width + 14.dp.toPx()
+                    val bh = size.height * 1.1f
+                    val topLeft = Offset((size.width - bw) / 2, -bh - 6.dp.toPx())
+                    val radius = CornerRadius(6.dp.toPx())
+                    drawRoundRect(bubbleFill, topLeft, Size(bw, bh), radius)
+                    drawRoundRect(bubbleText, topLeft, Size(bw, bh), radius, style = Stroke(2.dp.toPx()))
+                    val layout = measurer.measure(
+                        label,
+                        TextStyle(color = bubbleText, fontFamily = HudFont, fontSize = 30.sp, fontWeight = FontWeight.Bold),
+                    )
+                    drawText(
+                        layout,
+                        topLeft = Offset(
+                            topLeft.x + (bw - layout.size.width) / 2,
+                            topLeft.y + (bh - layout.size.height) / 2,
+                        ),
+                    )
+                }
+            }
             .hudPanel(borderColor = if (pressed) Cp.Yellow else Cp.Cyan.copy(alpha = 0.35f), fill = background, cut = 6.dp)
             .pointerInput(repeat) {
                 if (repeat) {
