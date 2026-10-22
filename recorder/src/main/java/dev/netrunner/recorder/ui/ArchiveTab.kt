@@ -1,5 +1,7 @@
 package dev.netrunner.recorder.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.media.MediaPlayer
 import android.widget.Toast
@@ -16,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -39,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.netrunner.deck.Cp
 import dev.netrunner.deck.HudButton
 import dev.netrunner.deck.HudFont
@@ -46,8 +51,11 @@ import dev.netrunner.deck.MonoFont
 import dev.netrunner.deck.hudFieldColors
 import dev.netrunner.deck.hudPanel
 import dev.netrunner.deck.hudShape
+import dev.netrunner.recorder.data.NotesLink
 import dev.netrunner.recorder.data.Recordings
+import dev.netrunner.recorder.data.Transcripts
 import dev.netrunner.recorder.data.Wave
+import dev.netrunner.recorder.system.Transcriber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -63,6 +71,11 @@ fun ArchiveTab(version: Int, onChanged: () -> Unit) {
     var open by remember { mutableStateOf<java.io.File?>(null) }
     var renaming by remember { mutableStateOf<Recordings.Item?>(null) }
     var deleting by remember { mutableStateOf<Recordings.Item?>(null) }
+
+    val error by Transcriber.errors.collectAsStateWithLifecycle()
+    LaunchedEffect(error) {
+        error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); Transcriber.clearError() }
+    }
 
     val list = items
     when {
@@ -100,6 +113,7 @@ fun ArchiveTab(version: Int, onChanged: () -> Unit) {
                             Chip("RENOMMER", Cp.Cyan) { renaming = item }
                             Chip("SUPPR.", Cp.Red) { deleting = item }
                         }
+                        TranscriptPanel(item)
                     } else {
                         val bars = remember(item.file) { Wave.bars(Recordings.levels(item.file), 60) }
                         WaveBars(bars, Modifier.fillMaxWidth().height(28.dp).padding(top = 6.dp), color = Cp.Dim)
@@ -145,6 +159,57 @@ fun ArchiveTab(version: Int, onChanged: () -> Unit) {
             },
             dismissButton = { HudButton("ANNULER", color = Cp.Dim) { deleting = null } },
         )
+    }
+}
+
+/** The recording's text: start a transcription, follow it, then copy it or send it to Notes. */
+@Composable
+private fun TranscriptPanel(item: Recordings.Item) {
+    val context = LocalContext.current
+    val jobs by Transcriber.jobs.collectAsStateWithLifecycle()
+    val done by Transcriber.done.collectAsStateWithLifecycle()
+    val model by Transcriber.model.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { Transcriber.refresh(context) }
+    val text by produceState<String?>(null, item.file, done) { value = withContext(Dispatchers.IO) { Transcripts.read(item.file) } }
+    val progress = jobs[item.file.path]
+
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        when {
+            progress != null -> {
+                Text(
+                    "TRANSCRIPTION… ${(progress * 100).toInt()} %", color = Cp.Yellow, fontFamily = HudFont,
+                    fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp,
+                )
+                LinearProgressIndicator(
+                    progress = { progress }, color = Cp.Yellow, trackColor = Cp.Dim.copy(alpha = 0.3f),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
+            text != null -> {
+                Text("TRANSCRIPTION", color = Cp.Cyan, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
+                SelectionContainer {
+                    Text(text!!, color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(vertical = 6.dp))
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    Chip("COPIER", Cp.Cyan) {
+                        val clip = context.getSystemService(ClipboardManager::class.java)
+                        clip.setPrimaryClip(ClipData.newPlainText(item.name, text))
+                        Toast.makeText(context, "Texte copié", Toast.LENGTH_SHORT).show()
+                    }
+                    Chip("→ NOTES", Cp.Yellow) {
+                        val note = NotesLink.add(context, item.name, text!!)
+                        if (note == null) Toast.makeText(context, "Appli Notes introuvable", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(context, "Note créée", Toast.LENGTH_SHORT).show()
+                    }
+                    Chip("REFAIRE", Cp.Dim) { Transcriber.transcribe(context, item.file, toNotes = false) }
+                }
+            }
+            model == Transcriber.ModelState.Ready -> Chip("TRANSCRIRE EN TEXTE", Cp.Yellow) { Transcriber.transcribe(context, item.file) }
+            else -> Text(
+                "Pour transcrire, télécharge d'abord le modèle de voix français dans CONFIG (une fois, hors ligne ensuite).",
+                color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp,
+            )
+        }
     }
 }
 

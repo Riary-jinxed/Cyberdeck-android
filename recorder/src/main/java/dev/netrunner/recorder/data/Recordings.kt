@@ -6,7 +6,8 @@ import android.os.Environment
 import java.io.File
 import java.io.IOException
 
-/** Recordings are .m4a files in the app's own storage, each with a ".wave" file of its levels. */
+/** Recordings are .m4a files in the app's own storage, each with a ".wave" file of its levels
+ * and, once transcribed, a ".txt". */
 object Recordings {
     data class Item(val file: File, val name: String, val date: Long, val duration: Long, val size: Long)
 
@@ -51,6 +52,7 @@ object Recordings {
         if (target.exists()) throw IOException("« $clean » existe déjà")
         if (!item.file.renameTo(target)) throw IOException("Renommage refusé")
         waveFile(item.file).renameTo(waveFile(target))
+        Transcripts.file(item.file).renameTo(Transcripts.file(target))
         target.setLastModified(item.date)
         return target
     }
@@ -58,6 +60,7 @@ object Recordings {
     fun delete(item: Item) {
         item.file.delete()
         waveFile(item.file).delete()
+        Transcripts.file(item.file).delete()
     }
 
     private fun clean(name: String) = name.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_").take(80)
