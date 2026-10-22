@@ -183,8 +183,10 @@ fun Modifier.crtGlitch(): Modifier = composed {
     val t by rememberSlowClock(fps = 12)
     var jitter by remember { mutableFloatStateOf(0f) }
     var tears by remember { mutableStateOf<List<Triple<Float, Float, Boolean>>>(emptyList()) }
-    LaunchedEffect(active) {
-        while (active) {
+    // Corporate and military themes keep a clean picture: no random glitch bursts.
+    val glitch = Cp.faction.glitch
+    LaunchedEffect(active, glitch) {
+        while (active && glitch) {
             delay(Random.nextLong(3500, 8000))
             repeat(Random.nextInt(3, 7)) {
                 jitter = Random.nextFloat() * 14f - 7f

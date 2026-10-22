@@ -128,11 +128,11 @@ fun LockScreen(onUnlock: () -> Unit) {
             Spacer(Modifier.height(40.dp))
             GlitchText(
                 text = now.format(LockTime),
-                style = TextStyle(fontFamily = DisplayFont, fontSize = 72.sp, fontWeight = FontWeight.Black),
+                style = TextStyle(fontFamily = Cp.faction.clockFont, fontSize = 72.sp * Cp.faction.clockScale, fontWeight = FontWeight.Black),
                 color = Cp.Yellow,
             )
             Text(
-                now.format(LockDate).uppercase(),
+                "${now.format(LockDate).uppercase()} // ${Cp.faction.place}",
                 color = Cp.Cyan,
                 fontFamily = HudFont,
                 fontSize = 15.sp,

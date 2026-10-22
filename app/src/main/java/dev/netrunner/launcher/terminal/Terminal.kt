@@ -378,10 +378,10 @@ class Terminal(
     }
 
     private fun theme(arg: String?) {
-        val faction = Faction.entries.firstOrNull { it.id == arg?.lowercase(Locale.ROOT) && it != Faction.Ghost }
+        val faction = arg?.lowercase(Locale.ROOT)?.let { a -> Faction.entries.firstOrNull { it.id == a } ?: Faction.Barghest.takeIf { a == "dogtown" } }?.takeIf { it != Faction.Ghost }
         if (faction == null) {
             out("faction actuelle : ${Cp.faction.label}", Tone.Ok)
-            out("usage : theme netrunner | arasaka | militech | netwatch | voodoo | dogtown", Tone.Dim)
+            out("usage : theme netrunner | arasaka | militech | netwatch | voodoo | barghest", Tone.Dim)
             return
         }
         Cp.select(context, faction)

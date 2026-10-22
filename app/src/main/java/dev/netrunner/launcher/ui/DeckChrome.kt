@@ -30,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +46,11 @@ import kotlinx.coroutines.withContext
 /** RAM slots of the deck, in the blue of the in-game cyberdeck bar. */
 private val DeckBlue = Color(0xFF2BD9FE)
 
-/** Yellow corner brackets around the whole screen, like the edges of the game's HUD. */
+/**
+ * Screen frame over the home screen, shaped by the faction: corner marks (netrunners), a
+ * targeting reticle with a range scale (Militech, Barghest), a thin corporate rule with a
+ * header bar (Arasaka) or ritual arcs in the corners (Voodoo Boys).
+ */
 fun Modifier.hudFrame(color: Color = Cp.Yellow.copy(alpha = 0.7f)): Modifier = drawWithContent {
     drawContent()
     val arm = 22.dp.toPx()
@@ -52,20 +58,60 @@ fun Modifier.hudFrame(color: Color = Cp.Yellow.copy(alpha = 0.7f)): Modifier = d
     val stroke = 2.dp.toPx()
     val w = size.width
     val h = size.height
+    val accent = Cp.Cyan.copy(alpha = 0.5f)
     val corners = listOf(
         Offset(inset, inset) to Offset(1f, 1f),
         Offset(w - inset, inset) to Offset(-1f, 1f),
         Offset(inset, h - inset) to Offset(1f, -1f),
         Offset(w - inset, h - inset) to Offset(-1f, -1f),
     )
-    corners.forEach { (p, d) ->
-        drawLine(color, p, Offset(p.x + arm * d.x, p.y), stroke)
-        drawLine(color, p, Offset(p.x, p.y + arm * d.y), stroke)
+    when (Cp.faction.frame) {
+        Frame.Corners -> {
+            corners.forEach { (p, d) ->
+                drawLine(color, p, Offset(p.x + arm * d.x, p.y), stroke)
+                drawLine(color, p, Offset(p.x, p.y + arm * d.y), stroke)
+            }
+            // Side ticks, half-way down.
+            val tick = 8.dp.toPx()
+            drawLine(accent, Offset(inset, h / 2 - tick), Offset(inset, h / 2 + tick), stroke)
+            drawLine(accent, Offset(w - inset, h / 2 - tick), Offset(w - inset, h / 2 + tick), stroke)
+        }
+        Frame.Reticle -> {
+            // Heavy brackets, a range scale down the left edge and centre marks on each side.
+            corners.forEach { (p, d) ->
+                drawLine(color, p, Offset(p.x + arm * 1.5f * d.x, p.y), stroke * 1.5f)
+                drawLine(color, p, Offset(p.x, p.y + arm * 1.5f * d.y), stroke * 1.5f)
+            }
+            val step = 14.dp.toPx()
+            var y = h * 0.25f
+            var k = 0
+            while (y < h * 0.75f) {
+                val len = if (k % 5 == 0) 12.dp.toPx() else 5.dp.toPx()
+                drawLine(accent, Offset(inset, y), Offset(inset + len, y), 1.dp.toPx())
+                y += step; k++
+            }
+            val mark = 14.dp.toPx()
+            drawLine(color, Offset(w / 2, inset), Offset(w / 2, inset + mark), stroke)
+            drawLine(color, Offset(w / 2, h - inset), Offset(w / 2, h - inset - mark), stroke)
+            drawLine(color, Offset(w - inset, h / 2), Offset(w - inset - mark, h / 2), stroke)
+        }
+        Frame.Rule -> {
+            // One hairline all round and a short solid header bar, like a corporate letterhead.
+            drawRect(color.copy(alpha = 0.35f), Offset(inset, inset), Size(w - inset * 2, h - inset * 2), style = Stroke(1.dp.toPx()))
+            drawRect(color, Offset(inset, inset), Size(w * 0.28f, 3.dp.toPx()))
+            drawRect(accent, Offset(w - inset - w * 0.08f, h - inset - 3.dp.toPx()), Size(w * 0.08f, 3.dp.toPx()))
+        }
+        Frame.Arcs -> {
+            // Doubled quarter circles in the corners.
+            val r = arm * 2.2f
+            corners.forEachIndexed { i, (p, _) ->
+                val start = when (i) { 0 -> 0f; 1 -> 90f; 2 -> 270f; else -> 180f }
+                val tl = Offset(p.x - r, p.y - r)
+                drawArc(color, start, 90f, false, tl, Size(r * 2, r * 2), style = Stroke(stroke))
+                drawArc(accent, start, 90f, false, Offset(p.x - r * 0.7f, p.y - r * 0.7f), Size(r * 1.4f, r * 1.4f), style = Stroke(1.dp.toPx()))
+            }
+        }
     }
-    // Side ticks, half-way down.
-    val tick = 8.dp.toPx()
-    drawLine(Cp.Cyan.copy(alpha = 0.5f), Offset(inset, h / 2 - tick), Offset(inset, h / 2 + tick), stroke)
-    drawLine(Cp.Cyan.copy(alpha = 0.5f), Offset(w - inset, h / 2 - tick), Offset(w - inset, h / 2 + tick), stroke)
 }
 
 /** "RAM ▮▮▮▮▮▯▯▯" deck memory bar with the battery temperature, refreshed every 10 s while visible. */
