@@ -2,7 +2,9 @@ package dev.netrunner.launcher.kit
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -145,6 +147,18 @@ object KitStore {
         tmp.writeText(root.toString())
         tmp.renameTo(f)
     }
+
+    /** A code handed over by the Scanner or a note link, waiting for the KIT panel to open its sheet. */
+    data class Request(val code: String, val format: String?)
+
+    var request by androidx.compose.runtime.mutableStateOf<Request?>(null)
+
+    /** The sheet for [request]: the known equipment with that code, or a new one pre-filled. */
+    fun sheetFor(request: Request): Equipment =
+        findByCode(request.code) ?: Equipment(
+            newId(), request.code, "", "", "", States[0],
+            request.format?.let { "Format : $it" }.orEmpty(), 0,
+        )
 
     fun newId(): String = System.currentTimeMillis().toString(36) + (0..999).random().toString(36)
 

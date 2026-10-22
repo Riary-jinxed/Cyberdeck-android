@@ -44,6 +44,14 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- The Agenda app (same signing key) reads her reminders. -->
+    <!-- Lets the deck's own apps (Scanner, Notes) open the field kit on a code: same signing key only. -->
+    <permission
+        android:name="dev.netrunner.permission.KIT"
+        android:label="Ouvrir le kit de terrain de Netrunner"
+        android:protectionLevel="signature" />
+    <!-- Kit sheet → note in Notes Netrunner (its provider, same signing key). -->
+    <uses-permission android:name="dev.netrunner.permission.WRITE_NOTES" />
+
     <permission
         android:name="dev.netrunner.permission.READ_REMINDERS"
         android:label="Lire les rappels d'As//ka"
@@ -63,6 +71,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="com.anthropic.claude" />
+        <package android:name="dev.netrunner.notes" />
         <!-- As//ka's ears: lets the app find the speech recognizer (Android 11+). -->
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -199,6 +208,22 @@
             android:screenOrientation="portrait"
             android:showWhenLocked="true"
             android:taskAffinity="dev.netrunner.launcher.lock" />
+
+        <!-- Scanner and Notes → field kit (KIT_ADD / KIT_OPEN), signature permission only. -->
+        <activity
+            android:name=".kit.KitLinkActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:permission="dev.netrunner.permission.KIT"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="dev.netrunner.action.KIT_ADD" />
+                <action android:name="dev.netrunner.action.KIT_OPEN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <!-- ICE limits: intrusion screen over an app whose daily time is used up. -->
         <activity
