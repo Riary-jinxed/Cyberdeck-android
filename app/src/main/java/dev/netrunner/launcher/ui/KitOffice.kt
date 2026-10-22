@@ -278,7 +278,7 @@ private fun ClientSheet(c: Client, onBack: () -> Unit, onEdit: () -> Unit, onOpe
         if (c.contracts.isEmpty()) {
             item { Text("> maintenance, support, infogérance : dates, montant, périmètre", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp) }
         } else {
-            items(c.contracts, key = { "k" + it.id }) { k -> ContractRow(k) { contract = k to false } }
+            items(c.contracts, key = { "k" + it.id }) { k -> ClientContractRow(k) { contract = k to false } }
         }
         item {
             Header("// DEVIS · ${c.quotes.size}", "[ + AJOUTER ]") {

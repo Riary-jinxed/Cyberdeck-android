@@ -86,7 +86,7 @@ private fun FileRow(title: String, detail: String, tag: String, tagColor: Color,
 }
 
 @Composable
-internal fun ContractRow(c: ClientContract, onClick: () -> Unit) {
+internal fun ClientContractRow(c: ClientContract, onClick: () -> Unit) {
     val (tag, color) = stateLabel(c)
     val period = when {
         c.start > 0 && c.end > 0 -> "du ${day(c.start)} au ${day(c.end)}"
