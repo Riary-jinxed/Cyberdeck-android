@@ -420,6 +420,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = drawerOpen,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -450,6 +451,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Terminal,
+            modifier = Modifier.blockTouches(),
             enter = slideInHorizontally { -it } + fadeIn(),
             exit = slideOutHorizontally { -it } + fadeOut(),
         ) {
@@ -458,6 +460,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Feed,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -466,6 +469,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Quick,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { -it } + fadeIn(),
             exit = slideOutVertically { -it } + fadeOut(),
         ) {
@@ -481,6 +485,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Settings,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -489,6 +494,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Messages,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -497,6 +503,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Kit,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -505,6 +512,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Stats,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -513,6 +521,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Hub,
+            modifier = Modifier.blockTouches(),
             enter = slideInHorizontally { it } + fadeIn(),
             exit = slideOutHorizontally { it } + fadeOut(),
         ) {
@@ -561,6 +570,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Wifi,
+            modifier = Modifier.blockTouches(),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
         ) {
@@ -569,6 +579,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
 
         AnimatedVisibility(
             visible = panel == Panel.Aska,
+            modifier = Modifier.blockTouches(),
             enter = slideInHorizontally { it } + fadeIn(),
             exit = slideOutHorizontally { it } + fadeOut(),
         ) {
@@ -599,6 +610,17 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                 booting = false
             })
         }
+    }
+}
+
+/**
+ * Makes an overlay a touch target over its whole area. Without it, a tap on an empty spot of a
+ * panel (no button there) falls through to the home screen underneath and can open an app.
+ * Events are only observed, not consumed, so everything inside the panel works as before.
+ */
+private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent()
     }
 }
 
