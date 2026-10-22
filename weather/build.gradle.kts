@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.weather"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
     }
 
     // Same key as the launcher (CI secrets), so each new APK installs over the previous one.

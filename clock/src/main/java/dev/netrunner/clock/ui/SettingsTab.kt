@@ -49,7 +49,6 @@ fun SettingsTab() {
     var crescendo by remember { mutableIntStateOf(ClockPrefs.crescendoSeconds(context)) }
     var ringFor by remember { mutableIntStateOf(ClockPrefs.ringMinutes(context)) }
     var home by remember { mutableStateOf(ClockPrefs.homeAfterMorning(context)) }
-    var faction by remember { mutableStateOf(Cp.faction) }
     var update by remember { mutableStateOf("") }
     var release by remember { mutableStateOf<Updater.Release?>(null) }
 
@@ -105,17 +104,31 @@ fun SettingsTab() {
 
         Spacer(Modifier.height(18.dp))
         SectionTitle("FACTION", Cp.Yellow)
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Suivre le launcher", color = Cp.Text, fontFamily = HudFont, fontSize = 16.sp)
+                Text(
+                    when {
+                        !Cp.follow -> "Thème propre à l'horloge."
+                        Cp.linked -> "Même thème que le launcher, mis à jour à chaque retour dans l'appli."
+                        else -> "Launcher introuvable ou trop ancien : thème local en attendant."
+                    },
+                    color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp,
+                )
+            }
+            Switch(checked = Cp.follow, onCheckedChange = { Cp.setFollow(context, it) }, colors = hudSwitch())
+        }
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Faction.entries.forEach { f ->
                 Box(
-                    Modifier.size(40.dp).background(f.palette.yellow, hudShape(6.dp))
-                        .clickable { Cp.select(context, f); faction = f },
+                    Modifier.size(36.dp).background(f.palette.yellow, hudShape(6.dp))
+                        .clickable { Cp.select(context, f) },
                     contentAlignment = Alignment.Center,
-                ) { if (f == faction) Text("◆", color = f.palette.background, fontSize = 16.sp) }
+                ) { if (f == Cp.faction) Text("◆", color = f.palette.background, fontSize = 15.sp) }
             }
         }
-        Text(faction.label, color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(Cp.faction.label + if (Cp.follow) "" else " · choisi ici", color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
 
         Spacer(Modifier.height(18.dp))
         SectionTitle("MISE À JOUR", Cp.Yellow)
