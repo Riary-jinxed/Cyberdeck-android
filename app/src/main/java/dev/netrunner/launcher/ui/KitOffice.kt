@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,11 +36,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.netrunner.launcher.kit.Client
+import dev.netrunner.launcher.kit.ClientContract
+import dev.netrunner.launcher.kit.ClientDocs
 import dev.netrunner.launcher.kit.Clients
 import dev.netrunner.launcher.kit.Intervention
 import dev.netrunner.launcher.kit.KitBackup
 import dev.netrunner.launcher.kit.KitStore
 import dev.netrunner.launcher.kit.Logbook
+import dev.netrunner.launcher.kit.Quote
+import dev.netrunner.launcher.kit.QuoteState
 import dev.netrunner.launcher.kit.Stock
 import dev.netrunner.launcher.kit.StockItem
 import dev.netrunner.launcher.kit.TimeSheet
@@ -100,15 +105,24 @@ internal fun ClientsView(onOpenIntervention: (String) -> Unit) {
 
     // Names only seen in the logbook can be turned into a sheet in one tap.
     val withoutSheet = Clients.knownNames().filter { Clients.byName(it) == null }
+    val context = LocalContext.current
     val q = query.trim()
-    val list = Clients.items.filter { q.isEmpty() || listOf(it.name, it.contact, it.address).any { f -> f.contains(q, ignoreCase = true) } }
+    val list = Clients.items.filter { q.isEmpty() || (listOf(it.name, it.contact, it.address) + Clients.refsOf(it)).any { f -> f.contains(q, ignoreCase = true) } }
+    // The search also looks through every client's documents (names, and text files' content).
+    val rev = ClientDocs.revision.intValue
+    val hasDocs = remember(rev, Clients.items.size) { Clients.items.any { ClientDocs.list(context, it.id).isNotEmpty() } }
+    val docHits = remember(q, rev) { if (q.length >= 2) ClientDocs.search(context, q) else emptyList() }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item {
             Header("// CLIENTS", "[ + NOUVEAU ]") {
                 editing = Client(KitStore.newId(), "", "", "", "", "", "", "", "", 0)
             }
         }
-        if (Clients.items.size > 5) item { KitField("Rechercher", query, { query = it }) }
+        if (Clients.items.size > 5 || hasDocs) item { KitField("Rechercher (clients et documents)", query, { query = it }) }
+        if (docHits.isNotEmpty()) {
+            item { Text("// DOCUMENTS", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            items(docHits, key = { "d" + it.second.path }) { (c, f) -> DocRow(f, c.name) }
+        }
         if (list.isEmpty() && withoutSheet.isEmpty()) {
             item { Text("> aucune fiche client : contacts, accès au site et consignes, reliés au carnet", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp) }
         }
@@ -123,7 +137,11 @@ internal fun ClientsView(onOpenIntervention: (String) -> Unit) {
             ) {
                 Text(c.name.ifBlank { "(sans nom)" }.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOf(c.contact, c.phone, "$count intervention" + if (count > 1) "s" else "").filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(
+                        c.contact, c.phone, "$count intervention" + if (count > 1) "s" else "",
+                        if (c.contracts.any { it.state() != ClientContract.State.Expired && it.state() != ClientContract.State.Upcoming }) "sous contrat" else "",
+                        c.quotes.count { it.state == QuoteState.Sent }.let { if (it > 0) "$it devis en attente" else "" },
+                    ).filter { it.isNotBlank() }.joinToString(" · "),
                     color = Cp.Dim,
                     fontFamily = MonoFont,
                     fontSize = 11.sp,
@@ -151,12 +169,91 @@ internal fun ClientsView(onOpenIntervention: (String) -> Unit) {
     }
 }
 
+/** One filed document: tap opens it in the matching app, long press offers share and delete. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun DocRow(file: java.io.File, client: String?) {
+    val context = LocalContext.current
+    var menu by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+    val kind = ClientDocs.kind(file)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.4f), cut = 4.dp)
+            .combinedClickable(
+                onClick = {
+                    if (!ClientDocs.open(context, file)) Toast.makeText(context, "Aucune appli pour ouvrir ce fichier", Toast.LENGTH_SHORT).show()
+                },
+                onLongClick = { menu = !menu; confirm = false },
+            )
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                kind.tag,
+                color = when (kind) {
+                    ClientDocs.Kind.Pdf -> Cp.Red
+                    ClientDocs.Kind.Image -> Cp.Yellow
+                    else -> Cp.Cyan
+                },
+                fontFamily = MonoFont,
+                fontSize = 11.sp,
+                modifier = Modifier.width(38.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(file.name, color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOfNotNull(client, ClientDocs.sizeLabel(file.length()), DateFmt.format(Instant.ofEpochMilli(file.lastModified()))).joinToString(" · "),
+                    color = Cp.Dim,
+                    fontFamily = MonoFont,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        if (menu) {
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KitButton("PARTAGER", Cp.Cyan, Modifier.weight(1f)) { ClientDocs.share(context, file); menu = false }
+                KitButton(if (confirm) "CONFIRMER" else "SUPPRIMER", Cp.Red, Modifier.weight(1f)) {
+                    if (confirm) ClientDocs.delete(file) else confirm = true
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ClientSheet(c: Client, onBack: () -> Unit, onEdit: () -> Unit, onOpenIntervention: (String) -> Unit) {
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
+    // Contract or quote being edited, with whether it is a new one.
+    var contract by remember { mutableStateOf<Pair<ClientContract, Boolean>?>(null) }
+    var quote by remember { mutableStateOf<Pair<Quote, Boolean>?>(null) }
+    contract?.let { (k, isNew) ->
+        BackHandler { contract = null }
+        ContractEditor(c.id, k, isNew) { contract = null }
+        return
+    }
+    quote?.let { (q, isNew) ->
+        BackHandler { quote = null }
+        QuoteEditor(c.id, q, isNew) { quote = null }
+        return
+    }
     val interventions = Clients.interventionsOf(c.name)
     val minutes = interventions.sumOf { TimeSheet.minutes(it) }
+    val rev = ClientDocs.revision.intValue
+    val docs = remember(c.id, rev) { ClientDocs.list(context, c.id) }
+    var docQuery by remember { mutableStateOf("") }
+    val shownDocs = remember(docs, docQuery) { docs.filter { ClientDocs.matches(it, docQuery) } }
+    val scope = rememberCoroutineScope()
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            val failed = withContext(Dispatchers.IO) { uris.count { !ClientDocs.import(context, c.id, it) } }
+            if (failed > 0) Toast.makeText(context, "$failed fichier(s) illisible(s) ou trop lourd(s) (100 Mo max)", Toast.LENGTH_LONG).show()
+        }
+    }
     fun start(intent: Intent) {
         runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { Toast.makeText(context, "Aucune appli pour ça", Toast.LENGTH_SHORT).show() }
@@ -173,19 +270,57 @@ private fun ClientSheet(c: Client, onBack: () -> Unit, onEdit: () -> Unit, onOpe
         item { InfoBlock("Notes", c.notes) }
         val sites = Clients.sitesOf(c.name)
         if (sites.isNotEmpty()) item { InfoBlock("Sites", sites.joinToString(", ")) }
+        item {
+            Header("// CONTRATS · ${c.contracts.size}", "[ + AJOUTER ]") {
+                contract = ClientContract(KitStore.newId(), "", "", 0, 0, "", "") to true
+            }
+        }
+        if (c.contracts.isEmpty()) {
+            item { Text("> maintenance, support, infogérance : dates, montant, périmètre", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp) }
+        } else {
+            items(c.contracts, key = { "k" + it.id }) { k -> ClientContractRow(k) { contract = k to false } }
+        }
+        item {
+            Header("// DEVIS · ${c.quotes.size}", "[ + AJOUTER ]") {
+                quote = Quote(KitStore.newId(), "", "", System.currentTimeMillis(), "", QuoteState.Draft, "") to true
+            }
+        }
+        if (c.quotes.isEmpty()) {
+            item { Text("> suivi des devis : brouillon, envoyé, accepté, refusé", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp) }
+        } else {
+            items(c.quotes, key = { "q" + it.id }) { q -> QuoteRow(q) { quote = q to false } }
+        }
+        item { ClientAgenda(c) }
+        item {
+            Header("// DOCUMENTATION · ${docs.size}", "[ + AJOUTER ]") {
+                pick.launch(arrayOf("*/*"))
+            }
+        }
+        if (docs.isEmpty()) {
+            item { Text("> PDF, schémas, procédures, photos de baie : copiés dans le téléphone, lisibles sans réseau", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp) }
+        } else {
+            if (docs.size > 3) item { KitField("Chercher dans la doc", docQuery, { docQuery = it }) }
+            items(shownDocs, key = { "d" + it.name }) { f -> DocRow(f, null) }
+        }
         if (interventions.isNotEmpty()) {
             item { Text("// HISTORIQUE", color = Cp.Yellow, fontFamily = HudFont, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
             items(interventions, key = { it.id }) { i ->
-                Row(
+                Column(
                     Modifier
                         .fillMaxWidth()
                         .hudPanel(borderColor = (if (i.open) Cp.Yellow else Cp.Cyan).copy(alpha = 0.4f), cut = 4.dp)
                         .clickable { onOpenIntervention(i.id) }
                         .padding(horizontal = 10.dp, vertical = 7.dp)
                 ) {
-                    Text(DateFmt.format(Instant.ofEpochMilli(i.started)), color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp, modifier = Modifier.width(100.dp))
-                    Text(i.title.ifBlank { i.site }, color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(if (i.open) "EN COURS" else TimeSheet.hours(TimeSheet.minutes(i)), color = if (i.open) Cp.Yellow else Cp.Cyan, fontFamily = MonoFont, fontSize = 11.sp)
+                    Row {
+                        Text(DateFmt.format(Instant.ofEpochMilli(i.started)), color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp, modifier = Modifier.width(100.dp))
+                        Text(i.title.ifBlank { i.site }, color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(if (i.open) "EN COURS" else TimeSheet.hours(TimeSheet.minutes(i)), color = if (i.open) Cp.Yellow else Cp.Cyan, fontFamily = MonoFont, fontSize = 11.sp)
+                    }
+                    // The intervention summary, so the client's story reads without opening each one.
+                    if (i.notes.isNotBlank()) {
+                        Text(i.notes.replace('\n', ' '), color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
