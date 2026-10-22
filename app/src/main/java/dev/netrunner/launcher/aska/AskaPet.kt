@@ -310,7 +310,7 @@ class AskaPet(context: Context) {
             if (evolved) "Niveau $level : elle devient ${titleOf(level).lowercase()} !" else "Niveau $level atteint.",
         )
         return buildString {
-            append(if (evolved) "NIVEAU $level ! Je deviens ${titleOf(level).lowercase()}… tu as vu mes écailles ?" else "NIVEAU $level ! Héhé, je grandis.")
+            append(if (evolved) "NIVEAU $level ! Je deviens ${titleOf(level).lowercase()}… tu as vu mes écailles ?" else "NIVEAU $level ! Héhé, je monte en puissance.")
             if (unlocked.isNotEmpty()) append(" Nouveau dans la garde-robe : ${unlocked.joinToString(", ") { it.label.lowercase() }}.")
         }
     }
@@ -435,8 +435,8 @@ class AskaPet(context: Context) {
         fun titleOf(level: Int) = when {
             level >= 10 -> "DRAGONNE LÉGENDAIRE"
             level >= 6 -> "DRAGONNE DU RÉSEAU"
-            level >= 3 -> "DRAGONNETTE"
-            else -> "BÉBÉ DRAGONNE"
+            level >= 3 -> "DRAGONNE DE L'OMBRE"
+            else -> "DRAGONNE RECRUE"
         }
 
         /** Her state now, without touching what is saved: for the calls, outside her nest. */

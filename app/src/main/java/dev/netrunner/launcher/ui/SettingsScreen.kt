@@ -251,6 +251,13 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             }
         }
 
+        Section("AS//KA · RENDEZ-VOUS")
+        Toggle(
+            "Rendez-vous adultes (18+)",
+            "As//ka, 26 ans, peut devenir sensuelle et explicite en rendez-vous si tu le lui demandes. Texte uniquement",
+            DeckSettings.adultDates,
+        ) { DeckSettings.setAdultDates(context, !DeckSettings.adultDates) }
+
         Section("SÉCURITÉ")
         val lockOn = remember(tick) { CyberLock.isEnabled(context) }
         Toggle("Verrou cyber", "Écran cyberdeck par-dessus le verrou système", lockOn) {

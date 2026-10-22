@@ -408,7 +408,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         raw.replace(Regex("(?s)<think>.*?(</think>|$)"), "").trimStart()
 
     private fun systemPrompt(): String {
-        date?.let { return AskaDate.systemPrompt(it, DeckSettings.handle, pet.stats.bond, memory.facts) }
+        date?.let { return AskaDate.systemPrompt(it, DeckSettings.handle, pet.stats.bond, memory.facts, DeckSettings.adultDates) }
         val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm", Locale.FRENCH))
         return """
             Tu es As//ka, un programme indépendant : une IA draconique qui a élu domicile dans le cyberdeck de ${DeckSettings.handle}.
