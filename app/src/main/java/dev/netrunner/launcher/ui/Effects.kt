@@ -158,8 +158,28 @@ fun Modifier.cyberGrid(cell: Dp = 36.dp): Modifier = drawWithCache {
             lineAlpha = 0.09f
             stroke = 2f
         }
+        Motif.Spray -> Unit
         Motif.Plain -> Unit
     }
+    // Spray paint: drips running down from the top edge and splatter around them, always laid
+    // out the same way (fixed seed) so the screen does not change from one launch to the next.
+    class Drip(val x: Float, val length: Float, val width: Float)
+    val drips = mutableListOf<Drip>()
+    val splatter = mutableListOf<Pair<Offset, Float>>()
+    if (faction.motif == Motif.Spray) {
+        val rnd = Random(7)
+        var x = rnd.nextFloat() * step
+        while (x < w) {
+            drips += Drip(x, h * (0.05f + rnd.nextFloat() * rnd.nextFloat() * 0.5f), 2f + rnd.nextFloat() * 5f)
+            x += step * (0.4f + rnd.nextFloat() * 1.6f)
+        }
+        repeat(90) {
+            val y = h * rnd.nextFloat() * rnd.nextFloat() * 0.45f
+            splatter += Offset(rnd.nextFloat() * w, y) to (0.8f + rnd.nextFloat() * rnd.nextFloat() * 5f)
+        }
+    }
+    val paint = primary.copy(alpha = 0.13f)
+    val band = Brush.verticalGradient(listOf(primary.copy(alpha = 0.10f), Color.Transparent), endY = step * 1.5f)
     val line = (if (faction.motif == Motif.Hazard) primary else accent).copy(alpha = lineAlpha)
     val glow = Brush.radialGradient(
         colors = listOf(primary.copy(alpha = 0.10f), Color.Transparent),
@@ -175,6 +195,15 @@ fun Modifier.cyberGrid(cell: Dp = 36.dp): Modifier = drawWithCache {
         drawRect(background)
         if (points.isNotEmpty()) drawPoints(points, PointMode.Points, line, strokeWidth = stroke, cap = StrokeCap.Round)
         else drawPath(path, line, style = Stroke(width = stroke))
+        if (drips.isNotEmpty()) {
+            // Paint line along the top, the drips, a drop at the end of each, then the splatter.
+            drawRect(band, size = androidx.compose.ui.geometry.Size(w, step * 1.5f))
+            drips.forEach { d ->
+                drawLine(paint, Offset(d.x, 0f), Offset(d.x, d.length), d.width, StrokeCap.Round)
+                drawCircle(paint, d.width * 0.9f, Offset(d.x, d.length + d.width * 0.4f))
+            }
+            splatter.forEach { (c, r) -> drawCircle(paint, r, c) }
+        }
         drawRect(glow)
         drawRect(floor)
     }
