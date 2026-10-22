@@ -22,7 +22,7 @@ object TimeSheet {
     fun rows(items: List<Intervention>, month: YearMonth?): List<Row> =
         items.filter { !it.open && (month == null || monthOf(it) == month) }
             .groupBy { monthOf(it) to it.client.trim().ifBlank { "(sans client)" } }
-            .map { (key, list) -> Row(key.first, key.second, list.size, list.sumOf(::minutes)) }
+            .map { (key, list) -> Row(key.first, key.second, list.size, list.sumOf { minutes(it) }) }
             .sortedWith(compareByDescending<Row> { it.month }.thenByDescending { it.minutes })
 
     fun months(items: List<Intervention>): List<YearMonth> = items.filter { !it.open }.map(::monthOf).distinct().sortedDescending()

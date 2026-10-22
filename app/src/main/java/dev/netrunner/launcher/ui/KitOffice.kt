@@ -156,7 +156,7 @@ private fun ClientSheet(c: Client, onBack: () -> Unit, onEdit: () -> Unit, onOpe
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
     val interventions = Clients.interventionsOf(c.name)
-    val minutes = interventions.sumOf(TimeSheet::minutes)
+    val minutes = interventions.sumOf { TimeSheet.minutes(it) }
     fun start(intent: Intent) {
         runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { Toast.makeText(context, "Aucune appli pour ça", Toast.LENGTH_SHORT).show() }
