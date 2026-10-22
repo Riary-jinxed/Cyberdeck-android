@@ -320,12 +320,14 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         }
                 ) { Column { ClockBlock() } }
                 // As//ka watches over the deck: touch her sigil to talk.
-                AskaAvatar(
-                    Modifier
-                        .size(64.dp)
-                        .clickable { viewModel.openPanel(Panel.Aska) },
-                    animated = panel == Panel.None && !drawerOpen,
-                )
+                if (DeckSettings.askaSigil) {
+                    AskaAvatar(
+                        Modifier
+                            .size(64.dp)
+                            .clickable { viewModel.openPanel(Panel.Aska) },
+                        animated = panel == Panel.None && !drawerOpen,
+                    )
+                }
             }
             // The morning after the alarm, As//ka pops up to start the day's conversation.
             val homeContext = LocalContext.current
@@ -333,7 +335,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
             var briefing by remember { mutableStateOf<String?>(null) }
             LifecycleResumeEffect(Unit) {
                 AskaMorning.observe(homeContext)
-                morning = if (AskaMorning.isMorning(homeContext)) AskaMorning.greeting() else null
+                morning = if (DeckSettings.askaMorning && AskaMorning.isMorning(homeContext)) AskaMorning.greeting() else null
                 briefing = morning?.let { AskaDay.briefing(homeContext) }
                 onPauseOrDispose { }
             }
@@ -392,7 +394,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        AskaWidget(viewModel.aska.pet) { viewModel.openPanel(Panel.Aska) }
+                        if (DeckSettings.askaWidget) AskaWidget(viewModel.aska.pet) { viewModel.openPanel(Panel.Aska) }
                         nowPlaying?.let { MediaWidget(it, mediaWatcher) }
                         if (feedAccess) {
                             FeedPreview(feed) { viewModel.openPanel(Panel.Feed) }

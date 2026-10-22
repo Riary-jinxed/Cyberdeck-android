@@ -31,6 +31,15 @@ object DeckSettings {
     /** Opt-in: As//ka may be sensual and explicit during a date, in words only. */
     var adultDates by mutableStateOf(false)
         private set
+    /** Where As//ka shows up: her widget and sigil on the home screen, her morning card, her nap on the lock screen. */
+    var askaWidget by mutableStateOf(true)
+        private set
+    var askaSigil by mutableStateOf(true)
+        private set
+    var askaMorning by mutableStateOf(true)
+        private set
+    var askaLock by mutableStateOf(true)
+        private set
     private var loaded = false
 
     fun load(context: Context) {
@@ -40,6 +49,10 @@ object DeckSettings {
         bootStyle = BootStyle.entries.firstOrNull { it.name == prefs(context).getString("boot_style", null) } ?: BootStyle.Bios
         handle = prefs(context).getString("handle", "V") ?: "V"
         adultDates = prefs(context).getBoolean("adult_dates", false)
+        askaWidget = prefs(context).getBoolean("aska_widget", true)
+        askaSigil = prefs(context).getBoolean("aska_sigil", true)
+        askaMorning = prefs(context).getBoolean("aska_morning", true)
+        askaLock = prefs(context).getBoolean("aska_lock", true)
     }
 
     fun setBootStyle(context: Context, style: BootStyle) {
@@ -61,6 +74,26 @@ object DeckSettings {
     fun setAdultDates(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean("adult_dates", on).apply()
         adultDates = on
+    }
+
+    fun setAskaWidget(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("aska_widget", on).apply()
+        askaWidget = on
+    }
+
+    fun setAskaSigil(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("aska_sigil", on).apply()
+        askaSigil = on
+    }
+
+    fun setAskaMorning(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("aska_morning", on).apply()
+        askaMorning = on
+    }
+
+    fun setAskaLock(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("aska_lock", on).apply()
+        askaLock = on
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences("netrunner", Context.MODE_PRIVATE)

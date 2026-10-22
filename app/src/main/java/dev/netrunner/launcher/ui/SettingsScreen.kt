@@ -251,7 +251,19 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             }
         }
 
-        Section("AS//KA · RENDEZ-VOUS")
+        Section("AS//KA")
+        Toggle("Widget sur l'accueil", "Sa carte avec son humeur et sa phrase du jour, en haut des widgets", DeckSettings.askaWidget) {
+            DeckSettings.setAskaWidget(context, !DeckSettings.askaWidget)
+        }
+        Toggle("Sigil à côté de l'horloge", "Son emblème animé sur l'accueil. Masqué, elle reste joignable par le hub et les gestes", DeckSettings.askaSigil) {
+            DeckSettings.setAskaSigil(context, !DeckSettings.askaSigil)
+        }
+        Toggle("Carte du matin", "Après l'alarme, elle t'accueille avec le programme du jour", DeckSettings.askaMorning) {
+            DeckSettings.setAskaMorning(context, !DeckSettings.askaMorning)
+        }
+        Toggle("Sur l'écran verrouillé", "Elle dort en bas du verrou et marmonne (batterie, heure tardive)", DeckSettings.askaLock) {
+            DeckSettings.setAskaLock(context, !DeckSettings.askaLock)
+        }
         Toggle(
             "Rendez-vous adultes (18+)",
             "As//ka, 26 ans, peut devenir sensuelle et explicite en rendez-vous si tu le lui demandes. Texte uniquement",
