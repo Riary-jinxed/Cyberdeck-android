@@ -115,6 +115,9 @@ val Faction.clockFont: FontFamily
 /** The narrower faces get more size, to keep the same presence as Orbitron. */
 val Faction.clockScale: Float get() = if (clock == ClockFace.Display) 1f else 1.18f
 
+/** Glitch effects: by faction, always or never. */
+enum class GlitchMode(val label: String) { Auto("Auto"), On("Toujours"), Off("Jamais") }
+
 /** Active palette. Backed by Compose state, so switching faction recolours every screen live. */
 object Cp {
     private var palette by mutableStateOf(Faction.Netrunner.palette)
@@ -129,12 +132,29 @@ object Cp {
     val Dim get() = palette.dim
     val Text get() = palette.text
 
+    var glitchMode by mutableStateOf(GlitchMode.Auto)
+        private set
+
+    /** True when glitch bursts should play, from the setting and the faction. */
+    val glitchOn: Boolean
+        get() = when (glitchMode) {
+            GlitchMode.Auto -> faction.glitch
+            GlitchMode.On -> true
+            GlitchMode.Off -> false
+        }
+
     private var loaded = false
 
     fun load(context: Context) {
         if (loaded) return
         loaded = true
         apply(Faction.of(prefs(context).getString(KEY, null)))
+        glitchMode = GlitchMode.entries.firstOrNull { it.name == prefs(context).getString(KEY_GLITCH, null) } ?: GlitchMode.Auto
+    }
+
+    fun setGlitchMode(context: Context, mode: GlitchMode) {
+        glitchMode = mode
+        prefs(context).edit().putString(KEY_GLITCH, mode.name).apply()
     }
 
     fun select(context: Context, faction: Faction) {
@@ -149,6 +169,7 @@ object Cp {
 
     private fun prefs(context: Context) = context.getSharedPreferences("netrunner", Context.MODE_PRIVATE)
     private const val KEY = "faction"
+    private const val KEY_GLITCH = "glitch_mode"
 }
 
 /** Body and labels: Rajdhani, the narrow technical sans close to the game's HUD. */

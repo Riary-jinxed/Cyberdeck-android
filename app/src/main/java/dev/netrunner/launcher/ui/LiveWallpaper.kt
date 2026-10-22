@@ -184,7 +184,7 @@ fun Modifier.crtGlitch(): Modifier = composed {
     var jitter by remember { mutableFloatStateOf(0f) }
     var tears by remember { mutableStateOf<List<Triple<Float, Float, Boolean>>>(emptyList()) }
     // Corporate and military themes keep a clean picture: no random glitch bursts.
-    val glitch = Cp.faction.glitch
+    val glitch = Cp.glitchOn
     LaunchedEffect(active, glitch) {
         while (active && glitch) {
             delay(Random.nextLong(3500, 8000))
@@ -201,7 +201,7 @@ fun Modifier.crtGlitch(): Modifier = composed {
     }
     // Short burst on demand (panel opening).
     LaunchedEffect(GlitchBus.pulse) {
-        if (GlitchBus.pulse == 0) return@LaunchedEffect
+        if (GlitchBus.pulse == 0 || !glitch) return@LaunchedEffect
         repeat(3) {
             jitter = Random.nextFloat() * 18f - 9f
             tears = List(Random.nextInt(2, 5)) {

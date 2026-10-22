@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -105,6 +106,10 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
     }
     val checks = remember(tick) { Diagnostics.run(context) }
     val missing = checks.count { it.ok == false && !it.optional }
+    // Home grid of categories; each opens its own page, back returns to the grid.
+    var page by remember { mutableStateOf<ConfigPage?>(null) }
+    BackHandler(enabled = page != null) { page = null }
+    val scroll = remember(page) { ScrollState(0) }
 
     Column(
         Modifier
@@ -114,286 +119,317 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
             .systemBarsPadding()
             .displayCutoutPadding()
             .padding(horizontal = 16.dp, vertical = 10.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PanelHeader(title = "// CONFIG DU DECK", accent = Cp.Yellow, onClose = onClose)
-
-        Section("PROFIL")
-        Chips(Profiles.Profile.entries.map { it.label }, Profiles.Profile.entries.indexOf(Profiles.current)) { i ->
-            if (Profiles.switchTo(context, Profiles.Profile.entries[i])) {
-                UiSound.play(context, UiSound.Cue.Glitch)
-                onConfigChanged()
-                tick++
-            }
-        }
-        Text(
-            "Chaque profil garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 11.sp,
+        PanelHeader(
+            title = page?.let { "// CONFIG ▸ ${it.label}" } ?: "// CONFIG DU DECK",
+            accent = Cp.Yellow,
+            onClose = { if (page != null) page = null else onClose() },
         )
-        val ringer = remember(tick) { Profiles.ringerFor(context, Profiles.current) }
-        Action(
-            "Sonnerie du profil",
-            if (ringer == android.media.AudioManager.RINGER_MODE_NORMAL) "Son activé (touche pour passer en vibreur)" else "Vibreur (touche pour activer le son)",
-        ) {
-            Profiles.toggleRinger(context, Profiles.current)
-            tick++
-        }
 
-        Section("APPARENCE")
-        Label("Faction")
-        // Two rows of three: the faction names stay readable.
-        Faction.entries.filter { it != Faction.Ghost }.chunked(3).forEach { row ->
-            Chips(options = row.map { it.label }, selected = row.indexOf(Cp.faction)) { i ->
-                UiSound.play(context, UiSound.Cue.Glitch)
-                Cp.select(context, row[i])
-            }
-            Spacer(Modifier.height(6.dp))
-        }
-        Text(
-            "« ${Cp.faction.motto} »",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 11.sp,
-        )
-        Label("Fond animé")
-        Chips(WallpaperMode.entries.map { it.label }, WallpaperMode.entries.indexOf(Wallpaper.mode)) { i ->
-            Wallpaper.select(context, WallpaperMode.entries[i])
-        }
-        Action("Fond d'écran système", "Met la grille de breach animée partout, y compris sur l'écran verrouillé") {
-            runCatching { context.startActivity(BreachWallpaperService.pickerIntent(context)) }
-        }
-        Label("Animation de démarrage")
-        Chips(BootStyle.entries.map { it.label }, BootStyle.entries.indexOf(DeckSettings.bootStyle)) { i ->
-            DeckSettings.setBootStyle(context, BootStyle.entries[i])
-        }
-        HandleField()
-        Toggle("Icônes néon", "Icônes des applis teintées à la couleur de la faction", DeckSettings.neonIcons) {
-            DeckSettings.setNeonIcons(context, !DeckSettings.neonIcons)
-        }
-        Toggle("Sons d'interface", "Bips, glitchs et vibrations (muets en mode silencieux)", remember(tick) { UiSound.isEnabled(context) }) {
-            UiSound.setEnabled(context, !UiSound.isEnabled(context))
-            tick++
-        }
-
-        Section("MODE NUIT NETWATCH")
-        Toggle(
-            "Mode nuit",
-            "Interface assombrie, sans fond animé ni glitchs de ${NightWatch.startHour}h à ${NightWatch.endHour}h",
-            NightWatch.enabled,
-        ) { NightWatch.setEnabled(context, !NightWatch.enabled) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { Action("Début : ${NightWatch.startHour}h", "+1 h") { NightWatch.shiftStart(context) } }
-            Box(Modifier.weight(1f)) { Action("Fin : ${NightWatch.endHour}h", "+1 h") { NightWatch.shiftEnd(context) } }
-        }
-
-        Section("MODE ÉCO RIPPERDOC")
-        Text(
-            "Coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur. Auto : sous ${dev.netrunner.launcher.system.Ripperdoc.LOW_BATTERY} % ou avec l'économiseur d'Android.",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 11.sp,
-        )
-        Chips(
-            dev.netrunner.launcher.system.Ripperdoc.Mode.entries.map { it.label },
-            dev.netrunner.launcher.system.Ripperdoc.Mode.entries.indexOf(dev.netrunner.launcher.system.Ripperdoc.mode),
-        ) { i ->
-            dev.netrunner.launcher.system.Ripperdoc.setMode(context, dev.netrunner.launcher.system.Ripperdoc.Mode.entries[i])
-        }
-
-        Section("MUSIQUE")
-        val micOn = remember(tick) {
-            context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        Toggle(
-            "Vrai spectre audio",
-            "Le visualiseur lit le son réellement joué (Android demande l'accès au micro pour ça, rien n'est enregistré). Sinon : animation simulée.",
-            micOn,
-        ) {
-            if (!micOn) askMic.launch(android.Manifest.permission.RECORD_AUDIO)
-            else context.startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-            tick++
-        }
-
-        Section("GESTES")
-        Gestures.Gesture.entries.forEach { g -> GestureRow(g) }
-
-        Section("SONNERIES ET SONS")
-        Text(
-            "▶ écoute · ► installe dans les sons du téléphone et l'active par défaut",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 11.sp,
-        )
-        DisposableEffect(Unit) {
-            onDispose {
-                Tones.stopPreview()
-                MusicTone.stopPreview()
-            }
-        }
-        val source = music
-        if (source == null) {
-            Action("Importer une musique", "Un morceau du téléphone, coupé à l'extrait voulu, en sonnerie ou notification") {
-                pickMusic.launch(arrayOf("audio/*"))
-            }
-        } else {
-            MusicCutter(source, onClose = { music = null })
-        }
-        Tones.Kind.entries.forEach { kind ->
-            Label(kind.label)
-            Tones.all.filter { it.kind == kind }.forEach { tone -> ToneRow(tone) { tick++ } }
-        }
-
-        Section("TUILES DU VOLET")
-        DeckTiles.all.forEach { entry ->
-            Action(entry.label, "Ajouter la tuile dans le volet de réglages rapides") {
-                if (!DeckTiles.requestAdd(context, entry)) {
-                    Toast.makeText(context, "Ouvre le volet ▸ crayon ▸ ajoute la tuile Netrunner", Toast.LENGTH_LONG).show()
+        val current = page
+        if (current == null) {
+            ConfigHome(missing = missing, onOpen = { page = it })
+        } else when (current) {
+            ConfigPage.Profile -> {
+                Section("PROFIL")
+                Chips(Profiles.Profile.entries.map { it.label }, Profiles.Profile.entries.indexOf(Profiles.current)) { i ->
+                    if (Profiles.switchTo(context, Profiles.Profile.entries[i])) {
+                        UiSound.play(context, UiSound.Cue.Glitch)
+                        onConfigChanged()
+                        tick++
+                    }
+                }
+                Text(
+                    "Chaque profil garde ses quickhacks, dossiers, faction, fond, sons d'interface et mode de sonnerie.",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
+                val ringer = remember(tick) { Profiles.ringerFor(context, Profiles.current) }
+                Action(
+                    "Sonnerie du profil",
+                    if (ringer == android.media.AudioManager.RINGER_MODE_NORMAL) "Son activé (touche pour passer en vibreur)" else "Vibreur (touche pour activer le son)",
+                ) {
+                    Profiles.toggleRinger(context, Profiles.current)
+                    tick++
                 }
             }
-        }
+            ConfigPage.Look -> {
+                Section("APPARENCE")
+                Label("Faction")
+                // Two rows of three: the faction names stay readable.
+                Faction.entries.filter { it != Faction.Ghost }.chunked(3).forEach { row ->
+                    Chips(options = row.map { it.label }, selected = row.indexOf(Cp.faction)) { i ->
+                        UiSound.play(context, UiSound.Cue.Glitch)
+                        Cp.select(context, row[i])
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(
+                    "« ${Cp.faction.motto} »",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
+                Label("Fond animé")
+                Chips(WallpaperMode.entries.map { it.label }, WallpaperMode.entries.indexOf(Wallpaper.mode)) { i ->
+                    Wallpaper.select(context, WallpaperMode.entries[i])
+                }
+                Action("Fond d'écran système", "Met la grille de breach animée partout, y compris sur l'écran verrouillé") {
+                    runCatching { context.startActivity(BreachWallpaperService.pickerIntent(context)) }
+                }
+                Label("Animation de démarrage")
+                Chips(BootStyle.entries.map { it.label }, BootStyle.entries.indexOf(DeckSettings.bootStyle)) { i ->
+                    DeckSettings.setBootStyle(context, BootStyle.entries[i])
+                }
+                Label("Glitchs")
+                Chips(GlitchMode.entries.map { it.label }, GlitchMode.entries.indexOf(Cp.glitchMode)) { i ->
+                    Cp.setGlitchMode(context, GlitchMode.entries[i])
+                }
+                Text(
+                    "Auto : selon la faction (Arasaka, Militech, Barghest et Ghost restent nets). Les glitchs coupent aussi en mode nuit et en éco.",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
+                HandleField()
+                Toggle("Icônes néon", "Icônes des applis teintées à la couleur de la faction", DeckSettings.neonIcons) {
+                    DeckSettings.setNeonIcons(context, !DeckSettings.neonIcons)
+                }
 
-        Section("AS//KA")
-        Toggle("Widget sur l'accueil", "Sa carte avec son humeur et sa phrase du jour, en haut des widgets", DeckSettings.askaWidget) {
-            DeckSettings.setAskaWidget(context, !DeckSettings.askaWidget)
-        }
-        Toggle("Sigil à côté de l'horloge", "Son emblème animé sur l'accueil. Masqué, elle reste joignable par le hub et les gestes", DeckSettings.askaSigil) {
-            DeckSettings.setAskaSigil(context, !DeckSettings.askaSigil)
-        }
-        Toggle("Carte du matin", "Après l'alarme, elle t'accueille avec le programme du jour", DeckSettings.askaMorning) {
-            DeckSettings.setAskaMorning(context, !DeckSettings.askaMorning)
-        }
-        Toggle("Sur l'écran verrouillé", "Elle dort en bas du verrou et marmonne (batterie, heure tardive)", DeckSettings.askaLock) {
-            DeckSettings.setAskaLock(context, !DeckSettings.askaLock)
-        }
-        Toggle(
-            "Rendez-vous adultes (18+)",
-            "As//ka, 26 ans, peut devenir sensuelle et explicite en rendez-vous si tu le lui demandes. Texte uniquement",
-            DeckSettings.adultDates,
-        ) { DeckSettings.setAdultDates(context, !DeckSettings.adultDates) }
+                Section("MODE NUIT NETWATCH")
+                Toggle(
+                    "Mode nuit",
+                    "Interface assombrie, sans fond animé ni glitchs de ${NightWatch.startHour}h à ${NightWatch.endHour}h",
+                    NightWatch.enabled,
+                ) { NightWatch.setEnabled(context, !NightWatch.enabled) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) { Action("Début : ${NightWatch.startHour}h", "+1 h") { NightWatch.shiftStart(context) } }
+                    Box(Modifier.weight(1f)) { Action("Fin : ${NightWatch.endHour}h", "+1 h") { NightWatch.shiftEnd(context) } }
+                }
 
-        Section("SÉCURITÉ")
-        val lockOn = remember(tick) { CyberLock.isEnabled(context) }
-        Toggle("Verrou cyber", "Écran cyberdeck par-dessus le verrou système", lockOn) {
-            CyberLock.setEnabled(context, !lockOn)
-            if (!lockOn) CyberLock.missingStep(context)?.let { context.startActivity(it) }
-            tick++
-        }
-        if (lockOn) {
-            val handoffOn = remember(tick) { CyberLock.handoff(context) }
-            Toggle("Passer la main au visage", "À l'allumage, rend la main au verrou système : visage ou empreinte, sans glisser", handoffOn) {
-                CyberLock.setHandoff(context, !handoffOn)
-                tick++
+                Section("MODE ÉCO RIPPERDOC")
+                Text(
+                    "Coupe le fond animé, les glitchs, l'animation de démarrage et le visualiseur. Auto : sous ${dev.netrunner.launcher.system.Ripperdoc.LOW_BATTERY} % ou avec l'économiseur d'Android.",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
+                Chips(
+                    dev.netrunner.launcher.system.Ripperdoc.Mode.entries.map { it.label },
+                    dev.netrunner.launcher.system.Ripperdoc.Mode.entries.indexOf(dev.netrunner.launcher.system.Ripperdoc.mode),
+                ) { i ->
+                    dev.netrunner.launcher.system.Ripperdoc.setMode(context, dev.netrunner.launcher.system.Ripperdoc.Mode.entries[i])
+                }
             }
-        }
-        val ghostOn = remember(tick) { Ghost.isOn(context) }
-        Toggle("Mode furtif", "Silence, HUD GHOST, radios à couper (aussi : double-tap sur l'horloge)", ghostOn) {
-            Ghost.toggle(context)
-            tick++
-        }
+            ConfigPage.Sound -> {
+                Section("INTERFACE")
+                Toggle("Sons d'interface", "Bips, glitchs et vibrations (muets en mode silencieux)", remember(tick) { UiSound.isEnabled(context) }) {
+                    UiSound.setEnabled(context, !UiSound.isEnabled(context))
+                    tick++
+                }
+                Section("MUSIQUE")
+                val micOn = remember(tick) {
+                    context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                Toggle(
+                    "Vrai spectre audio",
+                    "Le visualiseur lit le son réellement joué (Android demande l'accès au micro pour ça, rien n'est enregistré). Sinon : animation simulée.",
+                    micOn,
+                ) {
+                    if (!micOn) askMic.launch(android.Manifest.permission.RECORD_AUDIO)
+                    else context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                    tick++
+                }
 
-        Section("SAUVEGARDE")
-        Action("Exporter la config", "Réglages, faction, quickhacks, dossiers, gestes et profils dans un fichier") {
-            exportFile.launch("netrunner-config.json")
-        }
-        Action("Restaurer une config", "Recharge un fichier exporté, puis redémarre le deck") {
-            importFile.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
-        }
-
-        Section("MISE À JOUR")
-        val installed = remember { Updater.currentVersion(context) }
-        val r = release
-        when {
-            downloading != null -> Text(
-                "> TÉLÉCHARGEMENT ${((downloading ?: 0f) * 100).toInt()}%",
-                color = Cp.Yellow,
-                fontFamily = MonoFont,
-                fontSize = 13.sp,
-            )
-            r != null -> Action("Installer la v${r.version}", "Version actuelle : $installed · ${(r.size / 1_048_576f).let { "%.1f".format(it) }} Mo") {
-                if (!Updater.canInstall(context)) {
-                    Toast.makeText(context, "Autorise Netrunner à installer des applis, puis réessaie", Toast.LENGTH_LONG).show()
-                    context.startActivity(Updater.installPermissionIntent(context))
+                Section("SONNERIES ET SONS")
+                Text(
+                    "▶ écoute · ► installe dans les sons du téléphone et l'active par défaut",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
+                DisposableEffect(Unit) {
+                    onDispose {
+                        Tones.stopPreview()
+                        MusicTone.stopPreview()
+                    }
+                }
+                val source = music
+                if (source == null) {
+                    Action("Importer une musique", "Un morceau du téléphone, coupé à l'extrait voulu, en sonnerie ou notification") {
+                        pickMusic.launch(arrayOf("audio/*"))
+                    }
                 } else {
-                    scope.launch {
-                        downloading = 0f
-                        val file = runCatching { Updater.download(context, r) { downloading = it } }.getOrNull()
-                        downloading = null
-                        if (file != null) Updater.install(context, file) else updateState = "Échec du téléchargement"
+                    MusicCutter(source, onClose = { music = null })
+                }
+                Tones.Kind.entries.forEach { kind ->
+                    Label(kind.label)
+                    Tones.all.filter { it.kind == kind }.forEach { tone -> ToneRow(tone) { tick++ } }
+                }
+            }
+            ConfigPage.Gestures -> {
+                Section("GESTES")
+                Gestures.Gesture.entries.forEach { g -> GestureRow(g) }
+
+                Section("TUILES DU VOLET")
+                DeckTiles.all.forEach { entry ->
+                    Action(entry.label, "Ajouter la tuile dans le volet de réglages rapides") {
+                        if (!DeckTiles.requestAdd(context, entry)) {
+                            Toast.makeText(context, "Ouvre le volet ▸ crayon ▸ ajoute la tuile Netrunner", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             }
-            else -> Action("Chercher une mise à jour", updateState ?: "Version installée : $installed") {
-                updateState = "Recherche…"
-                scope.launch {
-                    updateState = runCatching { Updater.check(context) }.fold(
-                        onSuccess = { found ->
-                            release = found
-                            if (found == null) "À jour (v$installed)" else null
-                        },
-                        onFailure = { "Réseau injoignable" },
+            ConfigPage.Aska -> {
+                Section("AS//KA")
+                Toggle("Widget sur l'accueil", "Sa carte avec son humeur et sa phrase du jour, en haut des widgets", DeckSettings.askaWidget) {
+                    DeckSettings.setAskaWidget(context, !DeckSettings.askaWidget)
+                }
+                Toggle("Sigil à côté de l'horloge", "Son emblème animé sur l'accueil. Masqué, elle reste joignable par le hub et les gestes", DeckSettings.askaSigil) {
+                    DeckSettings.setAskaSigil(context, !DeckSettings.askaSigil)
+                }
+                Toggle("Carte du matin", "Après l'alarme, elle t'accueille avec le programme du jour", DeckSettings.askaMorning) {
+                    DeckSettings.setAskaMorning(context, !DeckSettings.askaMorning)
+                }
+                Toggle("Sur l'écran verrouillé", "Elle dort en bas du verrou et marmonne (batterie, heure tardive)", DeckSettings.askaLock) {
+                    DeckSettings.setAskaLock(context, !DeckSettings.askaLock)
+                }
+                Toggle(
+                    "Rendez-vous adultes (18+)",
+                    "As//ka, 26 ans, peut devenir sensuelle et explicite en rendez-vous si tu le lui demandes. Texte uniquement",
+                    DeckSettings.adultDates,
+                ) { DeckSettings.setAdultDates(context, !DeckSettings.adultDates) }
+            }
+            ConfigPage.Security -> {
+                Section("SÉCURITÉ")
+                val lockOn = remember(tick) { CyberLock.isEnabled(context) }
+                Toggle("Verrou cyber", "Écran cyberdeck par-dessus le verrou système", lockOn) {
+                    CyberLock.setEnabled(context, !lockOn)
+                    if (!lockOn) CyberLock.missingStep(context)?.let { context.startActivity(it) }
+                    tick++
+                }
+                if (lockOn) {
+                    val handoffOn = remember(tick) { CyberLock.handoff(context) }
+                    Toggle("Passer la main au visage", "À l'allumage, rend la main au verrou système : visage ou empreinte, sans glisser", handoffOn) {
+                        CyberLock.setHandoff(context, !handoffOn)
+                        tick++
+                    }
+                }
+                val ghostOn = remember(tick) { Ghost.isOn(context) }
+                Toggle("Mode furtif", "Silence, HUD GHOST, radios à couper (aussi : double-tap sur l'horloge)", ghostOn) {
+                    Ghost.toggle(context)
+                    tick++
+                }
+            }
+            ConfigPage.Keyboard -> {
+                Section("SYSTÈME")
+                Action("Applis par défaut", "Écran d'accueil, téléphone, SMS") {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+                Action("Claviers", "Activer ou choisir le clavier Netrunner") {
+                    context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+                val autocorrect = remember(tick) { dev.netrunner.launcher.keyboard.KeyboardPrefs.autocorrect(context) }
+                Toggle(
+                    "Correction automatique",
+                    "Le clavier corrige une faute évidente à l'espace (⌫ juste après annule). Les suggestions restent affichées dans tous les cas.",
+                    autocorrect,
+                ) {
+                    dev.netrunner.launcher.keyboard.KeyboardPrefs.setAutocorrect(context, !autocorrect)
+                    tick++
+                }
+            }
+            ConfigPage.Apps -> {
+                Section("APPLIS DU DECK")
+                DeckAppsSection()
+            }
+            ConfigPage.Backup -> {
+                Section("SAUVEGARDE")
+                Action("Exporter la config", "Réglages, faction, quickhacks, dossiers, gestes et profils dans un fichier") {
+                    exportFile.launch("netrunner-config.json")
+                }
+                Action("Restaurer une config", "Recharge un fichier exporté, puis redémarre le deck") {
+                    importFile.launch(arrayOf("application/json", "application/octet-stream", "*/*"))
+                }
+
+                Section("MISE À JOUR")
+                val installed = remember { Updater.currentVersion(context) }
+                val r = release
+                when {
+                    downloading != null -> Text(
+                        "> TÉLÉCHARGEMENT ${((downloading ?: 0f) * 100).toInt()}%",
+                        color = Cp.Yellow,
+                        fontFamily = MonoFont,
+                        fontSize = 13.sp,
                     )
+                    r != null -> Action("Installer la v${r.version}", "Version actuelle : $installed · ${(r.size / 1_048_576f).let { "%.1f".format(it) }} Mo") {
+                        if (!Updater.canInstall(context)) {
+                            Toast.makeText(context, "Autorise Netrunner à installer des applis, puis réessaie", Toast.LENGTH_LONG).show()
+                            context.startActivity(Updater.installPermissionIntent(context))
+                        } else {
+                            scope.launch {
+                                downloading = 0f
+                                val file = runCatching { Updater.download(context, r) { downloading = it } }.getOrNull()
+                                downloading = null
+                                if (file != null) Updater.install(context, file) else updateState = "Échec du téléchargement"
+                            }
+                        }
+                    }
+                    else -> Action("Chercher une mise à jour", updateState ?: "Version installée : $installed") {
+                        updateState = "Recherche…"
+                        scope.launch {
+                            updateState = runCatching { Updater.check(context) }.fold(
+                                onSuccess = { found ->
+                                    release = found
+                                    if (found == null) "À jour (v$installed)" else null
+                                },
+                                onFailure = { "Réseau injoignable" },
+                            )
+                        }
+                    }
+                }
+                r?.notes?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 6)
                 }
             }
-        }
-        r?.notes?.takeIf { it.isNotBlank() }?.let {
-            Text(it, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 6)
-        }
-
-        Section("APPLIS DU DECK")
-        DeckAppsSection()
-
-        Section("SYSTÈME")
-        Action("Applis par défaut", "Écran d'accueil, téléphone, SMS") {
-            context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-        Action("Claviers", "Activer ou choisir le clavier Netrunner") {
-            context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-        val autocorrect = remember(tick) { dev.netrunner.launcher.keyboard.KeyboardPrefs.autocorrect(context) }
-        Toggle(
-            "Correction automatique",
-            "Le clavier corrige une faute évidente à l'espace (⌫ juste après annule). Les suggestions restent affichées dans tous les cas.",
-            autocorrect,
-        ) {
-            dev.netrunner.launcher.keyboard.KeyboardPrefs.setAutocorrect(context, !autocorrect)
-            tick++
-        }
-
-        Section(if (missing == 0) "DIAGNOSTIC : SYSTÈMES NOMINAUX" else "DIAGNOSTIC : $missing POINT(S) À CORRIGER")
-        checks.forEach { check ->
-            val (mark, color) = when (check.ok) {
-                true -> "✓" to Cp.Cyan
-                false -> (if (check.optional) "○" to Cp.Dim else "✕" to Cp.Red)
-                null -> "?" to Cp.Yellow
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .hudPanel(borderColor = color.copy(alpha = 0.5f), cut = 8.dp)
-                    .clickable(enabled = check.ok != true) { check.fix(context) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(mark, color = color, fontFamily = HudFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(check.title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(check.detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
+            ConfigPage.Diagnostic -> {
+                Section(if (missing == 0) "DIAGNOSTIC : SYSTÈMES NOMINAUX" else "DIAGNOSTIC : $missing POINT(S) À CORRIGER")
+                checks.forEach { check ->
+                    val (mark, color) = when (check.ok) {
+                        true -> "✓" to Cp.Cyan
+                        false -> (if (check.optional) "○" to Cp.Dim else "✕" to Cp.Red)
+                        null -> "?" to Cp.Yellow
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .hudPanel(borderColor = color.copy(alpha = 0.5f), cut = 8.dp)
+                            .clickable(enabled = check.ok != true) { check.fix(context) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(mark, color = color, fontFamily = HudFont, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(check.title.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(check.detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp)
+                        }
+                        if (check.ok != true) Text("►", color = color, fontFamily = HudFont, fontSize = 14.sp)
+                    }
                 }
-                if (check.ok != true) Text("►", color = color, fontFamily = HudFont, fontSize = 14.sp)
+                Text(
+                    "✓ OK   ✕ requis   ○ optionnel   ? à vérifier à la main (HyperOS)",
+                    color = Cp.Dim,
+                    fontFamily = HudFont,
+                    fontSize = 11.sp,
+                )
             }
         }
-        Text(
-            "✓ OK   ✕ requis   ○ optionnel   ? à vérifier à la main (HyperOS)",
-            color = Cp.Dim,
-            fontFamily = HudFont,
-            fontSize = 11.sp,
-        )
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -693,6 +729,56 @@ private fun ToneRow(tone: Tones.Tone, onChanged: () -> Unit) {
                 .padding(vertical = 6.dp),
         )
     }
+}
+
+/** Config categories, shown as a grid of tiles on the config home. */
+private enum class ConfigPage(val label: String, val glyph: String, val detail: String) {
+    Profile("PROFILS", "◉", "Profil actif et sa sonnerie"),
+    Look("APPARENCE", "◢", "Faction, fond, glitchs, démarrage, nuit, éco"),
+    Sound("SONS", "♪", "Sons d'interface, spectre audio, sonneries"),
+    Gestures("GESTES", "⇄", "Gestes de l'accueil, tuiles du volet"),
+    Aska("AS//KA", "✦", "Widget, sigil, carte du matin"),
+    Security("SÉCURITÉ", "⛨", "Verrou cyber, mode furtif"),
+    Keyboard("CLAVIER & SYSTÈME", "⌨", "Clavier, correction, applis par défaut"),
+    Apps("APPLIS DU DECK", "▦", "Applis Netrunner à installer"),
+    Backup("SAUVEGARDE & MAJ", "⟳", "Exporter, restaurer, mettre à jour"),
+    Diagnostic("DIAGNOSTIC", "✓", "Autorisations et réglages HyperOS"),
+}
+
+@Composable
+private fun ConfigHome(missing: Int, onOpen: (ConfigPage) -> Unit) {
+    ConfigPage.entries.chunked(2).forEach { row ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            row.forEach { p ->
+                val alert = p == ConfigPage.Diagnostic && missing > 0
+                val color = if (alert) Cp.Red else Cp.Cyan
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .height(104.dp)
+                        .hudPanel(borderColor = color.copy(alpha = 0.6f), cut = 10.dp)
+                        .clickable { onOpen(p) }
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p.glyph, color = if (alert) Cp.Red else Cp.Yellow, fontFamily = HudFont, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        if (alert) Text("$missing ✕", color = Cp.Red, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(p.label, color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(p.detail, color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, maxLines = 2)
+                }
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+    Text(
+        "◀ retour ferme une page · ✕ ferme la config",
+        color = Cp.Dim,
+        fontFamily = HudFont,
+        fontSize = 11.sp,
+    )
 }
 
 @Composable

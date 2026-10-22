@@ -195,7 +195,7 @@ fun GlitchText(
     var flicker by remember { mutableStateOf(false) }
     val active = rememberScreenActive()
     val lean = dev.netrunner.launcher.system.Ripperdoc.active
-    val glitch = Cp.faction.glitch
+    val glitch = Cp.glitchOn
     LaunchedEffect(active, lean, glitch) {
         while (active && !lean && glitch) {
             delay(Random.nextLong(1800, 5000))
