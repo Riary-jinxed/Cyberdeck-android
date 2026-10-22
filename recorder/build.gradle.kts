@@ -12,8 +12,10 @@ android {
         applicationId = "dev.netrunner.recorder"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+        // Vosk ships native code per ABI: the deck phone is arm64 only.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     // Same key as the launcher (CI secrets), so each new APK installs over the previous one.
@@ -53,4 +55,7 @@ kotlin {
 
 dependencies {
     implementation(project(":deck"))
+    // Offline speech recognition; its model is downloaded from CONFIG.
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 }

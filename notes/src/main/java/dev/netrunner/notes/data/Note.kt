@@ -27,6 +27,16 @@ data class Note(
     /** The text shown on the card and shared: the body, or the checklist as "☐ / ☑" lines. */
     fun content(): String = if (checklist) items.joinToString("\n") { (if (it.done) "☑ " else "☐ ") + it.text } else body
 
+    /** Field-kit items this note points to, written "kit:CODE" anywhere in the title or text. */
+    fun kitCodes(): List<String> = KIT.findAll(title + "\n" + content()).map { it.groupValues[1].trimEnd('.', ',', ';', ')') }.filter { it.isNotEmpty() }.distinct().toList()
+
+    /** Adds a "kit:CODE" link at the end of the text, or as a last item of a checklist. */
+    fun withKit(code: String): Note {
+        val link = "kit:$code"
+        if (code in kitCodes()) return this
+        return if (checklist) copy(items = items + Item(link)) else copy(body = if (body.isBlank()) link else body.trimEnd() + "\n" + link)
+    }
+
     fun shareText(): String = listOf(title.trim(), content().trim()).filter { it.isNotEmpty() }.joinToString("\n\n")
 
     /** Switches between text and checklist, keeping the content line by line. */
@@ -37,6 +47,8 @@ data class Note(
     }
 
     companion object {
+        private val KIT = Regex("""(?<![\w/])kit:(\S+)""")
+
         /** Pinned first, then the most recently changed. */
         val order: Comparator<Note> = compareByDescending<Note> { it.pinned }.thenByDescending { it.updated }
 

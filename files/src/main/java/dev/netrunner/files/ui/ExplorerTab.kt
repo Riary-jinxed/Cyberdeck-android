@@ -55,9 +55,14 @@ fun kindColor(kind: FileOps.Kind): Color = when (kind) {
     else -> Cp.Text
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExplorerTab(explorer: Explorer) {
+    if (explorer.showTrash) TrashScreen(explorer) else Browser(explorer)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Browser(explorer: Explorer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var naming by remember { mutableStateOf<Pair<String, File?>?>(null) } // title, file to rename (null = new folder)
@@ -103,6 +108,7 @@ fun ExplorerTab(explorer: Explorer) {
                 explorer.sortBy(all[(all.indexOf(explorer.sort) + 1) % all.size])
             }
             Chip(if (explorer.showHidden) "CACHÉS ✓" else "CACHÉS", if (explorer.showHidden) Cp.Yellow else Cp.Dim) { explorer.toggleHidden() }
+            Chip("CORBEILLE", Cp.Dim) { explorer.showTrash = true }
         }
         Spacer(Modifier.padding(top = 6.dp))
 
@@ -223,11 +229,20 @@ fun ExplorerTab(explorer: Explorer) {
         }
     }
     deleting?.let { files ->
-        DeleteDialog(files, onDismiss = { deleting = null }) {
-            deleting = null
-            explorer.selection = emptySet()
-            scope.fileOp(context, explorer, "Supprimé") { files.forEach(FileOps::delete) }
-        }
+        DeleteDialog(
+            files,
+            onDismiss = { deleting = null },
+            onForever = {
+                deleting = null
+                explorer.selection = emptySet()
+                scope.fileOp(context, explorer, "Supprimé") { files.forEach(FileOps::delete) }
+            },
+            onBin = {
+                deleting = null
+                explorer.selection = emptySet()
+                scope.fileOp(context, explorer, "Mis à la corbeille") { files.forEach { explorer.trash.put(it) } }
+            },
+        )
     }
     info?.let { InfoDialog(it) { info = null } }
     preview?.let { (file, type) ->
@@ -248,7 +263,7 @@ fun Chip(text: String, color: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ActionBar(title: String, content: @Composable () -> Unit) {
+fun ActionBar(title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 8.dp).hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.7f), cut = 8.dp).padding(10.dp)) {
         Text(title, color = Cp.Yellow, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
         Row(
@@ -270,7 +285,7 @@ fun AccessGate(onGrant: () -> Unit) {
         Text("ACCÈS REFUSÉ", color = Cp.Red, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = 3.sp)
         Text(
             "Pour parcourir tout le stockage, Android demande l'autorisation « Accès à tous les fichiers ». " +
-                "Rien ne quitte le téléphone : l'appli n'a pas d'accès réseau hors mises à jour.",
+                "Rien ne quitte le téléphone, sauf vers le NAS que tu ajoutes dans RÉSEAU (et les mises à jour).",
             color = Cp.Text, fontFamily = HudFont, fontSize = 16.sp, modifier = Modifier.padding(vertical = 14.dp),
         )
         HudButton("AUTORISER", filled = true, modifier = Modifier.fillMaxWidth(), onClick = onGrant)

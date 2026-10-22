@@ -88,6 +88,8 @@ Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`,
 - **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
 - **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
 - Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
+- **Corbeille** : SUPPR. envoie à la corbeille (bouton CORBEILLE de l'explorateur) pour restaurer à l'emplacement d'origine ; vidée automatiquement après 30 jours, ou DÉFINITIF pour effacer tout de suite.
+- **Réseau (NAS)** : partages SMB2/3 de ton NAS (Synology, QNAP, Freebox, Windows, Samba) : parcourir, ouvrir, télécharger dans le dossier de l'explorateur, envoyer le presse-papiers, créer, renommer, supprimer. Mot de passe chiffré par le Keystore Android.
 - **Mises à jour** : releases GitHub `files-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
 ## Agenda Netrunner (appli à part)
@@ -123,7 +125,9 @@ Bloc-notes dans le module `notes/` (package `dev.netrunner.notes`, même clé de
 - **Épinglage** : appui long sur une carte pour l'épingler en haut ; les autres sont triées par dernière modification.
 - **Recherche** dans les titres et le contenu, sans tenir compte des accents ni des majuscules.
 - **Partage** : une note se partage en texte, et du texte partagé depuis n'importe quelle appli devient une nouvelle note.
-- **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire et ajouter des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste.
+- **Export PDF** : une note depuis son bouton PDF, ou toutes les notes depuis CONFIG.
+- **Kit de terrain** : LIER AU KIT ajoute un lien `kit:CODE`, et le bouton ◆ KIT ouvre la fiche dans le launcher (action `dev.netrunner.action.KIT_OPEN`, permission de signature `dev.netrunner.permission.KIT`).
+- **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire, chercher (`?q=mots`, `?kit=CODE`), ajouter, modifier (update sur `…/notes/ID` : `title`, `content`, `pinned`) et supprimer des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste. Un intent VIEW sur `…/notes/ID` ouvre la note.
 - **Mises à jour** : releases GitHub `notes-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Dictaphone Netrunner (appli à part)
@@ -134,6 +138,7 @@ Enregistreur vocal dans le module `recorder/` (package `dev.netrunner.recorder`,
 - **Écran éteint** : l'enregistrement continue en arrière-plan avec une notification (bouton ARRÊTER).
 - **Archives** : lecteur avec forme d'onde (touche pour se déplacer), ±10 s et vitesse de lecture ; partager, renommer, supprimer.
 - **Qualité** : réglage haute qualité (48 kHz / 192 kb/s) ou économe (44,1 kHz / 96 kb/s) dans CONFIG.
+- **Transcription** : TRANSCRIRE EN TEXTE convertit un enregistrement en texte sur le téléphone (Vosk, hors ligne, modèle français d'environ 41 Mo à télécharger une fois dans CONFIG). Le texte se copie ou part dans l'appli Notes (→ NOTES), automatiquement si « Ranger dans Notes » est activé.
 - **Mises à jour** : releases GitHub `recorder-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Scanner Netrunner (appli à part)
@@ -144,6 +149,7 @@ Lecteur de QR codes et codes-barres dans le module `scanner/` (package `dev.netr
 - **Décodage** : liens, Wi-Fi (connexion en un geste), téléphone, SMS, e-mail, position GPS, carte de visite, code produit, texte.
 - **Actions** : ouvrir, se connecter, appeler, copier, partager ; ouverture automatique des liens en option.
 - **Historique** des 100 derniers scans, vibration réglable.
+- **Kit de terrain** : + KIT envoie le code à l'inventaire du launcher (fiche existante ou nouvelle fiche pré-remplie) ; le mode inventaire le fait à chaque scan.
 - **Mises à jour** : releases GitHub `scanner-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Météo Netrunner (appli à part)
