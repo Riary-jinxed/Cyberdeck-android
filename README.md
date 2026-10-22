@@ -163,6 +163,16 @@ Prévisions dans le module `weather/` (package `dev.netrunner.weather`, même cl
 - **Hors ligne** : la dernière prévision reste affichée.
 - **Mises à jour** : releases GitHub `weather-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## Musique Netrunner (appli à part)
+
+Lecteur de musique dans le module `music/` (package `dev.netrunner.music`, même clé de signature), au style terminal, sur Media3 (ExoPlayer).
+
+- **Bibliothèque** : titres, albums (avec pochettes) et artistes de l'index musical d'Android, recherche sans accents ; appui long pour « Lire ensuite » ou « Ajouter à la file ».
+- **Lecture** : pochette, barre de progression, aléatoire, répétition (file ou titre), file d'attente modifiable.
+- **Visualiseur néon** : spectre calculé sur le son décodé (pas besoin du micro), en barres, onde ou anneau, aux couleurs de la faction ; halo désactivable dans CONFIG.
+- **Arrière-plan** : la musique continue écran éteint, avec notification, écran de verrouillage, boutons du casque et pause quand le casque se débranche ; le widget musique du launcher la pilote aussi.
+- **Mises à jour** : releases GitHub `music-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).
