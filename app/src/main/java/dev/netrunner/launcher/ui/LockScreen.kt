@@ -58,6 +58,7 @@ private val LockDate = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefa
 @Composable
 fun LockScreen(onUnlock: () -> Unit) {
     val context = LocalContext.current
+    remember { DeckSettings.load(context.applicationContext) }
     val active = rememberScreenActive()
     val now by produceState(LocalDateTime.now(), active) {
         while (active) {
@@ -188,9 +189,9 @@ fun LockScreen(onUnlock: () -> Unit) {
             // Otherwise she mumbles in her sleep about the battery or the hour.
             val moment = remember(now.hour, now.minute) { AskaDay.moment(context) }
             val mumble = moment?.let { AskaDay.momentLine(context, it, asleep = true) }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            if (DeckSettings.askaLock) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Spacer(Modifier.weight(1f))
-                if (morning) {
+                if (morning && DeckSettings.askaMorning) {
                     AskaBubble(
                         "Debout, runner ! Glisse vers le haut, j'ai un truc à te dire.",
                         Modifier
