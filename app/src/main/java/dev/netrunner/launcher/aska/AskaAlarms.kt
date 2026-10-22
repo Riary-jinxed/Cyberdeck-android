@@ -5,6 +5,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import dev.netrunner.launcher.kit.CableRecord
+import dev.netrunner.launcher.kit.Equipment
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDateTime
@@ -39,6 +41,18 @@ sealed class AlarmAction {
     object GhostMode : AlarmAction() {
         override val ask = "Je bascule le mode furtif ? Valide."
     }
+    data class AddNote(val title: String, val content: String) : AlarmAction() {
+        override val ask = "Je l'écris dans tes notes ? Valide."
+    }
+    data class AddEquipment(val item: Equipment) : AlarmAction() {
+        override val ask = "Je l'ajoute à l'inventaire du kit ? Valide."
+    }
+    data class SetEquipmentState(val item: Equipment, val state: String) : AlarmAction() {
+        override val ask = "Je mets à jour l'inventaire ? Valide."
+    }
+    data class AddCable(val cable: CableRecord) : AlarmAction() {
+        override val ask = "J'enregistre ce relevé dans le kit ? Valide."
+    }
     data class Forget(val reminders: List<Reminder>) : AlarmAction() {
         override val ask = if (reminders.size > 1) "Je les efface tous ? Valide." else "J'efface ce rappel ? Valide."
     }
@@ -54,6 +68,10 @@ sealed class AlarmAction {
             is OpenApp -> "OUVRIR ${label.uppercase()}"
             is Torch -> if (on) "ALLUMER LA LAMPE" else "ÉTEINDRE LA LAMPE"
             GhostMode -> "BASCULER LE MODE FURTIF"
+            is AddNote -> "NOTE" + (if (title.isNotBlank()) " « $title »" else "") + " · " + content.lines().joinToString(" · ") { it.removePrefix("[ ] ") }.take(120)
+            is AddEquipment -> "INVENTAIRE + ${item.name.uppercase()}" + (if (item.location.isNotBlank()) " · ${item.location.uppercase()}" else "") + " · ${item.state.uppercase()}"
+            is SetEquipmentState -> "${item.name.uppercase()} → ${state.uppercase()}"
+            is AddCable -> "RELEVÉ " + AskaKit.cableSummary(cable)
         }
 }
 
@@ -71,6 +89,8 @@ object AskaAlarms {
                 return if (action.reminders.size == 1) "Rappel effacé." else "Rappels effacés."
             }
             is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> return AskaActions.run(context, action)
+            is AlarmAction.AddNote -> return AskaNotes.add(context, action.title, action.content)
+            is AlarmAction.AddEquipment, is AlarmAction.SetEquipmentState, is AlarmAction.AddCable -> return AskaKit.run(context, action)
             else -> Unit
         }
         val intent = when (action) {
@@ -89,7 +109,8 @@ object AskaAlarms {
                 .putExtra(AlarmClock.EXTRA_MESSAGE, "As//ka")
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             AlarmAction.Show -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
-            is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> error("handled above")
+            is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode,
+            is AlarmAction.AddNote, is AlarmAction.AddEquipment, is AlarmAction.SetEquipmentState, is AlarmAction.AddCable -> error("handled above")
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             context.startActivity(intent)
@@ -98,7 +119,7 @@ object AskaAlarms {
                 is AlarmAction.Dismiss -> "Je transmets à l'horloge. Confirme-lui si elle te le demande."
                 is AlarmAction.Timer -> "Minuteur lancé : ${durationLabel(action.seconds)}."
                 AlarmAction.Show -> "J'ouvre l'horloge."
-                is AlarmAction.Remind, is AlarmAction.Forget, is AlarmAction.OpenApp, is AlarmAction.Torch, AlarmAction.GhostMode -> ""
+                else -> ""
             }
         } catch (_: ActivityNotFoundException) {
             "Aucune appli d'horloge ne répond à mes signaux."
