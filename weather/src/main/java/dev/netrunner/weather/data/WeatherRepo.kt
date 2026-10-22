@@ -32,13 +32,39 @@ object WeatherRepo {
         }
     }
 
+    suspend fun bytes(url: String): ByteArray = withContext(Dispatchers.IO) {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 20_000
+        try {
+            if (conn.responseCode !in 200..299) throw java.io.IOException("Erreur ${conn.responseCode}")
+            conn.inputStream.use { it.readBytes() }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     suspend fun forecast(context: Context, place: Place): Forecast {
         val json = get(Forecast.url(place.lat, place.lon))
         val now = System.currentTimeMillis()
         val f = Forecast.parse(json, place.name, now)
-        prefs(context).edit().putString("cache_json", json).putString("cache_place", place.name).putLong("cache_time", now).apply()
+        prefs(context).edit().putString("cache_json", json).putString("cache_place", place.name).putLong("cache_time", now)
+            .putString("cache_where", place.toJson().toString()).apply()
         return f
     }
+
+    /** Where the cached forecast is for, so the satellite and farm tabs can follow it. */
+    fun cachedPlace(context: Context): Place? =
+        prefs(context).getString("cache_where", null)?.let { runCatching { Place.fromJson(org.json.JSONObject(it)) }.getOrNull() }
+
+    suspend fun agri(context: Context, place: Place): Agri {
+        val json = get(Agri.url(place.lat, place.lon))
+        val a = Agri.parse(json)
+        prefs(context).edit().putString("agri_json", json).apply()
+        return a
+    }
+
+    fun cachedAgri(context: Context): Agri? = prefs(context).getString("agri_json", null)?.let { runCatching { Agri.parse(it) }.getOrNull() }
 
     /** The last forecast fetched, to show something offline. */
     fun cached(context: Context): Forecast? {

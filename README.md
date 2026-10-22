@@ -159,6 +159,8 @@ Prévisions dans le module `weather/` (package `dev.netrunner.weather`, même cl
 - **Rapport de mission** : conditions actuelles (température, ressenti, vent, humidité, pression), conseil du jour.
 - **24 h** en courbe de température avec risque de pluie, et **7 jours** en barres min/max.
 - **Lieux** : position du téléphone (localisation approximative) ou villes recherchées et enregistrées.
+- **Satellite** : images Meteosat Third Generation (EUMETSAT, gratuit) autour du lieu, en couleurs, infrarouge ou brouillard, à trois échelles (local, région, Europe), animées sur les 3,5 dernières heures.
+- **Agricole** : température et humidité du sol par profondeur, déficit de vapeur, bilan pluie − évapotranspiration sur 7 jours passés et à venir, degrés-jours, risque de gel et fenêtres de traitement (vent < 19 km/h, sans pluie).
 - **As//ka** : son chibi change selon le temps (soleil, nuit, nuages, brouillard, pluie, orage, neige, canicule, grand froid, vent fort), avec une petite réplique ; désactivable dans CONFIG.
 - **Hors ligne** : la dernière prévision reste affichée.
 - **Mises à jour** : releases GitHub `weather-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
