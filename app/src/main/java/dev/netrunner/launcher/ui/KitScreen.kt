@@ -60,7 +60,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val InventoryParts = listOf("Matériel", "Consommables")
-private val LogParts = listOf("Interventions", "Clients", "Temps", "Réputation")
+private val LogParts = listOf("Interventions", "Clients", "Temps", "Dossier tech")
 
 private enum class KitTab(val label: String) {
     Inventory("INVENTAIRE"), Logbook("CARNET"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),

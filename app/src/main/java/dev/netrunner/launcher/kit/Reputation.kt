@@ -10,7 +10,7 @@ import dev.netrunner.launcher.ui.Faction
  */
 object Reputation {
     /** Name of the feature in the kit and on the home widget. */
-    const val TITLE = "RÉPUTATION"
+    const val TITLE = "DOSSIER TECH"
 
     data class Rank(val level: Int, val title: String, val from: Int, val to: Int?)
     data class Achievement(val title: String, val detail: String, val progress: Int, val target: Int) {
