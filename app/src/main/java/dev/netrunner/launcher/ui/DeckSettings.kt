@@ -28,6 +28,9 @@ object DeckSettings {
     /** The runner's handle, shown during boot and on the lock screen greeting. */
     var handle by mutableStateOf("V")
         private set
+    /** Opt-in: As//ka may be sensual and explicit during a date, in words only. */
+    var adultDates by mutableStateOf(false)
+        private set
     private var loaded = false
 
     fun load(context: Context) {
@@ -36,6 +39,7 @@ object DeckSettings {
         neonIcons = prefs(context).getBoolean("neon_icons", true)
         bootStyle = BootStyle.entries.firstOrNull { it.name == prefs(context).getString("boot_style", null) } ?: BootStyle.Bios
         handle = prefs(context).getString("handle", "V") ?: "V"
+        adultDates = prefs(context).getBoolean("adult_dates", false)
     }
 
     fun setBootStyle(context: Context, style: BootStyle) {
@@ -52,6 +56,11 @@ object DeckSettings {
     fun setNeonIcons(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean("neon_icons", on).apply()
         neonIcons = on
+    }
+
+    fun setAdultDates(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("adult_dates", on).apply()
+        adultDates = on
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences("netrunner", Context.MODE_PRIVATE)
