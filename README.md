@@ -175,6 +175,24 @@ Lecteur de musique dans le module `music/` (package `dev.netrunner.music`, même
 - **Arrière-plan** : la musique continue écran éteint, avec notification, écran de verrouillage, boutons du casque et pause quand le casque se débranche ; le widget musique du launcher la pilote aussi.
 - **Mises à jour** : releases GitHub `music-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## OSINT Netrunner (appli à part)
+
+Boîte à outils de recherche en sources ouvertes dans le module `osint/` (package `dev.netrunner.osint`, même clé de signature), au style terminal. Tout est passif : registres et archives publics, sans compte ni clé, jamais de scan de la cible.
+
+- **Cible** : un seul champ pour un domaine, une IP ou un lien (ou « Partager » depuis une autre appli), puis les modules :
+  - **WHOIS** (RDAP) : registrar, dates de création et d'expiration, statut, serveurs DNS, DNSSEC ;
+  - **DNS** (DNS over HTTPS) : A, AAAA, CNAME, MX, NS, TXT, SOA, CAA, avec contrôle SPF et DMARC ; PTR pour une IP ;
+  - **Certificats** (crt.sh) : sous-domaines vus dans Certificate Transparency, émetteurs ;
+  - **IP / ASN** : opérateur, ASN, plage et titulaire du bloc, contact abus, localisation approximative ;
+  - **Web** : chaîne de redirections, serveur, en-têtes de sécurité, cookies ;
+  - **TLS** : protocole, émetteur, validité, noms couverts, clé (même pour un certificat refusé, pour voir pourquoi) ;
+  - **Archives** : première et dernière capture de la Wayback Machine, années couvertes ;
+  - **Pivots** : liens vers VirusTotal, urlscan, Shodan, SecurityTrails, AbuseIPDB…
+- **Fichier** : métadonnées EXIF d'une photo (appareil, date, GPS avec carte, auteur), copie nettoyée sans métadonnées (JPEG et PNG sans perte, orientation conservée), recherche inversée (partage vers Google Lens ou liens Google, Bing, Yandex, TinEye pour une image en ligne), empreintes MD5/SHA-1/SHA-256 avec lien VirusTotal.
+- **Carnet d'enquête** : « + CARNET » sur un résultat le garde avec la date, notes libres, export vers Notes Netrunner ou partage en texte.
+- **Hors périmètre, volontairement** : recherche de personnes (nom, téléphone, e-mail) et scan actif de machines.
+- **Mises à jour** : releases GitHub `osint-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).

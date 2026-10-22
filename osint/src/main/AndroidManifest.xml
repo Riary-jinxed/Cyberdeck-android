@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Lookups go to public services (RDAP, DNS over HTTPS, crt.sh, Wayback…). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Without it Android hides the GPS position in the EXIF of a picked photo. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <!-- The case notebook is exported to the deck's Notes app (same signing key). -->
+    <uses-permission android:name="dev.netrunner.permission.WRITE_NOTES" />
+
+    <queries>
+        <provider android:authorities="dev.netrunner.notes.provider" />
+        <package android:name="dev.netrunner.notes" />
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Osint">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "Share" a domain, an IP or a link from any app to look it up. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
