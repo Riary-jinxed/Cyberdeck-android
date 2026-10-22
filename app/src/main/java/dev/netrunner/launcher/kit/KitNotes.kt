@@ -15,7 +15,6 @@ object KitNotes {
     private val NOTES: Uri = Uri.parse("content://dev.netrunner.notes.provider/notes")
 
     fun create(context: Context, e: Equipment) {
-        val title = e.name.ifBlank { e.code }
         val content = buildString {
             appendLine("kit:${e.code}")
             if (e.serial.isNotBlank()) appendLine("S/N : ${e.serial}")
@@ -29,6 +28,11 @@ object KitNotes {
                 appendLine(e.notes)
             }
         }.trimEnd()
+        create(context, e.name.ifBlank { e.code }, content)
+    }
+
+    /** Inserts a note with [title] and [content] and opens it in Notes. */
+    fun create(context: Context, title: String, content: String) {
         val uri = runCatching {
             context.contentResolver.insert(NOTES, ContentValues().apply {
                 put("title", title)

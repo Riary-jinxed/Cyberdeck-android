@@ -56,7 +56,7 @@ import java.time.LocalDate
 // ---------------------------------------------------------------------------------- shared
 
 @Composable
-private fun BackRow(title: String, subtitle: String = "", onBack: () -> Unit) {
+internal fun BackRow(title: String, subtitle: String = "", onBack: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title.uppercase(), color = Cp.Yellow, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -755,13 +755,14 @@ internal fun SwitchGenerator(onBack: () -> Unit) {
 internal fun ToolsTab() {
     var mode by remember { mutableStateOf("Hash") }
     Column {
-        KitChips(listOf("Hash", "Encodage", "JWT", "Bases", "Regex"), mode) { mode = it }
+        KitChips(listOf("Hash", "Encodage", "JWT", "Bases", "Regex", "Backup"), mode) { mode = it }
         Spacer(Modifier.height(8.dp))
         when (mode) {
             "Hash" -> HashTool()
             "Encodage" -> EncodeTool()
             "JWT" -> JwtTool()
             "Bases" -> BasesTool()
+            "Backup" -> BackupView()
             else -> RegexTool()
         }
     }

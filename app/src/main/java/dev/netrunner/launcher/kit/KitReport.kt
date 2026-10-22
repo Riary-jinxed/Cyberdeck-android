@@ -106,32 +106,7 @@ object KitReport {
         w.section("Checklist · ${run.done.size}/${run.steps.size}")
         run.steps.forEachIndexed { i, step -> w.text((if (i in run.done) "[x] " else "[ ] ") + "${i + 1}. $step", gapAfter = 1f) }
 
-        val site = run.site.trim()
-        if (site.isNotEmpty()) {
-            val cables = KitStore.cables.filter { it.site.equals(site, ignoreCase = true) }
-            if (cables.isNotEmpty()) {
-                w.section("Relevé des câbles · ${cables.size}")
-                cables.forEach { c ->
-                    val e = KitStore.equipment.firstOrNull { it.id == c.equipmentId }?.let { " · ${it.name.ifBlank { it.code }}" }.orEmpty()
-                    w.text("${c.outlet.ifBlank { "?" }} → ${c.switchName} ${c.port} · VLAN ${c.vlan.ifBlank { "-" }} · ${c.lengthM.ifBlank { "?" }} m · ${c.poe} · ${c.test}$e", w.mono, 1f)
-                }
-            }
-            val equipment = KitStore.equipment.filter { it.location.contains(site, ignoreCase = true) }
-            if (equipment.isNotEmpty()) {
-                w.section("Équipements · ${equipment.size}")
-                equipment.forEach { e ->
-                    w.text("${e.name.ifBlank { "?" }} · ${e.code} · S/N ${e.serial.ifBlank { "-" }} · ${e.location} · ${e.state}", w.mono, 1f)
-                }
-            }
-            val plans = NetPlan.plans.filter { it.site.equals(site, ignoreCase = true) }
-            if (plans.isNotEmpty()) {
-                w.section("Plan d'adressage")
-                plans.sortedBy { it.vlan.toIntOrNull() ?: 0 }.forEach { p ->
-                    w.text("VLAN ${p.vlan} ${p.name} · ${p.subnet} · passerelle ${p.gateway.ifBlank { "-" }}", w.body, 1f)
-                    NetPlan.assignmentsOf(p.id).forEach { a -> w.text("    ${a.ip}  ${a.host}", w.mono, 1f) }
-                }
-            }
-        }
+        siteSections(w, run.site)
 
         if (notes.isNotBlank()) {
             w.section("Notes")
@@ -144,13 +119,93 @@ object KitReport {
             }
         }
         w.finish()
-        val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-        val safe = (run.site.ifBlank { run.name }).replace(Regex("[^A-Za-z0-9._-]"), "_").take(40)
-        val file = File(dir, "rapport-$safe.pdf")
-        file.outputStream().use { doc.writeTo(it) }
-        doc.close()
-        file
+        write(context, doc, run.site.ifBlank { run.name })
     }.getOrNull()
+
+    /** Report of a logbook intervention: header, journal, its checklists, the site, notes and photos. */
+    fun build(context: Context, i: Intervention): File? = runCatching {
+        NetPlan.load(context)
+        val fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(ZoneId.systemDefault())
+        val hour = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+        val doc = PdfDocument()
+        val w = Writer(doc)
+        w.text("Rapport d'intervention", w.title, 6f)
+        w.text(i.title.ifBlank { "Intervention" })
+        if (i.site.isNotBlank()) w.text("Site : ${i.site}")
+        if (i.client.isNotBlank()) w.text("Client : ${i.client}")
+        if (i.ticket.isNotBlank()) w.text("Ticket : ${i.ticket}")
+        val end = if (i.open) "en cours" else "fin ${fmt.format(Instant.ofEpochMilli(i.ended))}"
+        val minutes = ((if (i.open) System.currentTimeMillis() else i.ended) - i.started) / 60000
+        w.text("Début ${fmt.format(Instant.ofEpochMilli(i.started))} · $end · durée ${minutes / 60} h ${"%02d".format(minutes % 60)}")
+        w.text("Rapport du ${fmt.format(Instant.now())}", w.dim)
+
+        if (i.journal.isNotEmpty()) {
+            w.section("Journal")
+            i.journal.sortedBy { it.at }.forEach { e -> w.text("${hour.format(Instant.ofEpochMilli(e.at))}  ${e.text}", gapAfter = 1f) }
+        }
+        Logbook.runsOf(i).forEach { run ->
+            w.section("Checklist ${run.name} · ${run.done.size}/${run.steps.size}")
+            run.steps.forEachIndexed { k, step -> w.text((if (k in run.done) "[x] " else "[ ] ") + "${k + 1}. $step", gapAfter = 1f) }
+        }
+        if (i.consumed.isNotEmpty()) {
+            w.section("Consommables")
+            i.consumed.forEach { w.text("${it.qty} ${it.unit}  ${it.name}", w.mono, 1f) }
+        }
+        siteSections(w, i.site)
+        if (i.notes.isNotBlank()) {
+            w.section("Notes")
+            w.text(i.notes)
+        }
+        if (i.photos.isNotEmpty()) {
+            w.section("Photos · ${i.photos.size}")
+            i.photos.forEach { name ->
+                Logbook.decode(context, Uri.fromFile(Logbook.photo(context, i.id, name)), 1000)?.let { w.image(it); it.recycle() }
+            }
+        }
+        w.finish()
+        write(context, doc, listOf(i.site, i.title).firstOrNull { it.isNotBlank() } ?: i.id)
+    }.getOrNull()
+
+    private fun write(context: Context, doc: PdfDocument, label: String): File {
+        val dir = File(context.cacheDir, "shared").apply { mkdirs() }
+        val safe = label.replace(Regex("[^A-Za-z0-9._-]"), "_").take(40)
+        val file = File(dir, "rapport-$safe.pdf")
+        try {
+            file.outputStream().use { doc.writeTo(it) }
+        } finally {
+            doc.close()
+        }
+        return file
+    }
+
+    /** Cables, equipment and addressing plan recorded for [siteName]. */
+    private fun siteSections(w: Writer, siteName: String) {
+        val site = siteName.trim()
+        if (site.isEmpty()) return
+        val cables = KitStore.cables.filter { it.site.equals(site, ignoreCase = true) }
+        if (cables.isNotEmpty()) {
+            w.section("Relevé des câbles · ${cables.size}")
+            cables.forEach { c ->
+                val e = KitStore.equipment.firstOrNull { it.id == c.equipmentId }?.let { " · ${it.name.ifBlank { it.code }}" }.orEmpty()
+                w.text("${c.outlet.ifBlank { "?" }} → ${c.switchName} ${c.port} · VLAN ${c.vlan.ifBlank { "-" }} · ${c.lengthM.ifBlank { "?" }} m · ${c.poe} · ${c.test}$e", w.mono, 1f)
+            }
+        }
+        val equipment = KitStore.equipment.filter { it.location.contains(site, ignoreCase = true) }
+        if (equipment.isNotEmpty()) {
+            w.section("Équipements · ${equipment.size}")
+            equipment.forEach { e ->
+                w.text("${e.name.ifBlank { "?" }} · ${e.code} · S/N ${e.serial.ifBlank { "-" }} · ${e.location} · ${e.state}", w.mono, 1f)
+            }
+        }
+        val plans = NetPlan.plans.filter { it.site.equals(site, ignoreCase = true) }
+        if (plans.isNotEmpty()) {
+            w.section("Plan d'adressage")
+            plans.sortedBy { it.vlan.toIntOrNull() ?: 0 }.forEach { p ->
+                w.text("VLAN ${p.vlan} ${p.name} · ${p.subnet} · passerelle ${p.gateway.ifBlank { "-" }}", w.body, 1f)
+                NetPlan.assignmentsOf(p.id).forEach { a -> w.text("    ${a.ip}  ${a.host}", w.mono, 1f) }
+            }
+        }
+    }
 
     /** Photos are downscaled while decoding so a dozen of them stay light in memory and in the PDF. */
     private fun decode(context: Context, uri: Uri): Bitmap? = runCatching {
