@@ -54,8 +54,15 @@ class MainActivity : ComponentActivity() {
         read(intent)
     }
 
-    /** Text shared from another app becomes a new note, opened in the editor. */
+    /** Text shared from another app becomes a new note; a VIEW of …/notes/ID opens that note. */
     private fun read(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW) {
+            val id = intent.data?.lastPathSegment?.toLongOrNull() ?: return
+            val note = dev.netrunner.notes.data.NoteStore.get(this, id) ?: return
+            state.editing?.let { state.commit(it) }
+            state.editing = note
+            return
+        }
         if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return
         val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()

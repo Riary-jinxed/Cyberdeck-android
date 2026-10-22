@@ -33,3 +33,17 @@ fun Chip(text: String, color: Color, onClick: () -> Unit) {
 fun Message(text: String) {
     Text(text, color = Cp.Dim, fontFamily = HudFont, fontSize = 16.sp, modifier = Modifier.padding(16.dp))
 }
+
+/** Opens the field-kit sheet of [code] in the launcher (needs a launcher with the kit link, v1.3.8+). */
+fun openKit(context: android.content.Context, code: String) {
+    val intent = android.content.Intent("dev.netrunner.action.KIT_OPEN")
+        .setClassName("dev.netrunner.launcher", "dev.netrunner.launcher.kit.KitLinkActivity")
+        .putExtra("code", code)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        // Not installed, too old, or the permission is missing.
+        android.widget.Toast.makeText(context, "Mets à jour le launcher Netrunner pour ouvrir le kit.", android.widget.Toast.LENGTH_LONG).show()
+    }
+}
