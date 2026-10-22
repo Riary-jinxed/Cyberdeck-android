@@ -53,7 +53,7 @@ class IntentActivity : Activity() {
     private fun dismissAlarm(i: Intent) {
         val mode = i.getStringExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE)
         if (mode == null && RingService.ringing.value != null) {
-            RingService.command(this, RingService.ACTION_DISMISS)
+            RingService.stopNow(this)
             return
         }
         val alarms = AlarmStore.all(this).filter { it.enabled }

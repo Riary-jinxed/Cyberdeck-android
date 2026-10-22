@@ -114,7 +114,13 @@ class RingService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) getSystemService(VibratorManager::class.java).defaultVibrator
         else @Suppress("DEPRECATION") getSystemService(Vibrator::class.java)
 
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
     override fun onDestroy() {
+        if (instance === this) instance = null
         stopSound()
         state.value = null
         super.onDestroy()
@@ -141,6 +147,24 @@ class RingService : Service() {
                     .putExtra(EXTRA_KIND, kind.name).putExtra(Scheduler.EXTRA_ID, id)
                     .putExtra(EXTRA_LABEL, label).putExtra(EXTRA_TONE, tone).putExtra(EXTRA_VIBRATE, vibrate)
             )
+        }
+
+        /** The running service, to stop it directly from the wake screen (same process, main thread). */
+        private var instance: RingService? = null
+
+        /**
+         * Stops the ring now. Calls the service directly instead of sending it an intent, then
+         * stops it outright, which Android allows even from the background.
+         */
+        fun stopNow(context: Context) {
+            instance?.finish()
+            state.value = null
+            context.stopService(Intent(context, RingService::class.java))
+        }
+
+        fun snoozeNow(context: Context) {
+            val service = instance
+            if (service != null) service.snooze() else command(context, ACTION_SNOOZE)
         }
 
         fun command(context: Context, action: String) {
