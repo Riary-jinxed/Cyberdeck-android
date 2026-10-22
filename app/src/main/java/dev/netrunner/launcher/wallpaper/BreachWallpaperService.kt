@@ -41,6 +41,7 @@ class BreachWallpaperService : WallpaperService() {
         private var height = 0
         private var batteryLevel = 100
         private var lastBatteryRead = 0L
+        private var cachedPalette: dev.netrunner.launcher.ui.Palette? = null
         private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD) }
         private val fill = Paint()
         private val frame = Runnable { draw() }
@@ -49,6 +50,7 @@ class BreachWallpaperService : WallpaperService() {
             this.visible = visible
             handler.removeCallbacks(frame)
             if (visible) {
+                lastBatteryRead = 0L
                 Ripperdoc.refresh(applicationContext)
                 draw()
             }
@@ -83,14 +85,17 @@ class BreachWallpaperService : WallpaperService() {
         }
 
         private fun render(canvas: Canvas, t: Long) {
-            val palette = Faction.of(
-                applicationContext.getSharedPreferences("netrunner", Context.MODE_PRIVATE).getString("faction", null)
-            ).palette
+            // Faction and battery are read once a minute (and when the wallpaper shows again),
+            // not on every frame.
             if (t - lastBatteryRead > 60_000 || lastBatteryRead == 0L) {
                 lastBatteryRead = t.coerceAtLeast(1)
+                cachedPalette = Faction.of(
+                    applicationContext.getSharedPreferences("netrunner", Context.MODE_PRIVATE).getString("faction", null)
+                ).palette
                 batteryLevel = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                     ?.getIntExtra(BatteryManager.EXTRA_LEVEL, 100) ?: 100
             }
+            val palette = cachedPalette ?: return
             val hour = LocalTime.now().hour
             val night = hour >= 20 || hour < 7
             val tint = when {

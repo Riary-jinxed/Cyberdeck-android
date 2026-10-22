@@ -381,7 +381,7 @@ class Terminal(
         val faction = Faction.entries.firstOrNull { it.id == arg?.lowercase(Locale.ROOT) && it != Faction.Ghost }
         if (faction == null) {
             out("faction actuelle : ${Cp.faction.label}", Tone.Ok)
-            out("usage : theme netrunner | arasaka | militech | netwatch", Tone.Dim)
+            out("usage : theme netrunner | arasaka | militech | netwatch | voodoo | dogtown", Tone.Dim)
             return
         }
         Cp.select(context, faction)

@@ -243,11 +243,13 @@ private fun CorpoBoot(elapsed: Long) {
         )
         if (elapsed > 600) {
             Text(
-                "${Cp.faction.label.uppercase()} // SYSTÈMES EN LIGNE",
+                "${Cp.faction.label.uppercase()} // ${Cp.faction.motto}",
                 color = Cp.Cyan,
                 fontFamily = HudFont,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
         }
         if (elapsed > 1100) {

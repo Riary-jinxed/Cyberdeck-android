@@ -144,13 +144,20 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
 
         Section("APPARENCE")
         Label("Faction")
-        Chips(
-            options = Faction.entries.filter { it != Faction.Ghost }.map { it.label },
-            selected = Faction.entries.filter { it != Faction.Ghost }.indexOf(Cp.faction),
-        ) { i ->
-            UiSound.play(context, UiSound.Cue.Glitch)
-            Cp.select(context, Faction.entries.filter { it != Faction.Ghost }[i])
+        // Two rows of three: the faction names stay readable.
+        Faction.entries.filter { it != Faction.Ghost }.chunked(3).forEach { row ->
+            Chips(options = row.map { it.label }, selected = row.indexOf(Cp.faction)) { i ->
+                UiSound.play(context, UiSound.Cue.Glitch)
+                Cp.select(context, row[i])
+            }
+            Spacer(Modifier.height(6.dp))
         }
+        Text(
+            "« ${Cp.faction.motto} »",
+            color = Cp.Dim,
+            fontFamily = HudFont,
+            fontSize = 11.sp,
+        )
         Label("Fond animé")
         Chips(WallpaperMode.entries.map { it.label }, WallpaperMode.entries.indexOf(Wallpaper.mode)) { i ->
             Wallpaper.select(context, WallpaperMode.entries[i])

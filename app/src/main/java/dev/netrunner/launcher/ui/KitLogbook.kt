@@ -553,10 +553,13 @@ internal fun FocusBanner(onReturn: () -> Unit) {
 }
 
 @Composable
-private fun rememberNow() = produceState(System.currentTimeMillis()) {
-    while (true) {
-        value = System.currentTimeMillis()
-        delay(1000)
+private fun rememberNow(): androidx.compose.runtime.State<Long> {
+    val active = rememberScreenActive()
+    return produceState(System.currentTimeMillis(), active) {
+        while (active) {
+            value = System.currentTimeMillis()
+            delay(1000)
+        }
     }
 }
 

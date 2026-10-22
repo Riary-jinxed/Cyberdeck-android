@@ -14,7 +14,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -31,8 +37,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
-/** Angled "tech panel" shape used across the HUD. */
-fun hudShape(cut: Dp = 10.dp) = CutCornerShape(topEnd = cut, bottomStart = cut)
+/** Angled "tech panel" shape used across the HUD; the corners it cuts depend on the faction. */
+fun hudShape(cut: Dp = 10.dp) = when (Cp.faction.cut) {
+    PanelCut.Diagonal -> CutCornerShape(topEnd = cut, bottomStart = cut)
+    PanelCut.Mirror -> CutCornerShape(topStart = cut, bottomEnd = cut)
+    PanelCut.Octagon -> CutCornerShape(cut * 0.6f)
+    PanelCut.Tab -> CutCornerShape(topStart = cut, topEnd = cut)
+    PanelCut.Notch -> CutCornerShape(topEnd = cut * 1.6f)
+}
 
 fun Modifier.hudPanel(
     borderColor: Color = Cp.Yellow,
@@ -56,34 +68,116 @@ fun Modifier.scanlines(
     }
 }
 
-/** Faint cyan grid plus a yellow glow at the top, behind everything. */
-fun Modifier.cyberGrid(cell: Dp = 36.dp): Modifier = drawBehind {
-    drawRect(Cp.Background)
+/**
+ * The faction's background pattern (grid, pinstripes, hazard bands, dot matrix, rings,
+ * stencil marks) plus a primary-colour glow at the top, behind everything. The pattern is
+ * built once per size and faction, so redraws only replay it.
+ */
+fun Modifier.cyberGrid(cell: Dp = 36.dp): Modifier = drawWithCache {
+    val faction = Cp.faction
     val step = cell.toPx()
-    val line = Cp.Cyan.copy(alpha = 0.06f)
-    var x = 0f
-    while (x < size.width) {
-        drawLine(line, Offset(x, 0f), Offset(x, size.height))
-        x += step
+    val w = size.width
+    val h = size.height
+    val accent = Cp.Cyan
+    val primary = Cp.Yellow
+    val path = Path()
+    val points = mutableListOf<Offset>()
+    var lineAlpha = 0.06f
+    var stroke = 1f
+    when (faction.motif) {
+        Motif.Grid -> {
+            var x = 0f
+            while (x < w) { path.moveTo(x, 0f); path.lineTo(x, h); x += step }
+            var y = 0f
+            while (y < h) { path.moveTo(0f, y); path.lineTo(w, y); y += step }
+        }
+        Motif.Pinstripe -> {
+            // Corporate pinstripes with a heavier rule every fourth line.
+            var x = 0f
+            var k = 0
+            while (x < w) {
+                path.moveTo(x, 0f); path.lineTo(x, h)
+                if (k % 4 == 0) { path.moveTo(x + 2f, 0f); path.lineTo(x + 2f, h) }
+                x += step / 2; k++
+            }
+            lineAlpha = 0.05f
+        }
+        Motif.Hazard -> {
+            // Grid, plus hazard hatching on the top and bottom bands.
+            var x = 0f
+            while (x < w) { path.moveTo(x, 0f); path.lineTo(x, h); x += step * 2 }
+            val band = step * 2
+            var d = -band
+            while (d < w + band) {
+                path.moveTo(d, 0f); path.lineTo(d + band, band)
+                path.moveTo(d, h - band); path.lineTo(d + band, h)
+                d += step / 2
+            }
+            stroke = 2f
+        }
+        Motif.Dots -> {
+            var y = step / 2
+            while (y < h) {
+                var x = step / 2
+                while (x < w) { points += Offset(x, y); x += step / 2 }
+                y += step / 2
+            }
+            lineAlpha = 0.16f
+            stroke = 3f
+        }
+        Motif.Rings -> {
+            // Concentric rings and spokes around a point off the top right: a net "vévé".
+            val c = Offset(w * 0.8f, h * 0.18f)
+            var r = step
+            while (r < maxOf(w, h) * 1.2f) {
+                path.addOval(androidx.compose.ui.geometry.Rect(c, r))
+                r += step * 1.4f
+            }
+            for (i in 0 until 24) {
+                val a = Math.toRadians(i * 15.0)
+                path.moveTo(c.x, c.y)
+                path.lineTo(c.x + (cos(a) * w * 2).toFloat(), c.y + (sin(a) * w * 2).toFloat())
+            }
+            lineAlpha = 0.05f
+        }
+        Motif.Stencil -> {
+            // Crosshair marks on a wide grid and long diagonal slashes, spray-paint style.
+            val big = step * 2
+            var y = big / 2
+            while (y < h) {
+                var x = big / 2
+                while (x < w) {
+                    path.moveTo(x - 6f, y); path.lineTo(x + 6f, y)
+                    path.moveTo(x, y - 6f); path.lineTo(x, y + 6f)
+                    x += big
+                }
+                y += big
+            }
+            var d = -h
+            while (d < w) { path.moveTo(d, h); path.lineTo(d + h * 0.5f, 0f); d += big * 3 }
+            lineAlpha = 0.09f
+            stroke = 2f
+        }
+        Motif.Plain -> Unit
     }
-    var y = 0f
-    while (y < size.height) {
-        drawLine(line, Offset(0f, y), Offset(size.width, y))
-        y += step
+    val line = (if (faction.motif == Motif.Hazard) primary else accent).copy(alpha = lineAlpha)
+    val glow = Brush.radialGradient(
+        colors = listOf(primary.copy(alpha = 0.10f), Color.Transparent),
+        center = Offset(w * 0.2f, 0f),
+        radius = w.coerceAtLeast(1f),
+    )
+    val floor = Brush.verticalGradient(
+        colors = listOf(Color.Transparent, Cp.Red.copy(alpha = 0.08f)),
+        startY = h * 0.6f,
+    )
+    val background = Cp.Background
+    onDrawBehind {
+        drawRect(background)
+        if (points.isNotEmpty()) drawPoints(points, PointMode.Points, line, strokeWidth = stroke, cap = StrokeCap.Round)
+        else drawPath(path, line, style = Stroke(width = stroke))
+        drawRect(glow)
+        drawRect(floor)
     }
-    drawRect(
-        Brush.radialGradient(
-            colors = listOf(Cp.Yellow.copy(alpha = 0.10f), Color.Transparent),
-            center = Offset(size.width * 0.2f, 0f),
-            radius = size.width,
-        )
-    )
-    drawRect(
-        Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Cp.Red.copy(alpha = 0.08f)),
-            startY = size.height * 0.6f,
-        )
-    )
 }
 
 /**
