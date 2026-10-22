@@ -116,14 +116,6 @@ private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val SecondsFormat = DateTimeFormatter.ofPattern("ss")
 private val DateFormat = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.getDefault())
 
-private val FeedLines = listOf(
-    "> CONNEXION AU RÉSEAU......... OK",
-    "> ICE DÉTECTÉ : AUCUN",
-    "> PROTOCOLE DE BRÈCHE PRÊT",
-    "> PUBS XIAOMI : NEUTRALISÉES",
-    "> BIENVENUE À NIGHT CITY, NETRUNNER",
-    "> CYBERDECK : TEMPÉRATURE NOMINALE",
-)
 
 @Composable
 fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
@@ -726,7 +718,7 @@ private fun ClockBlock() {
     Row(verticalAlignment = Alignment.Bottom) {
         GlitchText(
             text = now.format(TimeFormat),
-            style = TextStyle(fontFamily = DisplayFont, fontSize = 64.sp, fontWeight = FontWeight.Black),
+            style = TextStyle(fontFamily = Cp.faction.clockFont, fontSize = 64.sp * Cp.faction.clockScale, fontWeight = FontWeight.Black),
             color = Cp.Yellow,
         )
         Text(
@@ -739,7 +731,7 @@ private fun ClockBlock() {
         )
     }
     Text(
-        "${now.format(DateFormat).uppercase()} // NIGHT CITY",
+        "${now.format(DateFormat).uppercase()} // ${Cp.faction.place}",
         color = Cp.Cyan,
         fontFamily = HudFont,
         fontSize = 14.sp,
@@ -747,31 +739,52 @@ private fun ClockBlock() {
     )
 }
 
-/** One terminal line typed letter by letter, cycling through FeedLines. */
+/** One terminal line typed letter by letter, cycling through the faction's feed (see FactionFeed). */
 @Composable
 private fun LiveFeed() {
+    val context = LocalContext.current
     var index by remember { mutableIntStateOf(0) }
     var shown by remember { mutableIntStateOf(0) }
+    val faction = Cp.faction
+    // Readings refreshed at each new line, so the numbers stay current without a separate poll.
+    fun read(): List<String> {
+        val battery = SystemInfo.battery(context)
+        val mem = SystemInfo.memory(context)
+        return FactionFeed.lines(
+            faction,
+            FeedInfo(
+                battery = battery.level,
+                charging = battery.charging,
+                tempC = battery.temperatureC?.toInt(),
+                ramPct = if (mem.totalBytes > 0) (100 - mem.availBytes * 100 / mem.totalBytes).toInt() else 0,
+                notifications = NotificationHub.items.value.size,
+            ),
+        )
+    }
+    var lines by remember(faction) { mutableStateOf(read()) }
     val active = rememberScreenActive() && !Ripperdoc.active
-    LaunchedEffect(active) {
-        if (!active) shown = FeedLines[index].length
+    LaunchedEffect(active, faction) {
+        index = index.coerceIn(0, lines.lastIndex)
+        if (!active) shown = lines[index].length
         while (active) {
-            val line = FeedLines[index]
+            val line = lines[index]
             for (i in 1..line.length) {
                 shown = i
                 delay(35)
             }
             delay(3500)
-            index = (index + 1) % FeedLines.size
+            lines = read()
+            index = (index + 1) % lines.size
             shown = 0
         }
     }
-    val line = FeedLines[index]
+    val line = lines[index.coerceIn(0, lines.lastIndex)]
     Text(
         line.take(shown) + "█",
         color = Cp.Text.copy(alpha = 0.8f),
-        fontFamily = HudFont,
+        fontFamily = if (faction.clock == ClockFace.Mono) MonoFont else HudFont,
         fontSize = 12.sp,
+        maxLines = 1,
         modifier = Modifier
             .fillMaxWidth()
             .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.5f))
