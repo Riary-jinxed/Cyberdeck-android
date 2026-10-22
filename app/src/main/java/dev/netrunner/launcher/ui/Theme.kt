@@ -156,11 +156,13 @@ object Cp {
     fun setGlitchMode(context: Context, mode: GlitchMode) {
         glitchMode = mode
         prefs(context).edit().putString(KEY_GLITCH, mode.name).apply()
+        ThemeProvider.changed(context)
     }
 
     fun select(context: Context, faction: Faction) {
         prefs(context).edit().putString(KEY, faction.id).apply()
         apply(faction)
+        ThemeProvider.changed(context)
     }
 
     private fun apply(f: Faction) {
