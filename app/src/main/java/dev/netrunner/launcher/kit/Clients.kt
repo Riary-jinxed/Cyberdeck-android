@@ -77,6 +77,7 @@ object Clients {
     fun delete(context: Context, id: String) {
         items.removeAll { it.id == id }
         save(context)
+        ClientDocs.deleteAll(context, id)
     }
 
     /** Client names from the sheets and from the logbook, for suggestions. */

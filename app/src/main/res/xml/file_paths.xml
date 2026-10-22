@@ -5,4 +5,5 @@
     <cache-path name="shared" path="shared/" />
     <!-- Where the camera app writes a shot taken from the intervention logbook. -->
     <files-path name="logbook" path="logbook/" />
+    <files-path name="clients" path="clients/" />
 </paths>

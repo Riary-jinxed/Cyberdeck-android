@@ -393,6 +393,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         } else {
                             FeedAccessCard()
                         }
+                        NextContractWidget(onOpenKit = { viewModel.openPanel(Panel.Kit) })
                         ZoneWidget()
                         ImplantHud()
                     }

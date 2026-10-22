@@ -16,7 +16,7 @@ import java.util.zip.ZipOutputStream
 object KitBackup {
     private const val MANIFEST = "netrunner-kit.json"
     private val Files = listOf("kit.json", "kit_net.json", "kit_log.json", "kit_clients.json", "kit_stock.json", "kit_coverage.json")
-    private val Dirs = listOf("logbook", "coverage")
+    private val Dirs = listOf("logbook", "coverage", "clients")
     /** A restore never writes more than this, whatever the archive claims. */
     private const val MAX_BYTES = 1L shl 30
 

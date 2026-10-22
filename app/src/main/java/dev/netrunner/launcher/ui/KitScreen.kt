@@ -60,7 +60,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val InventoryParts = listOf("Matériel", "Consommables")
-private val LogParts = listOf("Interventions", "Clients", "Temps")
+private val LogParts = listOf("Interventions", "Clients", "Temps", "Réputation")
 
 private enum class KitTab(val label: String) {
     Inventory("INVENTAIRE"), Logbook("CARNET"), Checklists("CHECKLISTS"), Cables("CÂBLES"), Configs("CONFIGS"),
@@ -173,7 +173,8 @@ fun KitScreen(onClose: () -> Unit) {
                 when {
                     logOpen != null || logPart == LogParts[0] -> LogbookTab(logOpen, onOpen = { logOpen = it })
                     logPart == LogParts[1] -> ClientsView(onOpenIntervention = { id -> logPart = LogParts[0]; logOpen = id })
-                    else -> TimeView()
+                    logPart == LogParts[2] -> TimeView()
+                    else -> ReputationView()
                 }
             }
             KitTab.Maps -> MapsTab()
