@@ -148,6 +148,7 @@ Lecteur de QR codes et codes-barres dans le module `scanner/` (package `dev.netr
 - **Décodage** : liens, Wi-Fi (connexion en un geste), téléphone, SMS, e-mail, position GPS, carte de visite, code produit, texte.
 - **Actions** : ouvrir, se connecter, appeler, copier, partager ; ouverture automatique des liens en option.
 - **Historique** des 100 derniers scans, vibration réglable.
+- **Kit de terrain** : + KIT envoie le code à l'inventaire du launcher (fiche existante ou nouvelle fiche pré-remplie) ; le mode inventaire le fait à chaque scan.
 - **Mises à jour** : releases GitHub `scanner-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Météo Netrunner (appli à part)

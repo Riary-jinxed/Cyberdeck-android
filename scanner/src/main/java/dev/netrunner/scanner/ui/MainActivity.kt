@@ -74,7 +74,9 @@ class MainActivity : ComponentActivity() {
                                         history = History.add(this@MainActivity, scan)
                                         if (History.vibrate(this@MainActivity)) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         val content = Codes.parse(raw)
-                                        if (content is Codes.Content.Url && History.autoOpen(this@MainActivity)) {
+                                        if (History.kitMode(this@MainActivity)) {
+                                            addToKit(this@MainActivity, raw, format)
+                                        } else if (content is Codes.Content.Url && History.autoOpen(this@MainActivity)) {
                                             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(content.url))) }
                                         }
                                     }

@@ -37,4 +37,8 @@ object History {
     /** Open links straight away instead of showing the card first. */
     fun autoOpen(context: Context) = prefs(context).getBoolean("auto_open", false)
     fun setAutoOpen(context: Context, on: Boolean) = prefs(context).edit().putBoolean("auto_open", on).apply()
+
+    /** Inventory mode: every code goes straight to the launcher's field kit. */
+    fun kitMode(context: Context) = prefs(context).getBoolean("kit_mode", false)
+    fun setKitMode(context: Context, on: Boolean) = prefs(context).edit().putBoolean("kit_mode", on).apply()
 }
