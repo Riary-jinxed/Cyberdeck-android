@@ -1,8 +1,10 @@
 package dev.netrunner.clock.ui
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
@@ -40,6 +42,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import dev.netrunner.clock.alarm.RingService
 import dev.netrunner.clock.data.ClockPrefs
 import java.time.LocalTime
@@ -60,9 +65,45 @@ class RingActivity : ComponentActivity() {
             ClockTheme {
                 val ring by RingService.ringing.collectAsState()
                 LaunchedEffect(ring) { if (ring == null) finish() }
-                ring?.let { RingScreen(it, onSnooze = ::snooze, onDismiss = { dismiss(it) }) }
+                ring?.let { r ->
+                    RingScreen(
+                        r, onSnooze = ::snooze, onDismiss = { dismiss(r) },
+                        onScan = { scanToStop(r) }, scannerBroken = scannerBroken,
+                    )
+                }
             }
         }
+    }
+
+    /** Set when the scanner cannot start at all: the slider comes back, so the alarm can still be stopped. */
+    private var scannerBroken by mutableStateOf(false)
+
+    /** Unlocks first (the scanner cannot show over the lock screen), then scans and compares. */
+    private fun scanToStop(ring: RingService.Ring) {
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (keyguard.isKeyguardLocked) {
+            keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() = scan(ring)
+            })
+        } else {
+            scan(ring)
+        }
+    }
+
+    private fun scan(ring: RingService.Ring) {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS).enableAutoZoom().build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { code ->
+                if (code.rawValue.orEmpty().trim() == ring.qr.trim()) {
+                    dismiss(ring)
+                } else {
+                    Toast.makeText(this, "Mauvais code. Va scanner celui de ton alarme.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .addOnFailureListener {
+                scannerBroken = true
+                Toast.makeText(this, "Scanner indisponible : glisse la barre pour arrêter.", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun snooze() {
@@ -90,7 +131,7 @@ class RingActivity : ComponentActivity() {
 }
 
 @Composable
-private fun RingScreen(ring: RingService.Ring, onSnooze: () -> Unit, onDismiss: () -> Unit) {
+private fun RingScreen(ring: RingService.Ring, onSnooze: () -> Unit, onDismiss: () -> Unit, onScan: () -> Unit, scannerBroken: Boolean) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val now by rememberNow(500L)
     val pulse = (now / 500L) % 2L == 0L
@@ -134,7 +175,11 @@ private fun RingScreen(ring: RingService.Ring, onSnooze: () -> Unit, onDismiss: 
                 color = Cp.Cyan, size = 20.sp, modifier = Modifier.fillMaxWidth(), onClick = onSnooze,
             )
             Spacer(Modifier.height(20.dp))
-            SlideToStop(onDismiss)
+            if (ring.qr.isNotEmpty() && !scannerBroken) {
+                HudButton("⌗ SCANNER LE QR POUR ARRÊTER", filled = true, size = 18.sp, modifier = Modifier.fillMaxWidth(), onClick = onScan)
+            } else {
+                SlideToStop(onDismiss)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }

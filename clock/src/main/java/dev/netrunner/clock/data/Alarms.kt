@@ -26,6 +26,8 @@ data class Alarm(
     /** Excerpt of the tone to loop, in ms (end 0 = to the end of the file). */
     val toneStart: Long = 0L,
     val toneEnd: Long = 0L,
+    /** When set, the alarm only stops by scanning this QR or barcode. */
+    val qrCode: String = "",
     /** Wall-clock time of a pending snooze, 0 when none. */
     val snoozedUntil: Long = 0L,
 ) {
@@ -52,7 +54,7 @@ data class Alarm(
         .put("days", JSONArray(days.sorted())).put("label", label)
         .put("enabled", enabled).put("vibrate", vibrate)
         .put("tone", tone ?: "").put("toneStart", toneStart).put("toneEnd", toneEnd)
-        .put("snoozedUntil", snoozedUntil)
+        .put("qr", qrCode).put("snoozedUntil", snoozedUntil)
 
     companion object {
         fun fromJson(o: JSONObject) = Alarm(
@@ -66,6 +68,7 @@ data class Alarm(
             tone = o.optString("tone").ifEmpty { null },
             toneStart = o.optLong("toneStart"),
             toneEnd = o.optLong("toneEnd"),
+            qrCode = o.optString("qr"),
             snoozedUntil = o.optLong("snoozedUntil"),
         )
 

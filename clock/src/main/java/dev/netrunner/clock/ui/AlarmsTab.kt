@@ -1,6 +1,7 @@
 package dev.netrunner.clock.ui
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import dev.netrunner.clock.alarm.Clockwork
 import dev.netrunner.clock.alarm.TonePlayer
 import dev.netrunner.clock.data.Alarm
@@ -123,6 +127,7 @@ private fun AlarmRow(alarm: Alarm, now: Long, onClick: () -> Unit, onToggle: (Bo
             Text(hhmm(alarm.hour, alarm.minute), color = color, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 34.sp)
             val info = buildList {
                 add(Alarm.daysLabel(alarm.days))
+                if (alarm.qrCode.isNotEmpty()) add("⌗ QR")
                 if (alarm.label.isNotEmpty()) add("« ${alarm.label} »")
                 if (alarm.snoozedUntil > now) add("EN RÉPIT")
                 else alarm.nextTrigger(now)?.let { add(untilLabel(it - now)) }
@@ -147,6 +152,7 @@ private fun AlarmEditor(initial: Alarm, onDismiss: () -> Unit, onSave: (Alarm) -
     var days by remember { mutableStateOf(initial.days) }
     var label by remember { mutableStateOf(initial.label) }
     var vibrate by remember { mutableStateOf(initial.vibrate) }
+    var qr by remember { mutableStateOf(initial.qrCode) }
     var tone by remember { mutableStateOf(ToneChoice(initial.tone, initial.toneStart, initial.toneEnd)) }
     var choosingTone by remember { mutableStateOf(false) }
 
@@ -218,6 +224,8 @@ private fun AlarmEditor(initial: Alarm, onDismiss: () -> Unit, onSave: (Alarm) -
                 Text("Vibreur", color = Cp.Text, fontFamily = HudFont, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 Switch(checked = vibrate, onCheckedChange = { vibrate = it }, colors = hudSwitch())
             }
+            Spacer(Modifier.height(8.dp))
+            QrStopSection(qr) { qr = it }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (onDelete != null) HudButton("SUPPRIMER", color = Cp.Red, onClick = onDelete)
@@ -227,7 +235,7 @@ private fun AlarmEditor(initial: Alarm, onDismiss: () -> Unit, onSave: (Alarm) -
                     onSave(
                         initial.copy(
                             hour = picker.hour, minute = picker.minute, days = days, label = label.trim(), vibrate = vibrate,
-                            tone = tone.uri, toneStart = tone.start, toneEnd = tone.end, enabled = true, snoozedUntil = 0L,
+                            tone = tone.uri, toneStart = tone.start, toneEnd = tone.end, qrCode = qr, enabled = true, snoozedUntil = 0L,
                         )
                     )
                 }
@@ -253,3 +261,42 @@ fun hudField() = OutlinedTextFieldDefaults.colors(
     focusedLabelColor = Cp.Yellow, unfocusedLabelColor = Cp.Dim,
     focusedTextColor = Cp.Text, unfocusedTextColor = Cp.Text, cursorColor = Cp.Yellow,
 )
+
+/**
+ * "Anti-snooze" option: a reference code scanned now (a QR stuck in the kitchen, the barcode on
+ * the coffee pack…) that must be scanned again to stop the alarm.
+ */
+@Composable
+private fun QrStopSection(qr: String, onChange: (String) -> Unit) {
+    val context = LocalContext.current
+    fun scan() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS).enableAutoZoom().build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { code ->
+                val value = code.rawValue.orEmpty().trim()
+                if (value.isNotEmpty()) onChange(value)
+            }
+            .addOnFailureListener {
+                Toast.makeText(context, "Scanner indisponible (services Google Play).", Toast.LENGTH_LONG).show()
+            }
+    }
+    Column(Modifier.fillMaxWidth().hudPanel(borderColor = (if (qr.isEmpty()) Cp.Dim else Cp.Red).copy(alpha = 0.7f)).padding(12.dp)) {
+        Text("ARRÊT PAR QR CODE", color = if (qr.isEmpty()) Cp.Cyan else Cp.Red, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        if (qr.isEmpty()) {
+            Text(
+                "L'alarme ne s'arrêtera qu'en scannant un code choisi maintenant : un QR collé dans la cuisine, le code-barres du paquet de café…",
+                color = Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp),
+            )
+            HudButton("⌗ SCANNER LE CODE DE RÉFÉRENCE", color = Cp.Cyan, modifier = Modifier.fillMaxWidth()) { scan() }
+        } else {
+            Text(
+                "Code enregistré : ${qr.take(24)}${if (qr.length > 24) "…" else ""}",
+                color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(vertical = 6.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HudButton("CHANGER", color = Cp.Cyan, modifier = Modifier.weight(1f)) { scan() }
+                HudButton("RETIRER", color = Cp.Red, modifier = Modifier.weight(1f)) { onChange("") }
+            }
+        }
+    }
+}

@@ -28,7 +28,8 @@ class RingService : Service() {
 
     enum class Kind { Alarm, Timer }
 
-    data class Ring(val kind: Kind, val id: Int, val label: String, val since: Long, val hour: Int, val minute: Int)
+    /** [qr] non-empty: only a scan of that code stops it (the wake screen checks it, then calls [stopNow]). */
+    data class Ring(val kind: Kind, val id: Int, val label: String, val since: Long, val hour: Int, val minute: Int, val qr: String = "")
 
     private val handler = Handler(Looper.getMainLooper())
     private var player: TonePlayer? = null
@@ -40,7 +41,7 @@ class RingService : Service() {
         when (intent?.action) {
             ACTION_RING -> start(intent)
             ACTION_SNOOZE -> snooze()
-            ACTION_DISMISS -> finish()
+            ACTION_DISMISS -> if (state.value?.qr.isNullOrEmpty()) finish()
             else -> if (state.value == null) stopSelf()
         }
         return START_NOT_STICKY
@@ -52,15 +53,16 @@ class RingService : Service() {
         val label = intent.getStringExtra(EXTRA_LABEL).orEmpty()
         val alarm = if (kind == Kind.Alarm) AlarmStore.get(this, id) else null
         val now = LocalTime.now()
-        val ring = Ring(kind, id, label, System.currentTimeMillis(), alarm?.hour ?: now.hour, alarm?.minute ?: now.minute)
+        val ring = Ring(kind, id, label, System.currentTimeMillis(), alarm?.hour ?: now.hour, alarm?.minute ?: now.minute, alarm?.qrCode.orEmpty())
 
         val title = if (kind == Kind.Alarm) "Alarme ${hhmm(ring.hour, ring.minute)}" else "Minuteur terminé"
-        val notification = Notifs.ring(this, title, label.ifEmpty { if (kind == Kind.Alarm) "Debout, runner." else "Temps écoulé." }, kind == Kind.Alarm)
+        val notification = Notifs.ring(this, title, label.ifEmpty { if (kind == Kind.Alarm) "Debout, runner." else "Temps écoulé." }, kind == Kind.Alarm, canStop = ring.qr.isEmpty())
         startForeground(Notifs.ID_RING, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
 
         stopSound()
         state.value = ring
-        val minutes = ClockPrefs.ringMinutes(this)
+        // A QR alarm is meant to get you out of bed: it keeps going for an hour, not a few minutes.
+        val minutes = if (ring.qr.isEmpty()) ClockPrefs.ringMinutes(this) else maxOf(ClockPrefs.ringMinutes(this), 60)
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "netrunner:ring")
             .apply { acquire(minutes * 60_000L + 5_000L) }
