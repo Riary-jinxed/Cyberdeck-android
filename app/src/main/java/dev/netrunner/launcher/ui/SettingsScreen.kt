@@ -198,6 +198,46 @@ fun SettingsScreen(onClose: () -> Unit, onConfigChanged: () -> Unit = {}) {
                 Toggle("Icônes néon", "Icônes des applis teintées à la couleur de la faction", DeckSettings.neonIcons) {
                     DeckSettings.setNeonIcons(context, !DeckSettings.neonIcons)
                 }
+                val overlay = remember(tick) { dev.netrunner.launcher.notify.NeonBanner.canShow(context) }
+                Toggle(
+                    "Notifications aux couleurs",
+                    if (overlay) "Les notifications des autres applis s'affichent en bannière de la faction, par-dessus l'écran. Coupe les notifications flottantes d'Android pour ces applis pour éviter le doublon."
+                    else "Il faut d'abord autoriser Netrunner à s'afficher par-dessus les autres applis (touche pour ouvrir le réglage)",
+                    DeckSettings.neonBanners && overlay,
+                ) {
+                    if (!overlay) {
+                        context.startActivity(
+                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        DeckSettings.setNeonBanners(context, true)
+                    } else {
+                        DeckSettings.setNeonBanners(context, !DeckSettings.neonBanners)
+                    }
+                    tick++
+                }
+                if (DeckSettings.neonBanners && overlay) {
+                    Action("Tester la bannière", "Affiche un exemple aux couleurs de la faction") {
+                        dev.netrunner.launcher.notify.NeonBanner.show(
+                            context,
+                            dev.netrunner.launcher.notify.FeedItem(
+                                key = "netrunner-test",
+                                packageName = context.packageName,
+                                appLabel = "Netrunner",
+                                title = "Test de bannière",
+                                text = "Voilà à quoi ressemblent tes notifications en ${Cp.faction.label}.",
+                                postTime = System.currentTimeMillis(),
+                                kind = dev.netrunner.launcher.notify.FeedKind.Other,
+                                icon = null,
+                                contentIntent = null,
+                                replyAction = null,
+                                autoCancel = false,
+                                clearable = false,
+                            ),
+                            "◢ NETRUNNER // ${FactionFeed.incoming(Cp.faction)}",
+                        )
+                    }
+                }
 
                 Section("MODE NUIT NETWATCH")
                 Toggle(

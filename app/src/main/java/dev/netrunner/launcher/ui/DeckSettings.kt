@@ -40,6 +40,9 @@ object DeckSettings {
         private set
     var askaLock by mutableStateOf(true)
         private set
+    /** Off by default: notifications from other apps shown as a faction-coloured banner over them. */
+    var neonBanners by mutableStateOf(false)
+        private set
     private var loaded = false
 
     fun load(context: Context) {
@@ -53,6 +56,12 @@ object DeckSettings {
         askaSigil = prefs(context).getBoolean("aska_sigil", true)
         askaMorning = prefs(context).getBoolean("aska_morning", true)
         askaLock = prefs(context).getBoolean("aska_lock", true)
+        neonBanners = prefs(context).getBoolean("neon_banners", false)
+    }
+
+    fun setNeonBanners(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean("neon_banners", on).apply()
+        neonBanners = on
     }
 
     fun setBootStyle(context: Context, style: BootStyle) {

@@ -18,6 +18,47 @@ data class FeedInfo(
  * with a few lines of its lore.
  */
 object FactionFeed {
+    enum class Power { Plugged, Unplugged, Low }
+
+    /** Title and line for a power event banner, in the faction's voice. */
+    fun power(faction: Faction, event: Power, level: Int): Pair<String, String> = when (event) {
+        Power.Plugged -> when (faction) {
+            Faction.Arasaka -> "Recharge autorisée" to "Réserve à $level %. La société apprécie votre prévoyance."
+            Faction.Militech -> "Ravitaillement" to "Cellule d'énergie à $level %, recharge en cours."
+            Faction.Netwatch -> "Alimentation détectée" to "Terminal sur secteur, $level %. Connexion journalisée."
+            Faction.VoodooBoys -> "Le courant passe" to "$level %. Les loas boivent à la prise."
+            Faction.Barghest -> "Ravitaillement au checkpoint" to "Autonomie $level %, on recharge avant la patrouille."
+            else -> "Jack-in secteur" to "Batterie à $level %, recharge en cours."
+        }
+        Power.Unplugged -> when (faction) {
+            Faction.Arasaka -> "Fin de recharge" to "Réserve à $level %. Retour au poste."
+            Faction.Militech -> "Déploiement" to "Sur batterie, $level %. Bonne chasse."
+            Faction.Netwatch -> "Alimentation coupée" to "Terminal sur batterie, $level %."
+            Faction.VoodooBoys -> "Hors du flux" to "$level %. Garde ton énergie pour le net."
+            Faction.Barghest -> "En patrouille" to "Débranché à $level %. Dogtown t'attend."
+            else -> "Jack-out" to "Sur batterie, $level %."
+        }
+        Power.Low -> when (faction) {
+            Faction.Arasaka -> "Réserve non conforme" to "$level % restants. Rechargez sans délai."
+            Faction.Militech -> "Munitions faibles" to "Cellule à $level %. Retour à la base conseillé."
+            Faction.Netwatch -> "Terminal en danger" to "$level % restants. Perte de liaison imminente."
+            Faction.VoodooBoys -> "Ton esprit s'éteint" to "$level %. Trouve une prise avant que le net ne t'oublie."
+            Faction.Barghest -> "Autonomie critique" to "$level %. Rentre au checkpoint, choom."
+            else -> "Batterie faible" to "$level % restants. Le Ripperdoc passe en mode éco."
+        }
+    }
+
+    /** How the faction names an incoming notification, on the banner over other apps. */
+    fun incoming(faction: Faction): String = when (faction) {
+        Faction.Netrunner -> "PAQUET ENTRANT"
+        Faction.Arasaka -> "DOSSIER TRANSMIS"
+        Faction.Militech -> "ORDRE REÇU"
+        Faction.Netwatch -> "SIGNAL INTERCEPTÉ"
+        Faction.VoodooBoys -> "UN LOA MURMURE"
+        Faction.Barghest -> "TRANSMISSION RADIO"
+        Faction.Ghost -> "SIGNAL"
+    }
+
     fun lines(faction: Faction, i: FeedInfo): List<String> {
         val hot = (i.tempC ?: 0) >= 42
         val low = i.battery in 0..19

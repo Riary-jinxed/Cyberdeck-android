@@ -28,6 +28,16 @@ object BatteryLog {
     fun record(context: Context, state: BatteryState) {
         if (state.level !in 0..100) return
         if (state.level == lastLevel && state.charging == lastCharging) return
+        // Charger plugged or pulled, battery falling under 15 %: a banner in the faction's voice.
+        if (lastLevel >= 0) {
+            val event = when {
+                state.charging && !lastCharging -> dev.netrunner.launcher.ui.FactionFeed.Power.Plugged
+                !state.charging && lastCharging -> dev.netrunner.launcher.ui.FactionFeed.Power.Unplugged
+                !state.charging && lastLevel >= 15 && state.level < 15 -> dev.netrunner.launcher.ui.FactionFeed.Power.Low
+                else -> null
+            }
+            event?.let { runCatching { dev.netrunner.launcher.notify.NeonBanner.power(context, it, state.level) } }
+        }
         lastLevel = state.level
         lastCharging = state.charging
         runCatching {

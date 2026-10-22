@@ -41,7 +41,40 @@ class NetrunnerNotificationService : NotificationListenerService() {
         Ice.stop()
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = refreshSoon()
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        refreshSoon()
+        runCatching { maybeBanner(sbn) }
+    }
+
+    /** Keys already shown as a banner, with when: updates of the same notification stay quiet. */
+    private val bannered = object : LinkedHashMap<String, Long>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 64
+    }
+
+    /** Shows the faction banner for a new, alerting notification, when the option is on. */
+    private fun maybeBanner(sbn: StatusBarNotification) {
+        dev.netrunner.launcher.ui.DeckSettings.load(this)
+        if (!dev.netrunner.launcher.ui.DeckSettings.neonBanners || !NeonBanner.canShow(this)) return
+        val n = sbn.notification
+        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
+        // Do Not Disturb, screen off or locked: no banner.
+        if (currentInterruptionFilter != INTERRUPTION_FILTER_ALL) return
+        if (getSystemService(android.os.PowerManager::class.java)?.isInteractive != true) return
+        if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true) return
+        // Only notifications that would make a sound or pop up (not silent or low ones).
+        val ranking = Ranking()
+        if (currentRanking?.getRanking(sbn.key, ranking) == true &&
+            ranking.importance < android.app.NotificationManager.IMPORTANCE_DEFAULT
+        ) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val last = bannered[sbn.key]
+        if (last != null && (n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0 || now - last < 3_000)) return
+        val item = toItem(sbn) ?: return
+        bannered[sbn.key] = now
+        dev.netrunner.launcher.ui.Cp.load(this)
+        val tag = dev.netrunner.launcher.ui.FactionFeed.incoming(dev.netrunner.launcher.ui.Cp.faction)
+        NeonBanner.show(this, item, "◢ ${item.appLabel.uppercase()} // $tag")
+    }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) = refreshSoon()
 

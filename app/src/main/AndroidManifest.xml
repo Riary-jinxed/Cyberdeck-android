@@ -51,6 +51,11 @@
         android:protectionLevel="signature" />
 
     <permission
+        android:name="dev.netrunner.permission.THEME"
+        android:label="Lire le thème de Netrunner"
+        android:protectionLevel="signature" />
+
+    <permission
         android:name="dev.netrunner.permission.READ_REMINDERS"
         android:label="Lire les rappels d'As//ka"
         android:protectionLevel="signature" />
@@ -140,6 +145,13 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- The faction and glitch setting, read by the deck apps so they follow the launcher's theme. -->
+        <provider
+            android:name=".ui.ThemeProvider"
+            android:authorities="dev.netrunner.launcher.theme"
+            android:exported="true"
+            android:readPermission="dev.netrunner.permission.THEME" />
+
         <provider
             android:name=".aska.AskaRemindersProvider"
             android:authorities="dev.netrunner.launcher.reminders"
