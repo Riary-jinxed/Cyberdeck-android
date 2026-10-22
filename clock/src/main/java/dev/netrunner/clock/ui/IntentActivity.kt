@@ -52,8 +52,9 @@ class IntentActivity : Activity() {
 
     private fun dismissAlarm(i: Intent) {
         val mode = i.getStringExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE)
-        if (mode == null && RingService.ringing.value != null) {
-            RingService.stopNow(this)
+        val ringing = RingService.ringing.value
+        if (mode == null && ringing != null) {
+            if (ringing.qr.isEmpty()) RingService.stopNow(this) else toast("Cette alarme ne s'arrête qu'en scannant son QR code.")
             return
         }
         val alarms = AlarmStore.all(this).filter { it.enabled }
