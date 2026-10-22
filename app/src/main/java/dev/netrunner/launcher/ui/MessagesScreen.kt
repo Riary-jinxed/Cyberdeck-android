@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package dev.netrunner.launcher.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -6,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,13 +68,18 @@ fun MessagesScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     var version by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<SmsThread?>(null) }
+    var composing by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { version++ }
 
     DisposableEffect(version) {
         val stop = SmsStore.observe(context) { version++ }
         onDispose { stop() }
     }
-    BackHandler(enabled = open != null) { open = null }
+    BackHandler(enabled = open != null || composing) {
+        if (open != null) version++ // back on the list: refresh the unread counters
+        open = null
+        composing = false
+    }
 
     Column(
         Modifier
@@ -87,16 +95,39 @@ fun MessagesScreen(onClose: () -> Unit) {
         PanelHeader(
             title = if (thread == null) "// MESSAGERIE CHIFFRÉE" else "// CANAL : ${(thread.name ?: thread.address).uppercase()}",
             accent = Cp.Yellow,
-            onClose = { if (thread != null) open = null else onClose() },
+            onClose = {
+                when {
+                    thread != null -> {
+                        open = null
+                        version++
+                    }
+                    composing -> composing = false
+                    else -> onClose()
+                }
+            },
         )
         Spacer(Modifier.height(8.dp))
         when {
             !SmsStore.canRead(context) -> PermissionCard { ask.launch(SmsStore.permissions) }
-            thread == null -> ThreadList(version) {
+            thread == null && composing -> NewMessage { t ->
+                composing = false
+                open = t
+            }
+            thread == null -> ThreadList(version, onChanged = { version++ }, onNew = { composing = true }) {
                 UiSound.play(context, UiSound.Cue.Open)
                 open = it
             }
-            else -> Conversation(thread, version, onSent = { version++ })
+            else -> Conversation(
+                thread,
+                version,
+                onSent = { version++ },
+                onResolved = { open = it },
+                onHide = {
+                    SmsStore.hide(context, thread.threadId, thread.date)
+                    open = null
+                    version++
+                },
+            )
         }
     }
 }
@@ -123,61 +154,261 @@ private fun PermissionCard(onGrant: () -> Unit) {
 }
 
 @Composable
-private fun ThreadList(version: Int, onOpen: (SmsThread) -> Unit) {
+private fun ThreadList(version: Int, onChanged: () -> Unit, onNew: () -> Unit, onOpen: (SmsThread) -> Unit) {
     val context = LocalContext.current
-    val threads by produceState(emptyList<SmsThread>(), version) {
-        value = withContext(Dispatchers.IO) { SmsStore.threads(context) }
+    var showHidden by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var menu by remember { mutableStateOf<Long?>(null) }
+    val all by produceState(emptyList<SmsThread>(), version) {
+        value = withContext(Dispatchers.IO) { SmsStore.threads(context, includeHidden = true) }
     }
-    if (threads.isEmpty()) {
-        Text("> AUCUN CANAL ACTIF", color = Cp.Dim, fontFamily = MonoFont, fontSize = 13.sp)
-        return
-    }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(threads, key = { it.threadId }) { t ->
-            val hot = t.unread > 0
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .hudPanel(borderColor = if (hot) Cp.Yellow else Cp.Cyan.copy(alpha = 0.45f), cut = 10.dp)
-                    .clickable { onOpen(t) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Portrait(t.name ?: t.address, hot)
-                Spacer(Modifier.size(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            (t.name ?: t.address).uppercase(),
-                            color = if (hot) Cp.Yellow else Cp.Text,
-                            fontFamily = HudFont,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
+    val hiddenCount = all.count { SmsStore.isHidden(context, it) }
+    val q = query.trim()
+    val threads = all
+        .filter { SmsStore.isHidden(context, it) == showHidden }
+        .filter { q.isEmpty() || (it.name ?: "").contains(q, true) || it.address.contains(q) || it.snippet.contains(q, true) }
+    val unreadTotal = all.filter { !SmsStore.isHidden(context, it) }.sumOf { it.unread }
+
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallAction("+ NOUVEAU", Cp.Yellow, onClick = onNew)
+            if (unreadTotal > 0) {
+                SmallAction("TOUT LU ✓", Cp.Cyan) {
+                    SmsStore.markAllSeen(context, all.filter { it.unread > 0 })
+                    onChanged()
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            if (hiddenCount > 0 || showHidden) {
+                SmallAction(if (showHidden) "◄ CANAUX" else "MASQUÉS ($hiddenCount)", Cp.Dim) { showHidden = !showHidden }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (all.size > 6) {
+            SearchField(query, { query = it }, "> rechercher un nom, un numéro, un mot…")
+            Spacer(Modifier.height(8.dp))
+        }
+        if (threads.isEmpty()) {
+            Text(
+                when {
+                    q.isNotEmpty() -> "> AUCUN RÉSULTAT"
+                    showHidden -> "> AUCUN CANAL MASQUÉ"
+                    else -> "> AUCUN CANAL ACTIF"
+                },
+                color = Cp.Dim,
+                fontFamily = MonoFont,
+                fontSize = 13.sp,
+            )
+            return@Column
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(threads, key = { it.threadId }) { t ->
+                val hot = t.unread > 0
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .hudPanel(borderColor = if (hot) Cp.Yellow else Cp.Cyan.copy(alpha = 0.45f), cut = 10.dp)
+                        .combinedClickable(
+                            onClick = { if (menu == t.threadId) menu = null else onOpen(t) },
+                            onLongClick = {
+                                UiSound.play(context, UiSound.Cue.Tap)
+                                menu = if (menu == t.threadId) null else t.threadId
+                            },
                         )
-                        Text(stamp(t.date), color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Portrait(t.name ?: t.address, hot)
+                        Spacer(Modifier.size(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    (t.name ?: t.address).uppercase(),
+                                    color = if (hot) Cp.Yellow else Cp.Text,
+                                    fontFamily = HudFont,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(stamp(t.date), color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                            }
+                            Text(
+                                (if (t.lastFromMe) "▸ " else "") + t.snippet.replace('\n', ' '),
+                                color = if (hot) Cp.Text else Cp.Dim,
+                                fontFamily = HudFont,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (hot) {
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                "${t.unread}",
+                                color = Cp.Background,
+                                fontFamily = HudFont,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.background(Cp.Yellow).padding(horizontal = 6.dp, vertical = 1.dp),
+                            )
+                        }
                     }
+                    if (menu == t.threadId) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (hot) {
+                                SmallAction("LU ✓", Cp.Cyan) {
+                                    SmsStore.markSeen(context, t.threadId, t.date)
+                                    menu = null
+                                    onChanged()
+                                }
+                            }
+                            if (showHidden) {
+                                SmallAction("RÉAFFICHER", Cp.Cyan) {
+                                    SmsStore.unhide(context, t.threadId)
+                                    menu = null
+                                    onChanged()
+                                }
+                            } else {
+                                SmallAction("MASQUER", Cp.Red) {
+                                    SmsStore.hide(context, t.threadId, t.date)
+                                    menu = null
+                                    onChanged()
+                                }
+                            }
+                            SmallAction("APPELER", Cp.Yellow) { dial(context, t.address) }
+                            SmallAction("APPLI SMS", Cp.Dim) { openInSmsApp(context, t.address) }
+                        }
+                    }
+                }
+            }
+            item {
+                Text(
+                    "Appui long sur un canal : marquer lu, masquer, appeler. Pour supprimer pour de bon, passe par ton appli SMS (seule autorisée par Android).",
+                    color = Cp.Dim,
+                    fontFamily = MonoFont,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallAction(label: String, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Text(
+        label,
+        color = color,
+        fontFamily = HudFont,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = Modifier
+            .hudPanel(borderColor = color.copy(alpha = 0.6f), fill = color.copy(alpha = 0.08f), cut = 6.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SearchField(value: String, onChange: (String) -> Unit, hint: String, onDone: () -> Unit = {}) {
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp),
+        cursorBrush = SolidColor(Cp.Yellow),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onDone() }),
+        modifier = Modifier
+            .fillMaxWidth()
+            .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.5f), cut = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        decorationBox = { inner ->
+            if (value.isEmpty()) Text(hint, color = Cp.Dim, fontFamily = HudFont, fontSize = 15.sp)
+            inner()
+        },
+    )
+}
+
+private fun dial(context: android.content.Context, number: String) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(context, dev.netrunner.launcher.call.DialerActivity::class.java)
+                .setData(android.net.Uri.fromParts("tel", number, null))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
+
+/** The default SMS app on this conversation: the place for a real deletion. */
+private fun openInSmsApp(context: android.content.Context, number: String) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_SENDTO, android.net.Uri.fromParts("smsto", number, null))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.onFailure { android.widget.Toast.makeText(context, "Aucune appli SMS trouvée", android.widget.Toast.LENGTH_SHORT).show() }
+}
+
+/** Picks a contact (or types a number) to start a conversation. */
+@Composable
+private fun NewMessage(onStart: (SmsThread) -> Unit) {
+    val context = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    val contacts by produceState(emptyList<dev.netrunner.launcher.call.PhoneContact>()) {
+        value = withContext(Dispatchers.IO) { dev.netrunner.launcher.call.Contacts.all(context) }
+    }
+    val q = query.trim()
+    val digits = q.filter { it.isDigit() || it == '+' }
+    val matches = if (q.isEmpty()) contacts.take(30) else contacts.filter {
+        it.name.contains(q, true) || (digits.length >= 3 && it.number.filter(Char::isDigit).contains(digits.filter(Char::isDigit)))
+    }.take(30)
+    fun start(number: String, name: String?) {
+        // Reuse the existing conversation with this number when there is one.
+        val existing = SmsStore.threadFor(context, number)
+        onStart(existing ?: SmsThread(-1L, number, name, "", 0L, 0, false))
+    }
+    Column {
+        SearchField(query, { query = it }, "> nom ou numéro du destinataire") {
+            if (digits.length >= 3 && matches.isEmpty()) start(digits, null)
+        }
+        Spacer(Modifier.height(8.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (digits.length >= 3 && q.all { it.isDigit() || it in "+ .-()" }) {
+                item {
                     Text(
-                        (if (t.lastFromMe) "▸ " else "") + t.snippet.replace('\n', ' '),
-                        color = if (hot) Cp.Text else Cp.Dim,
+                        "► ENVOYER AU $digits",
+                        color = Cp.Yellow,
                         fontFamily = HudFont,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.6f), cut = 8.dp)
+                            .clickable { start(digits, null) }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     )
                 }
-                if (hot) {
-                    Spacer(Modifier.size(8.dp))
-                    Text(
-                        "${t.unread}",
-                        color = Cp.Background,
-                        fontFamily = HudFont,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.background(Cp.Yellow).padding(horizontal = 6.dp, vertical = 1.dp),
-                    )
+            }
+            items(matches) { c ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.4f), cut = 8.dp)
+                        .clickable { start(c.number, c.name) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Portrait(c.name, false)
+                    Spacer(Modifier.size(12.dp))
+                    Column {
+                        Text(c.name.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(c.number, color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                    }
                 }
             }
         }
@@ -206,10 +437,21 @@ private val QuickReplies = listOf(
 )
 
 @Composable
-private fun Conversation(thread: SmsThread, version: Int, onSent: () -> Unit) {
+private fun Conversation(thread: SmsThread, version: Int, onSent: () -> Unit, onResolved: (SmsThread) -> Unit, onHide: () -> Unit) {
     val context = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val messages by produceState(emptyList<SmsMessage>(), thread.threadId, version) {
-        value = withContext(Dispatchers.IO) { SmsStore.messages(context, thread.threadId) }
+        value = withContext(Dispatchers.IO) { if (thread.threadId < 0) emptyList() else SmsStore.messages(context, thread.threadId) }
+    }
+    // A new conversation gets its thread once Android has filed the first message.
+    LaunchedEffect(thread.threadId, version) {
+        if (thread.threadId < 0 && version > 0) {
+            withContext(Dispatchers.IO) { SmsStore.threadFor(context, thread.address) }?.let { onResolved(it.copy(name = thread.name ?: it.name)) }
+        }
+    }
+    // Opening the conversation reads it: the unread counter goes away.
+    LaunchedEffect(messages) {
+        messages.lastOrNull()?.let { SmsStore.markSeen(context, thread.threadId, it.date) }
     }
     val list = rememberLazyListState()
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) list.scrollToItem(messages.lastIndex) }
@@ -232,9 +474,13 @@ private fun Conversation(thread: SmsThread, version: Int, onSent: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Portrait(thread.name ?: thread.address, false)
             Spacer(Modifier.size(10.dp))
-            Column {
-                Text((thread.name ?: thread.address).uppercase(), color = Cp.Cyan, fontFamily = DisplayFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f)) {
+                Text((thread.name ?: thread.address).uppercase(), color = Cp.Cyan, fontFamily = DisplayFont, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${thread.address} · LIAISON SMS", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+            }
+            Text("☎", color = Cp.Yellow, fontSize = 18.sp, modifier = Modifier.clickable { dial(context, thread.address) }.padding(8.dp))
+            if (thread.threadId >= 0) {
+                Text("MASQUER", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onHide).padding(8.dp))
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -259,7 +505,12 @@ private fun Conversation(thread: SmsThread, version: Int, onSent: () -> Unit) {
                         )
                     }
                 }
-                item(key = m.id) { Bubble(m) }
+                item(key = m.id) {
+                    Bubble(m) {
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(m.body))
+                        android.widget.Toast.makeText(context, "Message copié", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
         error?.let { Text(it, color = Cp.Red, fontFamily = HudFont, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp)) }
@@ -321,7 +572,7 @@ private fun Conversation(thread: SmsThread, version: Int, onSent: () -> Unit) {
 }
 
 @Composable
-private fun Bubble(m: SmsMessage) {
+private fun Bubble(m: SmsMessage, onCopy: () -> Unit) {
     val color = when {
         m.failed -> Cp.Red
         m.fromMe -> Cp.Yellow
@@ -332,6 +583,7 @@ private fun Bubble(m: SmsMessage) {
             Modifier
                 .widthIn(max = 290.dp)
                 .hudPanel(borderColor = color.copy(alpha = 0.7f), fill = color.copy(alpha = 0.07f), cut = 8.dp)
+                .combinedClickable(onClick = {}, onLongClick = onCopy)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(m.body, color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp)
