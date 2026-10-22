@@ -33,7 +33,10 @@ fun SettingsTab() {
                 "• Retour remonte d'un dossier.\n" +
                 "• La recherche part du dossier ouvert dans l'explorateur.\n" +
                 "• Les images, les textes et les zip s'ouvrent en aperçu ; « Ouvrir avec » pour une autre appli.\n" +
-                "• COMPRESSER crée un zip de la sélection, EXTRAIRE le décompresse dans un nouveau dossier.",
+                "• COMPRESSER crée un zip de la sélection, EXTRAIRE le décompresse dans un nouveau dossier.\n" +
+                "• SUPPR. envoie à la CORBEILLE (bouton dans l'explorateur), vidée automatiquement après 30 jours ; DÉFINITIF efface tout de suite.\n" +
+                "• RÉSEAU : ajoute ton NAS (SMB). Touche un fichier pour l'ouvrir, appui long puis TÉLÉCHARGER le copie dans le dossier ouvert de l'explorateur. " +
+                "Pour envoyer, COPIER dans l'explorateur puis ENVOYER ICI dans RÉSEAU.",
             color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, modifier = Modifier.padding(vertical = 6.dp),
         )
         Spacer(Modifier.height(18.dp))

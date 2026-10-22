@@ -29,6 +29,9 @@ class Explorer(context: Context) {
         private set
     var showHidden by mutableStateOf(FilesPrefs.showHidden(app))
         private set
+    /** The recycle bin, in a hidden folder of the main storage. */
+    val trash = dev.netrunner.files.data.Trash(File(Storage.home, dev.netrunner.files.data.Trash.FOLDER))
+    var showTrash by mutableStateOf(false)
     /** Bumped after every change on disk, so listings reload. */
     var version by mutableIntStateOf(0)
         private set
