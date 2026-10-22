@@ -24,6 +24,15 @@ class WeatherState(context: Context) {
         private set
     var saved by mutableStateOf(WeatherRepo.saved(app))
         private set
+    /** Where the forecast shown is for, with its coordinates. */
+    var place by mutableStateOf(WeatherRepo.cachedPlace(app))
+        private set
+    var agri by mutableStateOf(WeatherRepo.cachedAgri(app))
+        private set
+    var agriLoading by mutableStateOf(false)
+        private set
+    var agriError by mutableStateOf<String?>(null)
+        private set
 
     fun hasLocation() = app.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
@@ -38,6 +47,9 @@ class WeatherState(context: Context) {
                 Place(WeatherRepo.placeName(app, loc), "Position actuelle", loc.latitude, loc.longitude, gps = true)
             }
             forecast = WeatherRepo.forecast(app, place)
+            val moved = this.place?.let { it.lat != place.lat || it.lon != place.lon } ?: true
+            this.place = place
+            if (moved) agri = null
         } catch (e: Exception) {
             error = when (e) {
                 is IllegalStateException -> e.message
@@ -45,6 +57,20 @@ class WeatherState(context: Context) {
             }
         } finally {
             loading = false
+        }
+    }
+
+    suspend fun refreshAgri() {
+        val where = place ?: return
+        if (agriLoading) return
+        agriLoading = true
+        agriError = null
+        try {
+            agri = WeatherRepo.agri(app, where)
+        } catch (e: Exception) {
+            agriError = "Réseau indisponible" + (agri?.let { " : dernières données affichées." } ?: ".")
+        } finally {
+            agriLoading = false
         }
     }
 

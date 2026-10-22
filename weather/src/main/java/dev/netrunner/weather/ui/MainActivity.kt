@@ -45,11 +45,13 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             when (tab) {
                                 0 -> WeatherTab(state) { ask.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
-                                1 -> PlacesTab(state) { tab = 0 }
+                                1 -> SatelliteTab(state)
+                                2 -> AgriTab(state)
+                                3 -> PlacesTab(state) { tab = 0 }
                                 else -> SettingsTab()
                             }
                         }
-                        TabBar(listOf("MÉTÉO", "LIEUX", "CONFIG"), tab) { tab = it }
+                        TabBar(listOf("MÉTÉO", "SAT", "AGRI", "LIEUX", "CONFIG"), tab) { tab = it }
                     }
                 }
             }
