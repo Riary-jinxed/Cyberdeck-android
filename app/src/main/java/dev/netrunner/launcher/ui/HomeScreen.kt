@@ -131,6 +131,7 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
     val favoriteKeys by viewModel.favorites.collectAsStateWithLifecycle()
     val launching by viewModel.launching.collectAsStateWithLifecycle()
     val usage by viewModel.usage.collectAsStateWithLifecycle()
+    val recents by viewModel.recents.collectAsStateWithLifecycle()
     val panel by viewModel.panel.collectAsStateWithLifecycle()
     var drawerOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -517,6 +518,10 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
         ) {
             HubScreen(
                 apps = apps,
+                recents = remember(apps, recents) {
+                    val byKey = apps.associateBy { it.key }
+                    recents.mapNotNull { byKey[it] }.take(4)
+                },
                 quickhacks = {
                     QuickhackGrid(
                         slots = slots,
@@ -531,16 +536,24 @@ fun HomeScreen(viewModel: LauncherViewModel, homePresses: Int) {
                         onOpenFolder = { openFolder = it },
                     )
                 },
-                shortcuts = rememberHubShortcuts(
+                catalog = rememberHubShortcuts(
                     openAska = { viewModel.openPanel(Panel.Aska) },
                     openStats = { viewModel.openPanel(Panel.Stats) },
                     openKit = { viewModel.openPanel(Panel.Kit) },
                     openTerminal = { viewModel.openPanel(Panel.Terminal) },
                     openMessages = { viewModel.openPanel(Panel.Messages) },
+                    openWifi = { viewModel.openPanel(Panel.Wifi) },
+                    openFeed = { viewModel.openPanel(Panel.Feed) },
+                    openQuick = { viewModel.openPanel(Panel.Quick) },
+                    openSettings = { viewModel.openPanel(Panel.Settings) },
                 ),
                 onLaunch = { app ->
                     viewModel.openPanel(Panel.None)
                     viewModel.requestLaunch(app)
+                },
+                onTerminal = { command ->
+                    viewModel.openPanel(Panel.Terminal)
+                    viewModel.terminal.submit(command)
                 },
                 onClose = { viewModel.openPanel(Panel.None) },
             )

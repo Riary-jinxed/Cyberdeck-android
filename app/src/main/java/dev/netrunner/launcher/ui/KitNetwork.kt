@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -572,12 +573,13 @@ internal fun CalcTab() {
     // Kept here so switching between the three calculators keeps what was typed.
     val poeCounts = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
     Column {
-        KitChips(listOf("PoE", "Fibre", "MAC"), mode) { mode = it }
+        KitChips(listOf("PoE", "Fibre", "MAC", "Wi-Fi QR"), mode) { mode = it }
         Spacer(Modifier.height(8.dp))
         when (mode) {
             "PoE" -> PoeCalc(poeCounts)
             "Fibre" -> FiberCalc()
-            else -> MacCalc()
+            "MAC" -> MacCalc()
+            else -> WifiQr()
         }
     }
 }
@@ -814,6 +816,103 @@ private fun MacCalc() {
             item {
                 Text(
                     "Liste de constructeurs courte et hors ligne (réseau, VoIP, caméras, virtualisation).",
+                    color = Cp.Dim,
+                    fontFamily = MonoFont,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}
+
+/** Strong guest password: no look-alike characters (0/O, 1/l/I), easy to type from a poster. */
+private fun guestPassword(length: Int = 16): String {
+    val chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    val random = java.security.SecureRandom()
+    return (1..length).map { chars[random.nextInt(chars.length)] }
+        .joinToString("").chunked(4).joinToString("-")
+}
+
+/** The standard "WIFI:" payload phones read to join a network (special characters escaped). */
+private fun wifiPayload(ssid: String, security: String, password: String, hidden: Boolean): String {
+    fun esc(s: String) = s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace(":", "\\:").replace("\"", "\\\"")
+    val type = if (security == "Ouvert") "nopass" else "WPA"
+    return buildString {
+        append("WIFI:T:").append(type).append(";S:").append(esc(ssid)).append(';')
+        if (type != "nopass") append("P:").append(esc(password)).append(';')
+        if (hidden) append("H:true;")
+        append(';')
+    }
+}
+
+@Composable
+private fun WifiQr() {
+    val context = LocalContext.current
+    var ssid by remember { mutableStateOf("Invités") }
+    var security by remember { mutableStateOf("WPA2/WPA3") }
+    var password by remember { mutableStateOf(guestPassword()) }
+    var hidden by remember { mutableStateOf(false) }
+    val open = security == "Ouvert"
+    val payload = wifiPayload(ssid.trim(), security, password, hidden)
+    val tooShort = !open && password.length < 8
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item { KitField("Nom du réseau (SSID)", ssid, { ssid = it.take(32) }) }
+        item { KitChips(listOf("WPA2/WPA3", "Ouvert"), security) { security = it } }
+        if (!open) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                    KitField("Mot de passe (8 à 63)", password, { password = it.take(63) }, Modifier.weight(1f))
+                    KitButton("↻", Cp.Cyan) { password = guestPassword() }
+                }
+            }
+        }
+        item {
+            Text(
+                (if (hidden) "[✓]" else "[ ]") + " RÉSEAU MASQUÉ",
+                color = Cp.Cyan,
+                fontFamily = HudFont,
+                fontSize = 12.sp,
+                modifier = Modifier.clickable { hidden = !hidden }.padding(vertical = 4.dp),
+            )
+        }
+        if (ssid.isBlank() || tooShort) {
+            item {
+                Text(
+                    if (ssid.isBlank()) "> donne un nom de réseau" else "> le mot de passe doit faire au moins 8 caractères",
+                    color = Cp.Red,
+                    fontFamily = MonoFont,
+                    fontSize = 12.sp,
+                )
+            }
+        } else {
+            item {
+                Column(
+                    Modifier.fillMaxWidth().hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.7f), cut = 10.dp).padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    remember(payload) { encodeQr(payload) }?.let { QrImage(it, Modifier.size(220.dp)) }
+                    Text("WI-FI : ${ssid.trim()}", color = Cp.Text, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (!open) Text(password, color = Cp.Cyan, fontFamily = MonoFont, fontSize = 14.sp)
+                    Text("Scanne avec l'appareil photo pour te connecter", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    KitButton("PARTAGER ►", Cp.Yellow, Modifier.weight(1f), filled = true) {
+                        val lines = if (open) listOf("Réseau ouvert") else listOf("Mot de passe : $password")
+                        qrLabelBitmap(payload, "Wi-Fi : ${ssid.trim()}", lines)?.let { shareBitmap(context, it, "wifi-${ssid.trim()}") }
+                    }
+                    KitButton("⧉ MOT DE PASSE", Cp.Cyan, Modifier.weight(1f)) {
+                        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Wi-Fi", password))
+                        Toast.makeText(context, "Mot de passe copié", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            item {
+                Text(
+                    "Rien n'est appliqué à la borne : crée le réseau invité avec ces valeurs dans son interface, puis affiche ou imprime le QR.",
                     color = Cp.Dim,
                     fontFamily = MonoFont,
                     fontSize = 11.sp,

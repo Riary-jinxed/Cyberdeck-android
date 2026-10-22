@@ -25,6 +25,10 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     private val _usage = MutableStateFlow(repo.usage())
     val usage: StateFlow<Map<String, Int>> = _usage.asStateFlow()
 
+    private val _recents = MutableStateFlow(repo.recents())
+    /** App keys, most recently launched first. */
+    val recents: StateFlow<List<String>> = _recents.asStateFlow()
+
     private val _favorites = MutableStateFlow(repo.favorites())
     val favorites: StateFlow<List<String>> = _favorites.asStateFlow()
 
@@ -145,6 +149,7 @@ class LauncherViewModel(app: Application) : AndroidViewModel(app) {
     fun completeLaunch() {
         _launching.value?.let(repo::launch)
         _usage.value = repo.usage()
+        _recents.value = repo.recents()
         _launching.value = null
     }
 

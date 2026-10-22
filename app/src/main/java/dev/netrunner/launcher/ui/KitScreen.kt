@@ -50,6 +50,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import dev.netrunner.launcher.kit.ChecklistRun
 import dev.netrunner.launcher.kit.ChecklistTemplate
 import dev.netrunner.launcher.kit.Equipment
+import dev.netrunner.launcher.kit.KitNotes
 import dev.netrunner.launcher.kit.KitStore
 import dev.netrunner.launcher.kit.Subnet
 import dev.netrunner.launcher.system.UiSound
@@ -71,6 +72,8 @@ fun KitScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     remember { KitStore.load(context.applicationContext) }
     var tab by remember { mutableStateOf(KitTab.Inventory) }
+    // A code sent by the Scanner or a note: its sheet lives in the inventory.
+    androidx.compose.runtime.LaunchedEffect(KitStore.request) { if (KitStore.request != null) tab = KitTab.Inventory }
 
     Column(
         Modifier
@@ -230,9 +233,17 @@ private fun InventoryTab() {
             }
     }
 
+    androidx.compose.runtime.LaunchedEffect(KitStore.request) {
+        KitStore.request?.let {
+            editing = KitStore.sheetFor(it)
+            KitStore.request = null
+        }
+    }
+
     editing?.let { item ->
         BackHandler { editing = null }
-        EquipmentSheet(item, onDone = { editing = null })
+        // Keyed so a new code handed over while a sheet is open shows its own fields.
+        androidx.compose.runtime.key(item.id) { EquipmentSheet(item, onDone = { editing = null }) }
         return
     }
 
@@ -299,7 +310,10 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
     var location by remember { mutableStateOf(item.location) }
     var state by remember { mutableStateOf(item.state) }
     var notes by remember { mutableStateOf(item.notes) }
+    var showLabel by remember { mutableStateOf(false) }
     val known = KitStore.equipment.any { it.id == item.id }
+
+    fun current() = item.copy(code = code.trim(), name = name.trim(), serial = serial.trim(), location = location.trim(), state = state, notes = notes.trim())
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -334,6 +348,43 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
                     onDone()
                 }
                 KitButton("ANNULER", Cp.Dim, Modifier.weight(1f)) { onDone() }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KitButton("▣ ÉTIQUETTE QR", Cp.Cyan, Modifier.weight(1f)) {
+                    // A sheet without a code gets one, so its label can be scanned back.
+                    if (code.isBlank()) code = "NR-" + item.id.uppercase()
+                    KitStore.upsert(context, current())
+                    showLabel = true
+                }
+                KitButton("→ NOTE", Cp.Cyan, Modifier.weight(1f)) {
+                    if (code.isBlank()) code = "NR-" + item.id.uppercase()
+                    val e = current()
+                    KitStore.upsert(context, e)
+                    KitNotes.create(context, e)
+                }
+            }
+        }
+        if (showLabel && code.isNotBlank()) {
+            item {
+                val e = current()
+                val lines = listOfNotNull(e.code, e.location.takeIf { it.isNotBlank() })
+                Column(
+                    Modifier.fillMaxWidth().hudPanel(borderColor = Cp.Yellow.copy(alpha = 0.7f), cut = 10.dp).padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    remember(e.code) { encodeQr(e.code) }?.let { QrImage(it, Modifier.size(200.dp)) }
+                    Text(e.name.ifBlank { e.code }.uppercase(), color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(lines.joinToString(" · "), color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KitButton("PARTAGER ►", Cp.Yellow, Modifier.weight(1f), filled = true) {
+                            qrLabelBitmap(e.code, e.name.ifBlank { e.code }, lines)?.let { shareBitmap(context, it, "etiquette-${e.code}") }
+                        }
+                        KitButton("MASQUER", Cp.Dim, Modifier.weight(1f)) { showLabel = false }
+                    }
+                }
             }
         }
         if (known) {

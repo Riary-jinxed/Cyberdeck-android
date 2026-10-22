@@ -79,3 +79,72 @@ fun QrOverlay(text: String, onClose: () -> Unit) {
         }
     }
 }
+
+/**
+ * A printable label: the QR on white with a title and up to two lines under it, as a bitmap
+ * ready to share to a label printer app or a photo print.
+ */
+fun qrLabelBitmap(text: String, title: String, lines: List<String> = emptyList()): android.graphics.Bitmap? {
+    val matrix = encodeQr(text) ?: return null
+    val cell = 12
+    val qr = matrix.width * cell
+    val pad = 24
+    val titleSize = 40f
+    val lineSize = 28f
+    val height = pad + qr + 16 + titleSize.toInt() + lines.size * (lineSize.toInt() + 8) + pad
+    val width = qr + pad * 2
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    canvas.drawColor(android.graphics.Color.WHITE)
+    val black = android.graphics.Paint().apply { color = android.graphics.Color.BLACK }
+    for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
+        if (matrix[x, y]) {
+            val left = (pad + x * cell).toFloat()
+            val top = (pad + y * cell).toFloat()
+            canvas.drawRect(left, top, left + cell, top + cell, black)
+        }
+    }
+    fun fit(paint: android.graphics.Paint, s: String): String {
+        if (paint.measureText(s) <= width - pad * 2) return s
+        var cut = s
+        while (cut.isNotEmpty() && paint.measureText("$cut…") > width - pad * 2) cut = cut.dropLast(1)
+        return "$cut…"
+    }
+    val titlePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.BLACK
+        textSize = titleSize
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        textAlign = android.graphics.Paint.Align.CENTER
+    }
+    val linePaint = android.graphics.Paint(titlePaint).apply {
+        textSize = lineSize
+        typeface = android.graphics.Typeface.MONOSPACE
+    }
+    var y = pad + qr + 16 + titleSize
+    canvas.drawText(fit(titlePaint, title), width / 2f, y, titlePaint)
+    lines.forEach { line ->
+        y += lineSize + 8
+        canvas.drawText(fit(linePaint, line), width / 2f, y, linePaint)
+    }
+    return bitmap
+}
+
+/** Shares [bitmap] as a PNG (label printer apps, messages, print service). */
+fun shareBitmap(context: android.content.Context, bitmap: android.graphics.Bitmap, name: String) {
+    runCatching {
+        val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+        val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(60).ifBlank { "etiquette" }
+        val file = java.io.File(dir, "$safe.png")
+        file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+            .setType("image/png")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(
+            android.content.Intent.createChooser(send, "Partager l'étiquette").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.onFailure {
+        android.widget.Toast.makeText(context, "Partage impossible", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}

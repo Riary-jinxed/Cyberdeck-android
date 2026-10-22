@@ -46,6 +46,7 @@ class AppRepository(private val context: Context) {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
     private val prefs = context.getSharedPreferences("netrunner", Context.MODE_PRIVATE)
     private val usagePrefs = context.getSharedPreferences("netrunner_usage", Context.MODE_PRIVATE)
+    private val recentPrefs = context.getSharedPreferences("netrunner_recent", Context.MODE_PRIVATE)
 
     fun loadApps(): List<AppEntry> {
         val user = Process.myUserHandle()
@@ -88,8 +89,13 @@ class AppRepository(private val context: Context) {
     /** How many times each app was opened from Netrunner, for the "frequent" sort. */
     fun usage(): Map<String, Int> = usagePrefs.all.mapNotNull { (k, v) -> (v as? Int)?.let { k to it } }.toMap()
 
+    /** App keys by last launch from Netrunner, most recent first. */
+    fun recents(): List<String> =
+        recentPrefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.sortedByDescending { it.second }.map { it.first }
+
     fun launch(app: AppEntry) {
         usagePrefs.edit().putInt(app.key, usagePrefs.getInt(app.key, 0) + 1).apply()
+        recentPrefs.edit().putLong(app.key, System.currentTimeMillis()).apply()
         runCatching { launcherApps.startMainActivity(app.component, app.user, null, null) }
             .onFailure { Log.w(TAG, "Cannot launch ${app.key}", it) }
     }
