@@ -138,6 +138,7 @@ Enregistreur vocal dans le module `recorder/` (package `dev.netrunner.recorder`,
 - **Écran éteint** : l'enregistrement continue en arrière-plan avec une notification (bouton ARRÊTER).
 - **Archives** : lecteur avec forme d'onde (touche pour se déplacer), ±10 s et vitesse de lecture ; partager, renommer, supprimer.
 - **Qualité** : réglage haute qualité (48 kHz / 192 kb/s) ou économe (44,1 kHz / 96 kb/s) dans CONFIG.
+- **Transcription** : TRANSCRIRE EN TEXTE convertit un enregistrement en texte sur le téléphone (Vosk, hors ligne, modèle français d'environ 41 Mo à télécharger une fois dans CONFIG). Le texte se copie ou part dans l'appli Notes (→ NOTES), automatiquement si « Ranger dans Notes » est activé.
 - **Mises à jour** : releases GitHub `recorder-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Scanner Netrunner (appli à part)
