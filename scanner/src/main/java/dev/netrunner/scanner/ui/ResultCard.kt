@@ -50,6 +50,7 @@ fun ResultCard(scan: History.Scan, modifier: Modifier = Modifier, onClose: (() -
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             actions(content, scan.raw).forEachIndexed { i, a -> Chip(a.label, if (i == 0) Cp.Yellow else Cp.Cyan) { a.run(context) } }
+            Chip("+ KIT", Cp.Cyan) { addToKit(context, scan.raw, scan.format) }
             if (onClose != null) Chip("NOUVEAU SCAN", Cp.Dim, onClose)
         }
     }

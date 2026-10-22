@@ -95,3 +95,17 @@ private fun connect(context: Context, wifi: Content.Wifi) {
     Toast.makeText(context, "Mot de passe copié : choisis « ${wifi.ssid} » dans les réglages Wi-Fi", Toast.LENGTH_LONG).show()
     start(context, Intent(Settings.ACTION_WIFI_SETTINGS))
 }
+
+/** Opens the launcher's field kit on this code: its sheet if known, else a new pre-filled one (launcher v1.3.8+). */
+fun addToKit(context: Context, raw: String, format: String) {
+    val intent = Intent("dev.netrunner.action.KIT_ADD")
+        .setClassName("dev.netrunner.launcher", "dev.netrunner.launcher.kit.KitLinkActivity")
+        .putExtra("code", raw)
+        .putExtra("format", format)
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        // Missing launcher, an older one without the kit link, or the permission was not granted.
+        Toast.makeText(context, "Mets à jour le launcher Netrunner pour ajouter au kit.", Toast.LENGTH_LONG).show()
+    }
+}

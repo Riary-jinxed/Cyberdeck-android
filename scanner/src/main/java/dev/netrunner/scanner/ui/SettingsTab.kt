@@ -38,11 +38,15 @@ fun SettingsTab() {
     val context = LocalContext.current
     var vibrate by remember { mutableStateOf(History.vibrate(context)) }
     var autoOpen by remember { mutableStateOf(History.autoOpen(context)) }
+    var kitMode by remember { mutableStateOf(History.kitMode(context)) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         SectionTitle("SCAN", Cp.Yellow)
         Setting("Vibrer à la détection", "Un petit retour quand un code est lu.", vibrate) { vibrate = it; History.setVibrate(context, it) }
         Setting("Ouvrir les liens directement", "Sans passer par la fiche du code. Prudence avec les QR codes inconnus.", autoOpen) {
             autoOpen = it; History.setAutoOpen(context, it)
+        }
+        Setting("Mode inventaire", "Chaque code scanné ouvre sa fiche dans le kit de terrain du launcher (ou en crée une).", kitMode) {
+            kitMode = it; History.setKitMode(context, it)
         }
         Text(
             "La lecture se fait sur le téléphone, sans connexion. Seuls « Rechercher » et l'ouverture d'un lien vont sur Internet.",
