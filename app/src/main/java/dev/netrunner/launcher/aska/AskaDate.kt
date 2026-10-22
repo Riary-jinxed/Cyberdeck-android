@@ -79,7 +79,7 @@ object AskaDate {
             "la pince attrape presque la peluche dragonne… puis la lâche",
             "une borne affiche un nouveau record : le vôtre",
             "le photomaton vous fait de l'œil dans un coin",
-            "un groupe d'enfants vous applaudit après une partie",
+            "un groupe de joueurs vous applaudit après une partie",
         )
         Scene.Home -> listOf(
             "le film arrive à une scène romantique un peu gênante",
