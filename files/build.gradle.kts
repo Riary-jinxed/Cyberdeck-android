@@ -12,8 +12,8 @@ android {
         applicationId = "dev.netrunner.files"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     // Same key as the launcher (CI secrets), so each new APK installs over the previous one.
@@ -43,6 +43,10 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        // BouncyCastle (pulled by smbj) ships duplicate metadata.
+        resources.excludes += setOf("META-INF/versions/**", "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/BCKEY.*", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/DEPENDENCIES")
+    }
 }
 
 kotlin {
@@ -53,4 +57,6 @@ kotlin {
 
 dependencies {
     implementation(project(":deck"))
+    // SMB2/3 client for the NAS tab.
+    implementation("com.hierynomus:smbj:0.13.0")
 }

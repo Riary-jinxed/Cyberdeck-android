@@ -77,18 +77,30 @@ fun NameDialog(title: String, initial: String, action: String, onDismiss: () -> 
     }
 }
 
+/** The bin by default; "DÉFINITIF" skips it. */
 @Composable
-fun DeleteDialog(files: List<File>, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    HudDialog("SUPPRIMER ?", onDismiss, confirm = { HudButton("SUPPRIMER", color = Cp.Red, filled = true, onClick = onConfirm) }) {
-        Column {
-            Text(
-                if (files.size == 1) "« ${files[0].name} »" + if (files[0].isDirectory) " et tout son contenu" else ""
-                else "${files.size} éléments, dossiers compris avec leur contenu",
-                color = Cp.Text, fontFamily = HudFont, fontSize = 16.sp,
-            )
-            Text("Définitif : pas de corbeille.", color = Cp.Red, fontFamily = HudFont, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
-        }
-    }
+fun DeleteDialog(files: List<File>, onDismiss: () -> Unit, onForever: () -> Unit, onBin: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Cp.Panel,
+        shape = hudShape(14.dp),
+        title = { Text("SUPPRIMER ?", color = Cp.Yellow, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = 1.sp) },
+        text = {
+            Column {
+                Text(
+                    if (files.size == 1) "« ${files[0].name} »" + if (files[0].isDirectory) " et tout son contenu" else ""
+                    else "${files.size} éléments, dossiers compris avec leur contenu",
+                    color = Cp.Text, fontFamily = HudFont, fontSize = 16.sp,
+                )
+                Text(
+                    "CORBEILLE : récupérable pendant ${dev.netrunner.files.data.Trash.KEEP_DAYS} jours. DÉFINITIF : effacé tout de suite.",
+                    color = Cp.Dim, fontFamily = HudFont, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        },
+        confirmButton = { HudButton("CORBEILLE", color = Cp.Yellow, filled = true, onClick = onBin) },
+        dismissButton = { HudButton("DÉFINITIF", color = Cp.Red, onClick = onForever) },
+    )
 }
 
 @Composable

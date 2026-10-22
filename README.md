@@ -88,6 +88,8 @@ Gestionnaire de fichiers dans le module `files/` (package `dev.netrunner.files`,
 - **Partage** d'un ou plusieurs fichiers vers n'importe quelle appli.
 - **Recherche** par nom (sans tenir compte des accents ni des majuscules) sous le dossier ouvert, résultats au fil de l'eau.
 - Demande l'autorisation Android « Accès à tous les fichiers ». Rien n'est envoyé sur le réseau.
+- **Corbeille** : SUPPR. envoie à la corbeille (bouton CORBEILLE de l'explorateur) pour restaurer à l'emplacement d'origine ; vidée automatiquement après 30 jours, ou DÉFINITIF pour effacer tout de suite.
+- **Réseau (NAS)** : partages SMB2/3 de ton NAS (Synology, QNAP, Freebox, Windows, Samba) : parcourir, ouvrir, télécharger dans le dossier de l'explorateur, envoyer le presse-papiers, créer, renommer, supprimer. Mot de passe chiffré par le Keystore Android.
 - **Mises à jour** : releases GitHub `files-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour.
 
 ## Agenda Netrunner (appli à part)
