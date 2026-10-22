@@ -11,6 +11,13 @@
         android:label="Écrire des notes Netrunner"
         android:protectionLevel="signature" />
 
+    <!-- Opening a field-kit sheet in the launcher (same signature key). -->
+    <permission
+        android:name="dev.netrunner.permission.KIT"
+        android:label="Ouvrir le kit de terrain Netrunner"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="dev.netrunner.permission.KIT" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -33,6 +40,15 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- content://dev.netrunner.notes.provider/notes/ID from the launcher: open that note. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="dev.netrunner.notes.provider"
+                    android:mimeType="vnd.android.cursor.item/vnd.netrunner.note"
+                    android:scheme="content" />
             </intent-filter>
         </activity>
 

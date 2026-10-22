@@ -1,6 +1,9 @@
 package dev.netrunner.notes.ui
 
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,7 +48,9 @@ import dev.netrunner.deck.HudButton
 import dev.netrunner.deck.HudFont
 import dev.netrunner.deck.MonoFont
 import dev.netrunner.deck.hudShape
+import dev.netrunner.deck.hudFieldColors
 import dev.netrunner.notes.data.Note
+import dev.netrunner.notes.data.PdfExport
 
 /** Full-screen editor. Closing (✕ or back) saves; an emptied note is dropped. */
 @Composable
@@ -53,6 +58,13 @@ fun EditorDialog(state: NotesState, original: Note) {
     val context = LocalContext.current
     var note by remember(original.id) { mutableStateOf(original) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var linking by remember { mutableStateOf(false) }
+    val pdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) {
+            val ok = PdfExport.write(context, uri, listOf(note))
+            Toast.makeText(context, if (ok) "PDF enregistré" else "Échec de l'export PDF", Toast.LENGTH_SHORT).show()
+        }
+    }
     val color = noteColor(note.color)
     val close = { state.commit(note); state.editing = null }
 
@@ -68,6 +80,8 @@ fun EditorDialog(state: NotesState, original: Note) {
                         if (note.title.isNotBlank()) send.putExtra(Intent.EXTRA_SUBJECT, note.title)
                         context.startActivity(Intent.createChooser(send, "Partager la note"))
                     }
+                    Chip("PDF", Cp.Cyan) { pdf.launch(PdfExport.fileName(listOf(note))) }
+                    Chip("LIER AU KIT", Cp.Cyan) { linking = true }
                     Chip("SUPPR.", Cp.Red) { confirmDelete = true }
                 }
             }
@@ -87,6 +101,12 @@ fun EditorDialog(state: NotesState, original: Note) {
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
+            val kits = note.kitCodes()
+            if (kits.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 4.dp)) {
+                    kits.forEach { code -> Chip("◆ KIT · $code", Cp.Yellow) { openKit(context, code) } }
+                }
+            }
             if (note.checklist) {
                 Checklist(note.items) { note = note.copy(items = it) }
             } else {
@@ -103,6 +123,32 @@ fun EditorDialog(state: NotesState, original: Note) {
                 color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp),
             )
         }
+    }
+
+    if (linking) {
+        var code by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { linking = false },
+            containerColor = Cp.Panel,
+            shape = hudShape(14.dp),
+            title = { Text("LIER À UNE FICHE DU KIT", color = Cp.Yellow, fontFamily = HudFont, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            text = {
+                Column {
+                    Text("Code de l'équipement (numéro, code-barres ou QR de la fiche).", color = Cp.Text, fontFamily = HudFont, fontSize = 14.sp)
+                    TextField(
+                        code, { code = it.replace(Regex("\\s"), "") }, singleLine = true, colors = hudFieldColors(),
+                        textStyle = TextStyle(fontFamily = MonoFont, fontSize = 16.sp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                HudButton("LIER", color = Cp.Yellow, filled = true) {
+                    linking = false
+                    if (code.isNotBlank()) note = note.withKit(code)
+                }
+            },
+            dismissButton = { HudButton("ANNULER", color = Cp.Dim) { linking = false } },
+        )
     }
 
     if (confirmDelete) {

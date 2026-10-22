@@ -122,7 +122,9 @@ Bloc-notes dans le module `notes/` (package `dev.netrunner.notes`, même clé de
 - **Épinglage** : appui long sur une carte pour l'épingler en haut ; les autres sont triées par dernière modification.
 - **Recherche** dans les titres et le contenu, sans tenir compte des accents ni des majuscules.
 - **Partage** : une note se partage en texte, et du texte partagé depuis n'importe quelle appli devient une nouvelle note.
-- **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire et ajouter des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste.
+- **Export PDF** : une note depuis son bouton PDF, ou toutes les notes depuis CONFIG.
+- **Kit de terrain** : LIER AU KIT ajoute un lien `kit:CODE`, et le bouton ◆ KIT ouvre la fiche dans le launcher (action `dev.netrunner.action.KIT_OPEN`, permission de signature `dev.netrunner.permission.KIT`).
+- **As//ka** : fournisseur `content://dev.netrunner.notes.provider/notes` (permissions de signature `dev.netrunner.permission.READ_NOTES` et `WRITE_NOTES`) pour lire, chercher (`?q=mots`, `?kit=CODE`), ajouter, modifier (update sur `…/notes/ID` : `title`, `content`, `pinned`) et supprimer des notes ; colonnes `_id`, `title`, `content`, `checklist`, `pinned`, `updated`, `source`. Un contenu en lignes `[ ] …` / `[x] …` crée une liste. Un intent VIEW sur `…/notes/ID` ouvre la note.
 - **Mises à jour** : releases GitHub `notes-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
 ## Dictaphone Netrunner (appli à part)
