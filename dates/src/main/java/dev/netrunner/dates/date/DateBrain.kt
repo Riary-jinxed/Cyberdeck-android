@@ -14,10 +14,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 /**
  * A rendez-vous with As//ka: the scene, what they say, and her model. The model is loaded when the
  * date starts and let go a little after the app leaves the screen, which hands its memory back.
+ * The date itself is kept on disk until she is walked home: Android may close the app meanwhile.
  */
 class DateBrain(private val context: Context, private val scope: CoroutineScope) {
 
@@ -69,6 +73,10 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
         profile = Link.profile(context)
     }
 
+    init {
+        restore()
+    }
+
     fun refreshState() {
         if (state == State.Waking || state == State.Thinking) return
         state = when {
@@ -97,6 +105,7 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
         val saved = Link.dateEnded(context, s, messages, lines.filter { it.fromUser }.map { it.text }, lines.filter { !it.fromUser }.map { it.text })
         scene = null
         lines.clear()
+        savedFile.delete()
         return saved
     }
 
@@ -277,11 +286,38 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
 
     private fun add(line: Line) {
         lines.add(line)
+        if (line.done) save()
     }
 
     private fun replace(id: Long, line: Line) {
         val index = lines.indexOfFirst { it.id == id }
         if (index >= 0) lines[index] = line
+        if (line.done) save()
+    }
+
+    // ---- The date in progress, on disk.
+
+    private val savedFile get() = File(context.filesDir, "date.json")
+
+    private fun save() {
+        val s = scene ?: return
+        val array = JSONArray()
+        lines.filter { it.done }.forEach {
+            array.put(JSONObject().put("user", it.fromUser).put("text", it.text).put("photo", it.photo != null))
+        }
+        runCatching { savedFile.writeText(JSONObject().put("scene", s.name).put("messages", messages).put("lines", array).toString()) }
+    }
+
+    private fun restore() {
+        val saved = runCatching { JSONObject(savedFile.readText()) }.getOrNull() ?: return
+        val s = AskaDate.Scene.entries.firstOrNull { it.name == saved.optString("scene") } ?: return
+        val array = saved.optJSONArray("lines") ?: JSONArray()
+        scene = s
+        messages = saved.optInt("messages")
+        for (i in 0 until array.length()) {
+            val o = array.getJSONObject(i)
+            lines.add(Line(nextId++, o.optBoolean("user"), o.optString("text"), photo = if (o.optBoolean("photo")) AskaDate.photo(s) else null))
+        }
     }
 
     /** Hides reasoning some models print despite being told not to. */
@@ -290,7 +326,8 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
 
     private companion object {
         const val GPU_BROKEN = "gpu_broken"
-        const val SLEEP_DELAY_MS = 60_000L
+        /** Long enough to answer a message elsewhere and come back without reloading her. */
+        const val SLEEP_DELAY_MS = 180_000L
         const val CONTEXT_CHARS = 6000
         /** About 3000 tokens of French: under the usual 4096-token context, with room for an answer. */
         const val SESSION_CHARS = 9000

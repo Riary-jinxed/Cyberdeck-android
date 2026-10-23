@@ -396,8 +396,8 @@ fun ModelTab(brain: DateBrain) {
         }
         SectionTitle("DEPUIS UN LIEN", Pink.Neon)
         Text(
-            "Colle le lien d'un fichier .gguf sur Hugging Face (bouton « download » du fichier). Prends une version Q4_K_M " +
-                "d'un modèle de 2 à 4 milliards de paramètres : au-delà, ce sera lent.",
+            "Colle le lien d'un fichier .gguf sur Hugging Face (bouton « download » du fichier). Prends une version Q4_0 si elle existe " +
+                "(la plus rapide sur téléphone), sinon Q4_K_M, d'un modèle de 2 à 4 milliards de paramètres : au-delà, ce sera lent.",
             color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp,
         )
         BasicTextField(
