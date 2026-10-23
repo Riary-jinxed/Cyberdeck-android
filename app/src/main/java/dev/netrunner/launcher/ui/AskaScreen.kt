@@ -67,6 +67,7 @@ import dev.netrunner.launcher.aska.AlarmAction
 import dev.netrunner.launcher.aska.AskaEars
 import dev.netrunner.launcher.aska.AskaBrain
 import dev.netrunner.launcher.aska.AskaDate
+import dev.netrunner.launcher.aska.AskaLink
 import dev.netrunner.launcher.aska.AskaReminders
 import dev.netrunner.launcher.aska.AskaModels
 import dev.netrunner.launcher.aska.AskaPet
@@ -97,6 +98,7 @@ private val Prompts = listOf(
 
 @Composable
 fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
+    val context = LocalContext.current
     // The model only stays in memory while this panel is open and on screen (and a short while after).
     val onScreen = rememberScreenActive()
     DisposableEffect(onScreen) {
@@ -180,7 +182,8 @@ fun AskaScreen(brain: AskaBrain, onClose: () -> Unit) {
         )
         when {
             nest -> AskaNest(brain.pet, Modifier.weight(1f)) { scene ->
-                brain.startDate(scene)
+                // The Rendez-vous app when installed; here otherwise.
+                if (!AskaLink.openDates(context, scene)) brain.startDate(scene)
                 nest = false
             }
             reminders -> ReminderBay(Modifier.weight(1f))

@@ -44,11 +44,14 @@ object AskaRecall {
 
     /** Keeps what the runner said during the date and what she did (the longest ones, in order). */
     fun saveDate(context: Context, scene: AskaDate.Scene, userLines: List<String>, herLines: List<String>) {
-        val said = longest(userLines, 5, 140)
-        if (said.isEmpty()) return
         val gestures = herLines.flatMap { line -> Regex("\\*([^*]+)\\*").findAll(line).map { it.groupValues[1] }.toList() }
-        val moments = longest(gestures, 3, 120)
-        val all = (listOf(DateMemory(System.currentTimeMillis(), scene.label, said, moments)) + dates(context)).take(MAX_DATES)
+        saveDate(context, scene.label, longest(userLines, 5, 140), longest(gestures, 3, 120))
+    }
+
+    /** A date as the Rendez-vous app tells it: what the runner said, what she did. */
+    fun saveDate(context: Context, label: String, said: List<String>, moments: List<String>) {
+        if (said.isEmpty()) return
+        val all = (listOf(DateMemory(System.currentTimeMillis(), label, said.take(5), moments.take(3))) + dates(context)).take(MAX_DATES)
         val a = JSONArray()
         all.forEach { d ->
             a.put(JSONObject().put("at", d.at).put("scene", d.scene).put("said", JSONArray(d.said)).put("moments", JSONArray(d.moments)))

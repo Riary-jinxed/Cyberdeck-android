@@ -59,6 +59,11 @@
         android:name="dev.netrunner.permission.READ_REMINDERS"
         android:label="Lire les rappels d'As//ka"
         android:protectionLevel="signature" />
+    <!-- The Rendez-vous app (same signing key) reads her profile and brings back the dates. -->
+    <permission
+        android:name="dev.netrunner.permission.ASKA"
+        android:label="Partager As//ka avec Rendez-vous"
+        android:protectionLevel="signature" />
     <!-- Built-in updates from the GitHub releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Music spectrum: Android's Visualizer reads the output mix and requires these. -->
@@ -79,6 +84,7 @@
         </intent>
         <package android:name="com.anthropic.claude" />
         <package android:name="dev.netrunner.notes" />
+        <package android:name="dev.netrunner.dates" />
         <!-- Notes Netrunner's provider, for As//ka. -->
         <provider android:authorities="dev.netrunner.notes.provider" />
         <!-- As//ka's ears: lets the app find the speech recognizer (Android 11+). -->
@@ -151,6 +157,13 @@
             android:authorities="dev.netrunner.launcher.theme"
             android:exported="true"
             android:readPermission="dev.netrunner.permission.THEME" />
+
+        <provider
+            android:name=".aska.AskaLinkProvider"
+            android:authorities="dev.netrunner.launcher.aska"
+            android:exported="true"
+            android:readPermission="dev.netrunner.permission.ASKA"
+            android:writePermission="dev.netrunner.permission.ASKA" />
 
         <provider
             android:name=".aska.AskaRemindersProvider"
