@@ -231,6 +231,11 @@ class AskaPet(context: Context) {
         react(Mood.Shy, PETTED.random())
     }
 
+    /** The dates that happened in the Rendez-vous app since her nest was last opened. */
+    fun collectDates() {
+        AskaLink.takePending(appContext).forEach { (scene, messages) -> dated(scene, messages) }
+    }
+
     /** Back from a rendez-vous: the more they talked, the closer they got. */
     fun dated(scene: AskaDate.Scene, messages: Int) {
         val s = elapsed(stats)

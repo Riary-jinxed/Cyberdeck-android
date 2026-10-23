@@ -28,8 +28,8 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 50
-        versionName = "1.5.4"
+        versionCode = 51
+        versionName = "1.5.5"
 
         // As//ka's model runtime ships native code: phones only, which keeps the APK small.
         ndk {

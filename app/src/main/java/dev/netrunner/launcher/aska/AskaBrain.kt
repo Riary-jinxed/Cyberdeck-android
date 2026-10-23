@@ -110,6 +110,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
     /** Her panel opened: load the model in the background so the first answer comes quicker. */
     fun wake() {
         sleepJob?.cancel()
+        pet.collectDates()
         // Finishes a download that completed while the panel was closed.
         AskaModels.pollDownload(context)
         refreshState()

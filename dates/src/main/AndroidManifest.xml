@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Internet (her model's download), updates and the launcher's theme come with the deck kit. -->
+
+    <!-- As//ka's profile in the launcher, and the dates sent back: same signing key only.
+         Declared here too, so the order in which the two apps are installed does not matter. -->
+    <permission
+        android:name="dev.netrunner.permission.ASKA"
+        android:label="Partager As//ka avec Rendez-vous"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="dev.netrunner.permission.ASKA" />
+    <!-- The launcher (and its provider) is visible through the deck kit's package query. -->
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Dates">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Her model, in its own process: running out of memory only stops her, not the app. -->
+        <service
+            android:name=".engine.EngineService"
+            android:exported="false"
+            android:process=":engine" />
+    </application>
+</manifest>
