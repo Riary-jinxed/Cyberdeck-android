@@ -81,6 +81,16 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::string &t
 /** The conversation in the model's chat format; [answer] opens her turn at the end. */
 std::string apply_template(const llama_model *model, const std::vector<llama_chat_message> &messages, bool answer) {
     const char *model_template = llama_model_chat_template(model, nullptr);
+    // Gemma 4's turns are not among llama.cpp's known formats: written here, without thinking.
+    if (model_template != nullptr && strstr(model_template, "<|turn>") != nullptr) {
+        std::string out;
+        for (const auto &m : messages) {
+            std::string role = strcmp(m.role, "assistant") == 0 ? "model" : m.role;
+            out += "<|turn>" + role + "\n" + m.content + "<turn|>\n";
+        }
+        if (answer) out += "<|turn>model\n";
+        return out;
+    }
     size_t total = 0;
     for (const auto &m : messages) total += strlen(m.content) + 64;
     for (const char *tmpl : {model_template, "chatml"}) {
@@ -208,7 +218,7 @@ Java_dev_netrunner_dates_engine_LlamaNative_generate(JNIEnv *env, jclass, jlong 
     llama_memory_t memory = llama_get_memory(session->ctx);
 
     llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(256, 1.08f, 0.0f, 0.0f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(llama_vocab_n_tokens(session->vocab), 256, 1.08f, 0.0f, 0.0f));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.05f, 1));

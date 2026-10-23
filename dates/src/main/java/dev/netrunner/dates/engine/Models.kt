@@ -37,6 +37,14 @@ object Models {
      */
     val catalog = listOf(
         Model(
+            id = "gemma4-e2b-abl",
+            label = "GEMMA 4 · E2B LIBÉRÉ",
+            tagline = "GGUF. Le modèle du launcher, sans ses refus : le meilleur en français et en cohérence.",
+            url = "$HF/mradermacher/Huihui-gemma-4-E2B-it-abliterated-v2-GGUF/resolve/main/Huihui-gemma-4-E2B-it-abliterated-v2.Q4_K_M.gguf",
+            sizeMb = 3270,
+            minRamGb = 8,
+        ),
+        Model(
             id = "gemma3-4b-abl",
             label = "GEMMA 3 · 4B LIBÉRÉ",
             tagline = "GGUF. Le plus à l'aise en français, cohérent dans la scène, sans les refus de Gemma.",
