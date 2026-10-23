@@ -164,6 +164,8 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
                 val pause = lines.lastOrNull { !it.fromUser && it.done && it.id < asked.id }?.text?.contains('?') == true
                 val message = listOfNotNull(
                     text,
+                    AskaDate.choiceNote(text),
+                    AskaDate.leadNote(lines.filter { !it.fromUser && it.done && it.id < asked.id && it.text.isNotBlank() }.map { it.text }),
                     AskaDate.looksNote(scene, text),
                     AskaDate.whereNote(lines.filter { it.done && it.id < asked.id }.map { it.fromUser to it.text }, p.handle),
                     beat?.let { "[Indication de scène, à glisser seulement si ça ne casse pas le moment : $it]" },
