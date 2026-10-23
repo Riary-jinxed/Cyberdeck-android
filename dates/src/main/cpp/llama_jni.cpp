@@ -168,6 +168,9 @@ Java_dev_netrunner_dates_engine_LlamaNative_load(JNIEnv *env, jclass, jstring jp
     ctx_params.n_ubatch = 512;
     ctx_params.n_threads = threads;
     ctx_params.n_threads_batch = threads;
+    // Gemma's sliding windows keep the whole conversation: otherwise its start is dropped from
+    // the cache, and reusing the prompt for the next answer would read past what is left.
+    ctx_params.swa_full = true;
     llama_context *ctx = llama_init_from_model(model, ctx_params);
     if (ctx == nullptr) {
         llama_model_free(model);
