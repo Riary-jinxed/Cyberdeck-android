@@ -30,6 +30,8 @@ object Models {
     private val EXTS = listOf("litertlm", "gguf")
 
     /**
+     * Q4_0 where the model has it: llama.cpp rearranges it for the phone's dot product
+     * instructions when loading, which reads the prompt about twice as fast as Q4_K_M.
      * The GGUF links are checked by the build (dates.yml): a file renamed on Hugging Face fails
      * it, instead of failing on the phone.
      */
@@ -38,8 +40,8 @@ object Models {
             id = "hermes3-3b",
             label = "HERMES 3 · LLAMA 3.2 3B",
             tagline = "GGUF. Fait pour le jeu de rôle : suit bien le personnage et la scène, peu de refus.",
-            url = "$HF/bartowski/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B-Q4_K_M.gguf",
-            sizeMb = 2020,
+            url = "$HF/bartowski/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B-Q4_0.gguf",
+            sizeMb = 1830,
             minRamGb = 6,
         ),
         Model(
@@ -54,8 +56,8 @@ object Models {
             id = "qwen25-3b",
             label = "QWEN 2.5 · 3B",
             tagline = "GGUF. Généraliste, bon en français, plus sage.",
-            url = "$HF/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-            sizeMb = 1930,
+            url = "$HF/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_0.gguf",
+            sizeMb = 1745,
             minRamGb = 6,
         ),
         Model(

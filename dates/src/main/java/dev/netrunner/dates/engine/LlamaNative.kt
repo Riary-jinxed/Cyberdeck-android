@@ -26,4 +26,7 @@ object LlamaNative {
         maxTokens: Int,
         callback: Callback,
     ): Boolean
+
+    /** Decodes the conversation ahead of the next answer, so that answer only pays for the new message. */
+    @JvmStatic external fun prefill(handle: Long, system: String, roles: BooleanArray, texts: Array<String>): Boolean
 }

@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             DeckTheme {
                 var tab by rememberSaveable { mutableIntStateOf(0) }
-                // Her model only stays in memory while the app is on screen (and a minute after).
+                // Her model only stays in memory while the app is on screen (and a few minutes after).
                 val onScreen = rememberScreenActive()
                 DisposableEffect(onScreen) {
                     if (onScreen) {

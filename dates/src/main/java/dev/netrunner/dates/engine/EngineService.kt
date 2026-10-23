@@ -167,6 +167,10 @@ class EngineService : Service() {
             llamaTemperature = data.getFloat(KEY_TEMPERATURE, 0.8f)
             llamaHistory.clear()
             data.getStringArrayList(KEY_TEXTS).orEmpty().forEachIndexed { i, t -> llamaHistory += roles.getOrElse(i) { true } to t }
+            // Her instructions are most of the prompt: read them now, while the runner types.
+            runCatching {
+                LlamaNative.prefill(llama, llamaSystem, llamaHistory.map { it.first }.toBooleanArray(), llamaHistory.map { it.second }.toTypedArray())
+            }
             return
         }
         val engine = engine ?: return

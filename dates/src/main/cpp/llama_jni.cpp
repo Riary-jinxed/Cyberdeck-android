@@ -78,21 +78,72 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::string &t
     return tokens;
 }
 
-std::string apply_template(const llama_model *model, const std::vector<llama_chat_message> &messages) {
+/** The conversation in the model's chat format; [answer] opens her turn at the end. */
+std::string apply_template(const llama_model *model, const std::vector<llama_chat_message> &messages, bool answer) {
     const char *model_template = llama_model_chat_template(model, nullptr);
     size_t total = 0;
     for (const auto &m : messages) total += strlen(m.content) + 64;
     for (const char *tmpl : {model_template, "chatml"}) {
         if (tmpl == nullptr) continue;
         std::vector<char> buf(total * 2 + 1024);
-        int n = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, buf.data(), static_cast<int32_t>(buf.size()));
+        int n = llama_chat_apply_template(tmpl, messages.data(), messages.size(), answer, buf.data(), static_cast<int32_t>(buf.size()));
         if (n > static_cast<int>(buf.size())) {
             buf.resize(static_cast<size_t>(n));
-            n = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, buf.data(), static_cast<int32_t>(buf.size()));
+            n = llama_chat_apply_template(tmpl, messages.data(), messages.size(), answer, buf.data(), static_cast<int32_t>(buf.size()));
         }
         if (n >= 0) return {buf.data(), static_cast<size_t>(n)};
     }
     return {};
+}
+
+/** [system], then [texts] said by the user when [roles] is true, by her otherwise. */
+std::string read_prompt(JNIEnv *env, const Session *session, jstring jsystem, jbooleanArray jroles, jobjectArray jtexts, bool answer) {
+    std::vector<std::string> contents;
+    std::vector<const char *> roles;
+    std::string system = jstring_to_utf8(env, jsystem);
+    if (!system.empty()) {
+        contents.push_back(system);
+        roles.push_back("system");
+    }
+    jsize count = env->GetArrayLength(jtexts);
+    std::vector<jboolean> from_user(static_cast<size_t>(count), JNI_TRUE);
+    if (count > 0) env->GetBooleanArrayRegion(jroles, 0, count, from_user.data());
+    for (jsize i = 0; i < count; i++) {
+        auto text = static_cast<jstring>(env->GetObjectArrayElement(jtexts, i));
+        contents.push_back(jstring_to_utf8(env, text));
+        env->DeleteLocalRef(text);
+        roles.push_back(from_user[static_cast<size_t>(i)] ? "user" : "assistant");
+    }
+    std::vector<llama_chat_message> messages;
+    for (size_t i = 0; i < contents.size(); i++) messages.push_back({roles[i], contents[i].c_str()});
+    return apply_template(session->model, messages, answer);
+}
+
+/**
+ * Brings the cache to [tokens]: what it already holds of them stays, the rest is decoded. The last
+ * token is always decoded again, for the logits of what comes next. False when decoding fails.
+ */
+bool feed(Session *session, const std::vector<llama_token> &tokens) {
+    llama_memory_t memory = llama_get_memory(session->ctx);
+    size_t keep = 0;
+    while (keep < session->cached.size() && keep < tokens.size() && session->cached[keep] == tokens[keep]) keep++;
+    if (keep == tokens.size()) keep--;
+    if (!llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(keep), -1)) {
+        // Some caches (sliding windows) cannot be cut in the middle: start over.
+        llama_memory_clear(memory, true);
+        keep = 0;
+    }
+    session->cached.resize(keep);
+    for (size_t i = keep; i < tokens.size(); i += static_cast<size_t>(session->n_batch)) {
+        auto n = static_cast<int32_t>(std::min(tokens.size() - i, static_cast<size_t>(session->n_batch)));
+        if (llama_decode(session->ctx, llama_batch_get_one(const_cast<llama_token *>(tokens.data()) + i, n)) != 0) {
+            llama_memory_clear(memory, true);
+            session->cached.clear();
+            return false;
+        }
+        session->cached.insert(session->cached.end(), tokens.begin() + static_cast<long>(i), tokens.begin() + static_cast<long>(i) + n);
+    }
+    return true;
 }
 
 }  // namespace
@@ -146,51 +197,12 @@ Java_dev_netrunner_dates_engine_LlamaNative_generate(JNIEnv *env, jclass, jlong 
     auto *session = reinterpret_cast<Session *>(handle);
     if (session == nullptr) return JNI_FALSE;
 
-    // The conversation, in the model's own chat format.
-    std::vector<std::string> contents;
-    std::vector<const char *> roles;
-    std::string system = jstring_to_utf8(env, jsystem);
-    if (!system.empty()) {
-        contents.push_back(system);
-        roles.push_back("system");
-    }
-    jsize count = env->GetArrayLength(jtexts);
-    std::vector<jboolean> from_user(static_cast<size_t>(count), JNI_TRUE);
-    if (count > 0) env->GetBooleanArrayRegion(jroles, 0, count, from_user.data());
-    for (jsize i = 0; i < count; i++) {
-        auto text = static_cast<jstring>(env->GetObjectArrayElement(jtexts, i));
-        contents.push_back(jstring_to_utf8(env, text));
-        env->DeleteLocalRef(text);
-        roles.push_back(from_user[static_cast<size_t>(i)] ? "user" : "assistant");
-    }
-    std::vector<llama_chat_message> messages;
-    for (size_t i = 0; i < contents.size(); i++) messages.push_back({roles[i], contents[i].c_str()});
-    std::string prompt = apply_template(session->model, messages);
+    std::string prompt = read_prompt(env, session, jsystem, jroles, jtexts, true);
     if (prompt.empty()) return JNI_FALSE;
-
     std::vector<llama_token> tokens = tokenize(session->vocab, prompt);
     if (tokens.empty() || static_cast<int>(tokens.size()) + 64 > session->n_ctx) return JNI_FALSE;
-
-    // Keep what the cache already holds of this prompt, decode the rest.
+    if (!feed(session, tokens)) return JNI_FALSE;
     llama_memory_t memory = llama_get_memory(session->ctx);
-    size_t keep = 0;
-    while (keep < session->cached.size() && keep < tokens.size() && session->cached[keep] == tokens[keep]) keep++;
-    if (keep == tokens.size()) keep--;  // the last token must be decoded again for its logits
-    if (!llama_memory_seq_rm(memory, 0, static_cast<llama_pos>(keep), -1)) {
-        // Some caches (sliding windows) cannot be cut in the middle: start over.
-        llama_memory_clear(memory, true);
-        keep = 0;
-    }
-    session->cached.resize(keep);
-    for (size_t i = keep; i < tokens.size(); i += static_cast<size_t>(session->n_batch)) {
-        auto n = static_cast<int32_t>(std::min(tokens.size() - i, static_cast<size_t>(session->n_batch)));
-        if (llama_decode(session->ctx, llama_batch_get_one(tokens.data() + i, n)) != 0) {
-            llama_memory_clear(memory, true);
-            session->cached.clear();
-            return JNI_FALSE;
-        }
-        session->cached.insert(session->cached.end(), tokens.begin() + static_cast<long>(i), tokens.begin() + static_cast<long>(i) + n);
-    }
 
     llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(sampler, llama_sampler_init_penalties(256, 1.08f, 0.0f, 0.0f));
@@ -236,4 +248,19 @@ Java_dev_netrunner_dates_engine_LlamaNative_generate(JNIEnv *env, jclass, jlong 
         session->cached.clear();
     }
     return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+/**
+ * Reads the conversation ahead, without answering: the instructions are the longest part of the
+ * prompt, and decoding them while the runner types makes the first answer come much sooner.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_netrunner_dates_engine_LlamaNative_prefill(JNIEnv *env, jclass, jlong handle, jstring jsystem, jbooleanArray jroles, jobjectArray jtexts) {
+    auto *session = reinterpret_cast<Session *>(handle);
+    if (session == nullptr) return JNI_FALSE;
+    std::string prompt = read_prompt(env, session, jsystem, jroles, jtexts, false);
+    if (prompt.empty()) return JNI_FALSE;
+    std::vector<llama_token> tokens = tokenize(session->vocab, prompt);
+    if (tokens.empty() || static_cast<int>(tokens.size()) + 64 > session->n_ctx) return JNI_FALSE;
+    return feed(session, tokens) ? JNI_TRUE : JNI_FALSE;
 }
