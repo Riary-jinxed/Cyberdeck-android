@@ -284,6 +284,12 @@ fun ModelTab(brain: DateBrain) {
     var importProgress by remember { mutableStateOf<Float?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var mobileData by remember { mutableStateOf(false) }
+    var link by remember { mutableStateOf("") }
+    val ramGb = remember {
+        val info = android.app.ActivityManager.MemoryInfo()
+        context.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(info)
+        Math.round(info.totalMem / 1_000_000_000.0).toInt()
+    }
 
     fun changed() {
         revision++
@@ -329,7 +335,8 @@ fun ModelTab(brain: DateBrain) {
         SectionTitle("NOYAU DES RENDEZ-VOUS", Pink.Neon)
         Text(
             "Les rendez-vous ont leur propre modèle, chargé seulement pendant la scène. Tout reste sur le téléphone. " +
-                "Tu peux importer un modèle fait pour le jeu de rôle, au format .litertlm.",
+                "Les modèles GGUF tournent sur le processeur (llama.cpp) : ceux faits pour le jeu de rôle tiennent mieux le personnage. " +
+                "Ton téléphone : $ramGb Go de RAM.",
             color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp,
         )
         message?.let { Text(it, color = Pink.Hot, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
@@ -338,7 +345,7 @@ fun ModelTab(brain: DateBrain) {
             val downloading = download?.takeIf { it.modelId == model.id }
             ModelCard(
                 title = model.label,
-                detail = "${model.tagline}\n${model.sizeMb} Mo" + (downloading?.let { " · ${it.done / 1_000_000} / ${it.total.coerceAtLeast(0) / 1_000_000} Mo" } ?: ""),
+                detail = "${model.tagline}\n${model.sizeMb} Mo" + (if (ramGb < model.minRamGb) " · ⚠ lourd pour $ramGb Go de RAM" else "") + (downloading?.let { " · ${it.done / 1_000_000} / ${it.total.coerceAtLeast(0) / 1_000_000} Mo" } ?: ""),
                 active = active == model.id,
             ) {
                 when {
@@ -365,7 +372,7 @@ fun ModelTab(brain: DateBrain) {
             }
         }
         if (remember(revision) { Models.isInstalled(context, Models.CUSTOM_ID) }) {
-            ModelCard(title = Models.labelOf(context, Models.CUSTOM_ID), detail = "Fichier importé depuis le téléphone.", active = active == Models.CUSTOM_ID) {
+            ModelCard(title = Models.labelOf(context, Models.CUSTOM_ID), detail = "Ton modèle : importé ou téléchargé depuis un lien.", active = active == Models.CUSTOM_ID) {
                 if (active != Models.CUSTOM_ID) HudButton("UTILISER", color = Pink.Neon, size = 12.sp) {
                     Models.select(context, Models.CUSTOM_ID)
                     changed()
@@ -385,9 +392,42 @@ fun ModelTab(brain: DateBrain) {
         if (progress != null) {
             Text("IMPORT… ${(progress * 100).toInt()} %", color = Pink.Hot, fontFamily = MonoFont, fontSize = 12.sp)
         } else {
-            HudButton("IMPORTER UN FICHIER .litertlm", color = Cp.Cyan, modifier = Modifier.fillMaxWidth()) { picker.launch(arrayOf("*/*")) }
+            HudButton("IMPORTER UN FICHIER .gguf OU .litertlm", color = Cp.Cyan, modifier = Modifier.fillMaxWidth()) { picker.launch(arrayOf("*/*")) }
         }
-        Text("Autres modèles compatibles : huggingface.co/litert-community (fichiers .litertlm).", color = Cp.Dim, fontFamily = HudFont, fontSize = 11.sp)
+        SectionTitle("DEPUIS UN LIEN", Pink.Neon)
+        Text(
+            "Colle le lien d'un fichier .gguf sur Hugging Face (bouton « download » du fichier). Prends une version Q4_K_M " +
+                "d'un modèle de 2 à 4 milliards de paramètres : au-delà, ce sera lent.",
+            color = Cp.Dim, fontFamily = HudFont, fontSize = 12.sp,
+        )
+        BasicTextField(
+            value = link,
+            onValueChange = { link = it },
+            singleLine = true,
+            textStyle = TextStyle(color = Cp.Text, fontFamily = MonoFont, fontSize = 12.sp),
+            cursorBrush = SolidColor(Pink.Neon),
+            modifier = Modifier
+                .fillMaxWidth()
+                .hudPanel(borderColor = Pink.Neon.copy(alpha = 0.5f), fill = Pink.Panel, cut = 6.dp)
+                .padding(10.dp),
+            decorationBox = { field ->
+                if (link.isEmpty()) Text("https://huggingface.co/…/resolve/main/….gguf", color = Cp.Dim, fontFamily = MonoFont, fontSize = 12.sp)
+                field()
+            },
+        )
+        if (download == null) HudButton("TÉLÉCHARGER CE LIEN", color = Pink.Neon, modifier = Modifier.fillMaxWidth()) {
+            message = runCatching { Models.startDownloadUrl(context, link, mobileData) }.fold(
+                { download = Models.pollDownload(context); link = ""; "Téléchargement lancé." },
+                { "Lien refusé : ${it.message}" },
+            )
+        }
+        download?.takeIf { it.modelId == Models.CUSTOM_ID }?.let {
+            Text("LIEN : ${it.done / 1_000_000} / ${it.total.coerceAtLeast(0) / 1_000_000} Mo", color = Pink.Hot, fontFamily = MonoFont, fontSize = 12.sp)
+            HudButton("ANNULER", color = Cp.Red, size = 12.sp) {
+                Models.cancelDownload(context)
+                download = null
+            }
+        }
     }
 }
 

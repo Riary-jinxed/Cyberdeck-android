@@ -36,6 +36,16 @@ jobs:
         env:
           NETRUNNER_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: ./gradlew --no-daemon :dates:assembleRelease
+      # The models offered for download must still exist on Hugging Face.
+      - name: Check model links
+        run: |
+          status=0
+          for url in $(grep -oP '\$HF/\K[^"]+' dates/src/main/java/dev/netrunner/dates/engine/Models.kt); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "https://huggingface.co/$url")
+            echo "$code https://huggingface.co/$url"
+            if [ "$code" != "200" ]; then status=1; fi
+          done
+          exit $status
       - uses: actions/upload-artifact@v4
         with:
           name: netrunner-dates

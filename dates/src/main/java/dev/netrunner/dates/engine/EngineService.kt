@@ -69,6 +69,14 @@ class EngineService : Service() {
     private var conversation: Conversation? = null
     private var generating: Job? = null
 
+    // A GGUF model goes to llama.cpp instead: its handle, and the conversation it answers.
+    private var llama = 0L
+    private var llamaSystem = ""
+    private val llamaHistory = mutableListOf<Pair<Boolean, String>>()
+    private var llamaTemperature = 0.8f
+    /** Bumped by each new answer and each cancel: an older answer sees it changed and stops. */
+    @Volatile private var llamaTurn = 0
+
     private val messenger = Messenger(object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: OsMessage) {
             val client = msg.replyTo
@@ -93,6 +101,7 @@ class EngineService : Service() {
         scope.cancel()
         runCatching { conversation?.close() }
         runCatching { engine?.close() }
+        if (llama != 0L) LlamaNative.free(llama)
         super.onDestroy()
         // Native memory is only truly given back when the process goes away.
         Process.killProcess(Process.myPid())
@@ -103,7 +112,10 @@ class EngineService : Service() {
         runCatching { engine?.close() }
         conversation = null
         engine = null
+        if (llama != 0L) LlamaNative.free(llama)
+        llama = 0L
         val path = data.getString(KEY_PATH) ?: return reply(client, ERROR, KEY_TEXT, "modèle introuvable")
+        if (path.endsWith(".gguf")) return loadGguf(client, path)
         var gpuFailed = false
         try {
             // GPU first: faster, and lighter on the battery. CPU if the driver refuses.
@@ -131,9 +143,32 @@ class EngineService : Service() {
         }
     }
 
+    /** llama.cpp runs on the CPU, with all big cores and a 4096-token context. */
+    private fun loadGguf(client: Messenger?, path: String) {
+        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        llama = try {
+            LlamaNative.load(path, threads, 4096)
+        } catch (e: Throwable) {
+            return reply(client, ERROR, KEY_TEXT, e.message ?: e.javaClass.simpleName)
+        }
+        if (llama == 0L) return reply(client, ERROR, KEY_TEXT, "fichier GGUF illisible ou trop gros pour la mémoire")
+        send(client, LOADED, Bundle().apply {
+            putString(KEY_BACKEND, "CPU · GGUF")
+            putBoolean(KEY_GPU_FAILED, false)
+        })
+    }
+
     private fun converse(client: Messenger?, data: Bundle) {
         runCatching { conversation?.close() }
         conversation = null
+        if (llama != 0L) {
+            val roles = data.getBooleanArray(KEY_ROLES) ?: BooleanArray(0)
+            llamaSystem = data.getString(KEY_SYSTEM).orEmpty()
+            llamaTemperature = data.getFloat(KEY_TEMPERATURE, 0.8f)
+            llamaHistory.clear()
+            data.getStringArrayList(KEY_TEXTS).orEmpty().forEachIndexed { i, t -> llamaHistory += roles.getOrElse(i) { true } to t }
+            return
+        }
         val engine = engine ?: return
         val roles = data.getBooleanArray(KEY_ROLES) ?: BooleanArray(0)
         val texts = data.getStringArrayList(KEY_TEXTS).orEmpty()
@@ -154,6 +189,7 @@ class EngineService : Service() {
 
     private fun send(client: Messenger?, text: String) {
         generating?.cancel()
+        if (llama != 0L) return sendGguf(client, text)
         generating = scope.launch {
             try {
                 val conv = conversation ?: error("conversation fermée")
@@ -168,7 +204,37 @@ class EngineService : Service() {
         }
     }
 
+    /** The answer from llama.cpp, piece by piece; the exchange then joins its conversation. */
+    private fun sendGguf(client: Messenger?, text: String) {
+        val turnId = ++llamaTurn
+        generating = scope.launch {
+            val answer = StringBuilder()
+            try {
+                val turn = llamaHistory + (true to text)
+                LlamaNative.generate(
+                    llama, llamaSystem,
+                    turn.map { it.first }.toBooleanArray(), turn.map { it.second }.toTypedArray(),
+                    llamaTemperature, 768,
+                ) { bytes ->
+                    val piece = String(bytes, Charsets.UTF_8)
+                    answer.append(piece)
+                    reply(client, CHUNK, KEY_TEXT, piece)
+                    turnId == llamaTurn
+                }
+                if (answer.isNotBlank()) {
+                    llamaHistory += true to text
+                    llamaHistory += false to answer.toString()
+                }
+                send(client, DONE, Bundle())
+            } catch (e: Throwable) {
+                reply(client, ERROR, KEY_TEXT, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
     private fun cancel() {
+        // llama.cpp checks this between two tokens; LiteRT-LM is cancelled with the job.
+        llamaTurn++
         generating?.cancel()
     }
 
