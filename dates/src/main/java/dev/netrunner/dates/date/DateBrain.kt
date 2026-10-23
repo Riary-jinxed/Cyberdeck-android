@@ -167,7 +167,7 @@ class DateBrain(private val context: Context, private val scope: CoroutineScope)
                     AskaDate.looksNote(scene, text),
                     AskaDate.whereNote(lines.filter { it.done && it.id < asked.id }.map { it.fromUser to it.text }, p.handle),
                     beat?.let { "[Indication de scène, à glisser seulement si ça ne casse pas le moment : $it]" },
-                    if (pause) "[Cette fois, pas de question : laisse l'action se dérouler, décris ce que tu fais et ressens.]" else null,
+                    if (pause) "[Cette fois, pas de question : fais toi-même le pas suivant, décris ce que tu fais et ressens.]" else null,
                 ).joinToString("\n\n")
                 // Before its context is full (the answer would come back empty), start over from the recent lines.
                 if (sentChars + message.length > SESSION_CHARS) resetConversation()

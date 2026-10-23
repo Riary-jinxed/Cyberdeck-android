@@ -39,8 +39,8 @@ android {
         applicationId = "dev.netrunner.dates"
         minSdk = 29
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
 
         // The model runtimes ship native code: phones only, which keeps the APK small.
         ndk {
