@@ -226,6 +226,8 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
                 val message = listOfNotNull(
                     text,
                     souvenir,
+                    scene?.let { AskaDate.looksNote(it, text) },
+                    scene?.let { _ -> AskaDate.whereNote(lines.filter { it.done && it.id < asked.id }.map { it.fromUser to it.text }, DeckSettings.handle) },
                     beat?.let { "[Indication de scène, à glisser seulement si ça ne casse pas le moment : $it]" },
                     if (pause) "[Cette fois, pas de question : laisse l'action se dérouler, décris ce que tu fais et ressens.]" else null,
                 ).joinToString("\n\n")
@@ -296,7 +298,7 @@ class AskaBrain(private val context: Context, private val scope: CoroutineScope)
         val scene = date ?: return
         stop()
         date = null
-        AskaRecall.saveDate(context, scene, dateTalk.filter { it.fromUser }.map { it.text })
+        AskaRecall.saveDate(context, scene, dateTalk.filter { it.fromUser }.map { it.text }, dateTalk.filter { !it.fromUser }.map { it.text })
         dateTalk.clear()
         pet.dated(scene, dateMessages)
         say(AskaDate.goodbye(scene))

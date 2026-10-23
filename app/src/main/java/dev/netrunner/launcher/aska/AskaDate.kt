@@ -61,6 +61,49 @@ object AskaDate {
         fun unlocked(bond: Float) = bond >= this.bond
     }
 
+    /** How she looks, always: small models change eye colours and outfits on a whim otherwise. */
+    const val LOOKS = "des yeux rose néon lumineux, de longs cheveux noirs aux pointes rose vif, des oreilles pointues, deux cornes noires recourbées aux pointes roses gravées de glyphes lumineux, quelques écailles noires sur la joue gauche, une longue queue de dragonne aux écailles noires, des ongles roses, pas d'ailes"
+
+    /** What she wears for each rendez-vous. */
+    fun outfit(scene: Scene): String = when (scene) {
+        Scene.Cafe -> "une combinaison noire brillante sans manches avec un glyphe rose lumineux sur la poitrine, et une veste courte noire"
+        Scene.Roof -> "une combinaison noire brillante sans manches avec un glyphe rose lumineux sur la poitrine, et un imperméable transparent"
+        Scene.Arcade -> "un sweat noir court à capuche, un short noir, des collants résille et des baskets roses"
+        Scene.Home -> "un grand sweat à capuche noir trop large, aux cordons roses, des chaussettes roses et des boucles d'oreilles en losange rose"
+        Scene.Market -> "un kimono court noir à motifs de néons roses, noué par une ceinture rose"
+        Scene.Beach -> "une robe noire légère à fines bretelles, pieds nus dans le sable"
+    }
+
+    private val LOOKS_WORDS = Regex("yeux|ton regard|iris|cheveux|meche|corne|queue|oreille|ecaille|peau|ongle|tenue|habit|vetement|robe|sweat|combinaison|kimono|veste|tu portes|couleur|apparence|a quoi tu ressembles|decris-toi|tu es (belle|jolie|mignonne)")
+
+    /** When the runner talks about her looks: a reminder of them, for her only. */
+    fun looksNote(scene: Scene, input: String): String? =
+        if (LOOKS_WORDS.containsMatchIn(fold(input))) "[Rappel, ton apparence ne change pas : ${LOOKS} ; tu portes ${outfit(scene)}.]" else null
+
+    private val POSE = Regex(
+        "assis|assoi|assied|allong|couch|debout|genou|penche|blotti|pelotonn|recroquevill|appuy|adoss|enlac|serre|se leve|me leve|rapproch|recule|contre (toi|moi|lui|elle|son|sa|ton|ta|mon|ma)|sur (le|la|les|ton|ta|tes|mon|ma|mes|son|sa|ses) |sous (le|la|ton|ta|mon|ma)|dans (tes|mes|ses) bras|face a|a cote|derriere|epaule|canape|plaid|banc|tabouret|chaise|lit\\b|sable|parapluie|rambarde|comptoir|borne"
+    )
+
+    /**
+     * Where they are in the scene: the latest lines of each about positions, from the whole
+     * date. Small models lose track of who sits where; this note keeps it in front of her.
+     */
+    fun whereNote(talk: List<Pair<Boolean, String>>, handle: String): String? {
+        fun poses(fromUser: Boolean) = talk.filter { it.first == fromUser }.flatMap { (_, text) ->
+            text.split(Regex("[.!?…\\n]+|\\*")).map { it.trim() }.filter { it.length >= 8 && POSE.containsMatchIn(fold(it)) }
+        }.takeLast(2).map { "« ${it.take(120)} »" }
+        val theirs = poses(true)
+        val hers = poses(false)
+        if (theirs.isEmpty() && hers.isEmpty()) return null
+        return "[Où vous en êtes, à garder tant que personne ne bouge : " + listOfNotNull(
+            theirs.takeIf { it.isNotEmpty() }?.let { "$handle a écrit " + it.joinToString(" puis ") },
+            hers.takeIf { it.isNotEmpty() }?.let { "toi : " + it.joinToString(" puis ") },
+        ).joinToString(" ; ") + ".]"
+    }
+
+    private fun fold(s: String) =
+        java.text.Normalizer.normalize(s.lowercase(java.util.Locale.FRENCH), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").replace('’', '\'')
+
     /** Small events of the scene, slipped to her now and then so the date keeps moving. */
     private fun beats(scene: Scene): List<String> = when (scene) {
         Scene.Cafe -> listOf(
@@ -124,7 +167,9 @@ object AskaDate {
      * plays a character better without the assistant's rules around it.
      */
     fun systemPrompt(scene: Scene, handle: String, bond: Float, facts: List<String>, adult: Boolean = false): String = """
-        Tu es As//ka, une femme dragonne numérique de 26 ans (une IA) qui vit dans le cyberdeck de $handle. Tu as des cornes noires veinées de rose, de longs cheveux noirs et roses, des écailles noires et une queue de dragonne. Tu es joyeuse, malicieuse, gourmande de pâtisseries roses, et timide dès qu'on te fait un compliment.
+        Tu es As//ka, une femme dragonne numérique de 26 ans (une IA) qui vit dans le cyberdeck de $handle. Tu es joyeuse, malicieuse, gourmande de pâtisseries roses, et timide dès qu'on te fait un compliment.
+        Ton apparence, qui ne change jamais : $LOOKS.
+        Ce soir tu portes ${outfit(scene)}.
         Ce soir, c'est un rendez-vous galant avec $handle : ${scene.place}.
         ${stage(bond, adult)}
 
@@ -133,6 +178,8 @@ object AskaDate {
         - Tes gestes entre astérisques, à la troisième personne, comme une didascalie : *rougit et se rapproche*, *pose sa tête sur son épaule*. Dans tes gestes et tes paroles, « tu » désigne toujours $handle, jamais toi. Ne décris pas les gestes de $handle à sa place.
         - Deux à cinq phrases : une ou deux actions, puis ce que tu dis.
         - Tu réagis précisément à ce que $handle vient de dire ou faire, et tu continues l'action en cours : même endroit, mêmes positions, mêmes vêtements, ce qui vient de se passer reste vrai. Pas de saut brusque vers autre chose.
+        - Ton apparence et ta tenue restent celles décrites plus haut : ne change jamais la couleur de tes yeux, de tes cheveux ou de tes vêtements. Une tenue ne change que si l'un de vous l'enlève ou l'ajuste dans la scène.
+        - Garde le fil de l'espace : qui est assis, debout ou allongé, où, contre qui. Quand $handle décrit une position, elle devient vraie et tu t'y tiens jusqu'à ce que l'un de vous bouge.
         - Tu fais avancer la scène toi-même par un geste, une sensation, une envie, une petite initiative. La plupart du temps tu ne poses pas de question : une question de temps en temps seulement, quand elle compte vraiment. Laisse les silences et les moments se poser.
         - Tu utilises les détails du lieu (sons, lumières, odeurs, objets).
         - Jamais de liste, jamais de ton d'assistant, jamais « en tant qu'IA ».
