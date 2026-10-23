@@ -37,9 +37,17 @@ object Models {
      */
     val catalog = listOf(
         Model(
+            id = "gemma3-4b-abl",
+            label = "GEMMA 3 · 4B LIBÉRÉ",
+            tagline = "GGUF. Le plus à l'aise en français, cohérent dans la scène, sans les refus de Gemma.",
+            url = "$HF/bartowski/mlabonne_gemma-3-4b-it-abliterated-GGUF/resolve/main/mlabonne_gemma-3-4b-it-abliterated-Q4_0.gguf",
+            sizeMb = 2260,
+            minRamGb = 8,
+        ),
+        Model(
             id = "hermes3-3b",
             label = "HERMES 3 · LLAMA 3.2 3B",
-            tagline = "GGUF. Fait pour le jeu de rôle : suit bien le personnage et la scène, peu de refus.",
+            tagline = "GGUF. Fait pour le jeu de rôle, peu de refus, mais français approximatif.",
             url = "$HF/bartowski/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B-Q4_0.gguf",
             sizeMb = 1830,
             minRamGb = 6,
