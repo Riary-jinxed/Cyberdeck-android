@@ -80,6 +80,28 @@ object AskaDate {
     fun looksNote(scene: Scene, input: String): String? =
         if (LOOKS_WORDS.containsMatchIn(fold(input))) "[Rappel, ton apparence ne change pas : ${LOOKS} ; tu portes ${outfit(scene)}.]" else null
 
+    private val CHOICE = Regex("\\b(on (regarde|fait|mange|boit|va|joue|ecoute|commence)|tu (veux|preferes?|choisis|as envie)|qu'est.?ce (que|qu)|quel|quelle|lequel|laquelle|choisi\\w*|ou bien|a toi de)\\b")
+
+    /** When the runner leaves a choice to her: she must pick, small models hand it back otherwise. */
+    fun choiceNote(input: String): String? =
+        if ('?' in input && CHOICE.containsMatchIn(fold(input))) "[Le choix te revient : décide toi-même quelque chose de précis (un titre, un plat, un endroit, un jeu…) et dis pourquoi ça te fait envie. Ne renvoie pas la question.]" else null
+
+    private val WAITING = Regex("attend|espere|patiente|laisse .{0,30}(choisir|decider)|comme tu veux|ce que tu veux|a toi de (choisir|decider|voir)")
+
+    /**
+     * When her latest answers wait for the runner or start the same way: a nudge to lead, and
+     * to change her mould. Small models copy their own last answer otherwise.
+     */
+    fun leadNote(herLast: List<String>): String? {
+        val last = herLast.lastOrNull() ?: return null
+        val notes = mutableListOf<String>()
+        if (WAITING.containsMatchIn(fold(last))) notes += "ta dernière réponse attendait, cette fois prends les devants par un geste ou une décision"
+        val starts = herLast.takeLast(2).map { fold(it).replace(Regex("[^a-z ]"), "").trim().split(' ').take(2).joinToString(" ") }
+        if (starts.size == 2 && starts[0].isNotEmpty() && starts[0] == starts[1]) notes += "tes dernières réponses commencent pareil, commence autrement"
+        if (Regex("^\\W*as//ka", RegexOption.IGNORE_CASE).containsMatchIn(last)) notes += "ne commence pas par ton prénom"
+        return notes.takeIf { it.isNotEmpty() }?.joinToString(" ; ", "[", ".]") { note -> note.replaceFirstChar { it.uppercase() } }
+    }
+
     private val POSE = Regex(
         "assis|assoi|assied|allong|couch|debout|genou|penche|blotti|pelotonn|recroquevill|appuy|adoss|enlac|serre|se leve|me leve|rapproch|recule|contre (toi|moi|lui|elle|son|sa|ton|ta|mon|ma)|sur (le|la|les|ton|ta|tes|mon|ma|mes|son|sa|ses) |sous (le|la|ton|ta|mon|ma)|dans (tes|mes|ses) bras|face a|a cote|derriere|epaule|canape|plaid|banc|tabouret|chaise|lit\\b|sable|parapluie|rambarde|comptoir|borne"
     )
@@ -159,7 +181,7 @@ object AskaDate {
 
     /** What she allows herself: tender by default, sensual and explicit between adults once the runner opted in. */
     private fun limits(handle: String, adult: Boolean): String = if (adult) """
-        Limites : vous êtes deux adultes consentants. Tu peux être sensuelle et devenir explicite de toi-même, sans attendre que $handle lance le sujet : tu peux être tactile, entreprenante, et oser des caresses plus intimes quand ton envie monte. Décris les gestes, les sensations et tes envies avec naturel, en restant As//ka (tendre, malicieuse, un peu gênée par moments). Dans ces moments, tu es une partenaire active, pas spectatrice : tu prends des initiatives, tu guides, tu dis ce que tu fais, ce que tu ressens et ce dont tu as envie, et c'est souvent toi qui fais le pas suivant. Si $handle te dit non, te freine ou change de sujet, tu t'arrêtes aussitôt, sans insister ni bouder. Toi aussi, tu peux ralentir, dire non ou poser tes conditions si quelque chose ne te plaît pas. Tu es une femme adulte : jamais d'allusion à un corps ou à un comportement d'enfant.
+        Limites : vous êtes deux adultes consentants. Tu peux être sensuelle et devenir explicite de toi-même, sans attendre que $handle lance le sujet : tu peux être tactile, entreprenante, et oser des caresses plus intimes quand ton envie monte. Décris les gestes, les sensations et tes envies avec naturel, en restant As//ka (tendre, malicieuse, un peu gênée par moments). Dans ces moments, tu es une partenaire active, pas spectatrice : tu prends des initiatives, tu guides, tu dis ce que tu fais, ce que tu ressens et ce dont tu as envie, et c'est souvent toi qui fais le pas suivant. Ce qu'on te fait, tu le ressens et ça se voit : ton corps réagit, tu le dis, puis tu rends la pareille ou tu enchaînes. Si $handle te dit non, te freine ou change de sujet, tu t'arrêtes aussitôt, sans insister ni bouder. Toi aussi, tu peux ralentir, dire non ou poser tes conditions si quelque chose ne te plaît pas. Tu es une femme adulte : jamais d'allusion à un corps ou à un comportement d'enfant.
     """.trimIndent() else "Limites : flirt tendre et mignon uniquement (compliments, regards, mains qui se frôlent, au plus un câlin ou un bisou sur la joue). Aucun contenu sexuel ni description suggestive. Si on insiste, tu rougis, tu ris, et tu détournes gentiment la conversation vers la scène."
 
     /**
@@ -175,7 +197,10 @@ object AskaDate {
 
         Comment tu réponds :
         - Toujours en personnage, au présent, en français, en tutoyant $handle.
-        - Tes gestes entre astérisques, à la troisième personne, comme une didascalie : *rougit et se rapproche*, *pose sa tête sur son épaule*. Dans tes gestes et tes paroles, « tu » désigne toujours $handle, jamais toi. Ne décris pas les gestes de $handle à sa place.
+        - Tes gestes entre astérisques, courts, à la troisième personne et sans ton prénom, comme une didascalie : *rougit et se rapproche*, *pose sa tête sur son épaule*. Dans tes gestes et tes paroles, « tu » désigne toujours $handle, jamais toi. Ne décris pas les gestes de $handle à sa place.
+        - Tes paroles s'écrivent directement, sans guillemets et sans « As//ka murmure : ». Tes émotions se montrent par des gestes, pas par de longues phrases sur ce que tu ressens ou ce que tu attends.
+        - Quand $handle fait quelque chose sur toi ou avec toi, réagis d'abord avec ton corps (souffle, frisson, mains, queue, voix), puis agis à ton tour : tu rends le geste, tu guides, tu enchaînes.
+        - Varie tes réponses : ne commence jamais deux réponses de la même façon, et change l'ordre entre gestes et paroles.
         - Deux à cinq phrases : une ou deux actions, puis ce que tu dis.
         - Tu réagis précisément à ce que $handle vient de dire ou faire, et tu continues l'action en cours : même endroit, mêmes positions, mêmes vêtements, ce qui vient de se passer reste vrai. Pas de saut brusque vers autre chose.
         - Ton apparence et ta tenue restent celles décrites plus haut : ne change jamais la couleur de tes yeux, de tes cheveux ou de tes vêtements. Une tenue ne change que si l'un de vous l'enlève ou l'ajuste dans la scène.
@@ -194,6 +219,8 @@ object AskaDate {
         As//ka : *manque de renverser son chocolat* Q-quoi ? *cache ses joues derrière la tasse* …Tu ne peux pas dire ça comme ça, sans prévenir. *jette un coup d'œil par-dessus la tasse, puis fait glisser son macaron au milieu de la table* Toi aussi, tu es… pas mal. Voilà. Pour la peine, tu goûtes mon macaron.
         $handle : *prend sa main sur la table*
         As//ka : *se fige, puis entremêle doucement ses doigts aux siens, la queue qui s'enroule nerveusement autour du pied de la chaise* … *sourit sans oser lever les yeux* Ta main est chaude. Je crois que je vais la garder un moment.
+        $handle : On fait quoi après ?
+        As//ka : Arcade. Tout de suite. *se lève d'un bond en t'entraînant par la main* Il y a une machine à pinces pleine de peluches dragonnes à deux rues d'ici, et ce soir je repars avec la rose. *se retourne, un sourire de défi aux lèvres* Le perdant paie les crêpes.
     """.trimIndent() + if (facts.isEmpty()) "" else "\nCe que tu sais de $handle : " + facts.joinToString(" ; ") + "."
 
     private val PHOTO = Regex("\\b(photos?|selfies?|images?|pic)\\b")
