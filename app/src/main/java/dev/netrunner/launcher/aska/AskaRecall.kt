@@ -18,7 +18,8 @@ import java.util.Locale
  */
 object AskaRecall {
 
-    data class DateMemory(val at: Long, val scene: String, val said: List<String>)
+    /** [said]: what the runner said; [moments]: what she did, her gestures between asterisks. */
+    data class DateMemory(val at: Long, val scene: String, val said: List<String>, val moments: List<String> = emptyList())
 
     private fun file(context: Context) = File(context.filesDir, "aska_dates.json")
 
@@ -27,19 +28,31 @@ object AskaRecall {
         (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
             val said = o.getJSONArray("said")
-            DateMemory(o.getLong("at"), o.getString("scene"), (0 until said.length()).map { said.getString(it) })
+            val moments = o.optJSONArray("moments") ?: JSONArray()
+            DateMemory(
+                o.getLong("at"), o.getString("scene"),
+                (0 until said.length()).map { said.getString(it) },
+                (0 until moments.length()).map { moments.getString(it) },
+            )
         }
     }.getOrDefault(emptyList())
 
-    /** Keeps a few things the runner said during the date (the longest ones, in order). */
-    fun saveDate(context: Context, scene: AskaDate.Scene, userLines: List<String>) {
-        val said = userLines.map { it.trim() }.filter { it.length >= 12 }
-            .withIndex().sortedByDescending { it.value.length }.take(4).sortedBy { it.index }
-            .map { it.value.take(140) }
+    /** Keeps the longest of [lines], in their order. */
+    private fun longest(lines: List<String>, count: Int, max: Int) = lines.map { it.trim() }.filter { it.length >= 12 }
+        .withIndex().sortedByDescending { it.value.length }.take(count).sortedBy { it.index }
+        .map { it.value.take(max) }
+
+    /** Keeps what the runner said during the date and what she did (the longest ones, in order). */
+    fun saveDate(context: Context, scene: AskaDate.Scene, userLines: List<String>, herLines: List<String>) {
+        val said = longest(userLines, 5, 140)
         if (said.isEmpty()) return
-        val all = (listOf(DateMemory(System.currentTimeMillis(), scene.label, said)) + dates(context)).take(MAX_DATES)
+        val gestures = herLines.flatMap { line -> Regex("\\*([^*]+)\\*").findAll(line).map { it.groupValues[1] }.toList() }
+        val moments = longest(gestures, 3, 120)
+        val all = (listOf(DateMemory(System.currentTimeMillis(), scene.label, said, moments)) + dates(context)).take(MAX_DATES)
         val a = JSONArray()
-        all.forEach { d -> a.put(JSONObject().put("at", d.at).put("scene", d.scene).put("said", JSONArray(d.said))) }
+        all.forEach { d ->
+            a.put(JSONObject().put("at", d.at).put("scene", d.scene).put("said", JSONArray(d.said)).put("moments", JSONArray(d.moments)))
+        }
         runCatching { file(context).writeText(a.toString()) }
     }
 
@@ -47,9 +60,11 @@ object AskaRecall {
     fun datesForPrompt(context: Context, handle: String, count: Int = 3): String {
         val last = dates(context).take(count)
         if (last.isEmpty()) return ""
-        return "\nVos derniers rendez-vous (tu peux y faire allusion) :\n" + last.joinToString("\n") { d ->
-            "- le ${day(d.at)} (${d.scene.lowercase(Locale.FRENCH)}), $handle t'a dit : " + d.said.joinToString(" ; ") { "« $it »" }
-        }
+        return "\nVos derniers rendez-vous, tes vrais souvenirs (quand tu en parles, cite un détail précis de cette liste, et n'invente pas de souvenir qui n'y est pas) :\n" +
+            last.joinToString("\n") { d ->
+                "- le ${day(d.at)} (${d.scene.lowercase(Locale.FRENCH)}), $handle t'a dit : " + d.said.joinToString(" ; ") { "« $it »" } +
+                    (if (d.moments.isEmpty()) "" else " ; toi, tu as fait : " + d.moments.joinToString(" ; ") { "*$it*" })
+            }
     }
 
     /**
@@ -73,8 +88,9 @@ object AskaRecall {
             found += score to ("$handle t'avait dit « ${text.take(160)} »" + (answer?.let { " et tu avais répondu « ${it.take(160)} »" } ?: ""))
         }
         dates(context).forEach { d ->
-            val score = words.count { w -> d.said.any { w in words(it) } || w in words(d.scene) }
-            if (score >= needed) found += score to "pendant votre rendez-vous du ${day(d.at)} (${d.scene.lowercase(Locale.FRENCH)}), $handle t'avait dit " + d.said.joinToString(" ; ") { "« $it »" }
+            val score = words.count { w -> (d.said + d.moments).any { w in words(it) } || w in words(d.scene) }
+            if (score >= needed) found += score to "pendant votre rendez-vous du ${day(d.at)} (${d.scene.lowercase(Locale.FRENCH)}), $handle t'avait dit " +
+                d.said.joinToString(" ; ") { "« $it »" } + (if (d.moments.isEmpty()) "" else " et tu avais fait " + d.moments.joinToString(" ; ") { "*$it*" })
         }
         if (found.isEmpty()) return null
         return "[Souvenirs de vos conversations passées, à utiliser seulement si c'est utile : " +
