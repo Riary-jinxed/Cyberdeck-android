@@ -6,7 +6,8 @@ plugins {
 
 // llama.cpp (MIT), for the GGUF models: its source at a fixed release, fetched once and built with
 // the app by CMake (src/main/cpp).
-val llamaTag = "b6000"
+// v0.7.0: the first one here to read Gemma 4.
+val llamaTag = "v0.7.0"
 val llamaDir = layout.buildDirectory.dir("llama.cpp-$llamaTag").get().asFile
 // A task, not configuration code: the other apps' builds configure this project too, and must not download it.
 val fetchLlama by tasks.registering {
@@ -17,9 +18,12 @@ val fetchLlama by tasks.registering {
         archive.parentFile.mkdirs()
         uri("https://github.com/ggml-org/llama.cpp/archive/refs/tags/$llamaTag.tar.gz")
             .toURL().openStream().use { input -> archive.outputStream().use { input.copyTo(it) } }
+        // The archive's top folder drops the tag's "v": its content goes straight to llamaDir.
         project.copy {
             from(project.tarTree(project.resources.gzip(archive)))
-            into(llamaDir.parentFile)
+            eachFile { path = path.substringAfter('/') }
+            includeEmptyDirs = false
+            into(llamaDir)
         }
     }
 }
@@ -35,8 +39,8 @@ android {
         applicationId = "dev.netrunner.dates"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         // The model runtimes ship native code: phones only, which keeps the APK small.
         ndk {

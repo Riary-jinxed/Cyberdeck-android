@@ -81,6 +81,16 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::string &t
 /** The conversation in the model's chat format; [answer] opens her turn at the end. */
 std::string apply_template(const llama_model *model, const std::vector<llama_chat_message> &messages, bool answer) {
     const char *model_template = llama_model_chat_template(model, nullptr);
+    // Gemma 4's turns are not among llama.cpp's known formats: written here, without thinking.
+    if (model_template != nullptr && strstr(model_template, "<|turn>") != nullptr) {
+        std::string out;
+        for (const auto &m : messages) {
+            std::string role = strcmp(m.role, "assistant") == 0 ? "model" : m.role;
+            out += "<|turn>" + role + "\n" + m.content + "<turn|>\n";
+        }
+        if (answer) out += "<|turn>model\n";
+        return out;
+    }
     size_t total = 0;
     for (const auto &m : messages) total += strlen(m.content) + 64;
     for (const char *tmpl : {model_template, "chatml"}) {
