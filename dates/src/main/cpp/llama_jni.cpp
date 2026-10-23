@@ -218,7 +218,7 @@ Java_dev_netrunner_dates_engine_LlamaNative_generate(JNIEnv *env, jclass, jlong 
     llama_memory_t memory = llama_get_memory(session->ctx);
 
     llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(256, 1.08f, 0.0f, 0.0f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(llama_vocab_n_tokens(session->vocab), 256, 1.08f, 0.0f, 0.0f));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_min_p(0.05f, 1));
