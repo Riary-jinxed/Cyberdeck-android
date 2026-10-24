@@ -1,5 +1,6 @@
 package dev.netrunner.decklink
 
+import dev.netrunner.sync.AgentAuth
 import dev.netrunner.sync.PairingCode
 import java.io.File
 import java.util.Properties
@@ -47,6 +48,20 @@ object Paths {
         save(props().apply { setProperty("code", code.text) })
         return code
     }
+
+    /** Key the Deck Probe agents sign their reports with (64 hex characters), created on first use. */
+    fun fleetKey(): String = props().getProperty("fleet")?.takeIf { AgentAuth.keyBytes(it) != null } ?: newFleetKey()
+
+    fun newFleetKey(): String {
+        val key = AgentAuth.newKey()
+        save(props().apply { setProperty("fleet", key) })
+        return key
+    }
+
+    val outbox: File get() = File(File(home, "config"), "outbox.json")
+    /** The last report of each PC of the fleet, one JSON file per PC. */
+    val fleet: File get() = File(sync, "parc").also { it.mkdirs() }
+    val deployment: File get() = File(home, "deploiement")
 
     fun pcName(): String = props().getProperty("name")
         ?: System.getenv("COMPUTERNAME") ?: runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull() ?: "PC"

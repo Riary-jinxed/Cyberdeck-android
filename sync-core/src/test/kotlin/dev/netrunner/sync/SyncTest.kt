@@ -87,7 +87,7 @@ class SyncTest {
         try {
             val scanner = FolderScanner()
             fun sync() = SyncClient.sync(
-                InetSocketAddress("127.0.0.1", server.port), code, "Xiaomi 13 Pro", "kit", scanner.scan(phone),
+                InetSocketAddress("127.0.0.1", server.port), code, "Xiaomi 13 Pro", "kit", { scanner.scan(phone) },
                 open = { File(phone, it).inputStream() },
             )
 
@@ -116,7 +116,7 @@ class SyncTest {
 
             // Wrong code: refused, mirror untouched.
             assertFailsWith<java.io.IOException> {
-                SyncClient.sync(InetSocketAddress("127.0.0.1", server.port), PairingCode.random(), "intrus", "kit", scanner.scan(phone), { File(phone, it).inputStream() })
+                SyncClient.sync(InetSocketAddress("127.0.0.1", server.port), PairingCode.random(), "intrus", "kit", { scanner.scan(phone) }, { File(phone, it).inputStream() })
             }
             assertEquals("""{"equipment":[{"id":"x"}]}""", File(mirror, "kit.json").readText())
             Thread.sleep(200)
@@ -137,7 +137,7 @@ class SyncTest {
         try {
             val manifest = FolderScanner().scan(phone)
             File(phone, "kit.json").writeText("version 2, plus longue")
-            val r = SyncClient.sync(InetSocketAddress("127.0.0.1", server.port), code, "t", "kit", manifest, { File(phone, it).inputStream() })
+            val r = SyncClient.sync(InetSocketAddress("127.0.0.1", server.port), code, "t", "kit", { manifest }, { File(phone, it).inputStream() })
             assertEquals(1, r.skipped)
             assertFalse(File(pcRoot, "kit/kit.json").exists())
         } finally {
@@ -155,5 +155,56 @@ class SyncTest {
         assertFalse(store.receive("../evil.txt", 3, Hashes.sha256(ByteArrayInputStream(data))) { data })
         assertFalse(File(root, "evil.txt").exists())
         assertNotNull(Discovery.localAddresses())
+    }
+
+    @Test
+    fun pcChangesReachThePhoneBeforeTheMirror() {
+        val phone = tempDir()
+        val pcRoot = tempDir()
+        File(phone, "kit.json").writeText("avant")
+        val code = PairingCode.random()
+        val pending = mutableListOf(Op("op1", """{"kind":"equipment","id":"e1","item":{"name":"Switch \u00e9tage 2"}}"""), Op("op2", "{}"))
+        val outbox = object : SyncServer.Outbox {
+            override fun pending(folder: String) = synchronized(pending) { pending.toList() }
+            override fun applied(folder: String, ids: List<String>) { synchronized(pending) { pending.removeAll { it.id in ids } } }
+        }
+        val server = SyncServer(pcRoot, { code }, port = java.net.ServerSocket(0).use { it.localPort }, outbox = outbox)
+        server.start()
+        try {
+            val received = mutableListOf<Op>()
+            val r = SyncClient.sync(
+                InetSocketAddress("127.0.0.1", server.port), code, "t", "kit", { FolderScanner().scan(phone) }, { File(phone, it).inputStream() },
+                apply = { ops ->
+                    received += ops
+                    // The phone applies the first change to its file, and leaves the second for later.
+                    File(phone, "kit.json").writeText("après : " + ops.first().json)
+                    listOf("op1")
+                },
+            )
+            assertEquals(listOf("op1", "op2"), received.map { it.id })
+            assertEquals(1, r.applied)
+            assertEquals(listOf("op2"), pending.map { it.id })
+            // The mirror already holds the file as it was after the change.
+            assertTrue(File(pcRoot, "kit/kit.json").readText().contains("e1"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun agentSignatureIsCheckedOnce() {
+        val key = AgentAuth.keyBytes(AgentAuth.newKey())!!
+        val auth = AgentAuth(key)
+        val body = """{"hostname":"PC-COMPTA-01"}""".toByteArray()
+        val now = 1_800_000_000_000L
+        val sig = AgentAuth(key).sign(now, body)
+        assertTrue(auth.verify(now, body, sig, now + 1000))
+        assertFalse(auth.verify(now, body, sig, now + 2000), "rejeu")
+        assertFalse(auth.verify(now + 1, body, sig, now + 2000), "autre heure")
+        assertFalse(auth.verify(now, "{}".toByteArray(), AgentAuth(key).sign(now, body), now), "autre contenu")
+        val late = AgentAuth(key).sign(now, body)
+        assertFalse(AgentAuth(key).verify(now, body, late, now + 11 * 60_000L), "trop vieux")
+        assertFalse(AgentAuth(AgentAuth.keyBytes(AgentAuth.newKey())!!).verify(now, body, sig, now), "autre clé")
+        assertNull(AgentAuth.keyBytes("abc"))
     }
 }

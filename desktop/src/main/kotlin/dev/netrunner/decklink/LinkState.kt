@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import dev.netrunner.sync.Discovery
 import dev.netrunner.sync.PairingOffer
 import dev.netrunner.sync.SyncServer
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.BindException
 import java.time.Instant
 import java.time.ZoneId
@@ -16,7 +17,15 @@ import java.time.format.DateTimeFormatter
 class LinkState {
     var code by mutableStateOf(Paths.code())
         private set
-    var kit by mutableStateOf(KitData.load(Paths.kit))
+    val outbox = Outbox(Paths.outbox)
+    var kit by mutableStateOf(KitData.load(Paths.kit, outbox.changes()))
+        private set
+    var fleetKey by mutableStateOf(Paths.fleetKey())
+        private set
+    var fleet by mutableStateOf(Fleet.reports())
+        private set
+    /** Set when the agents' port could not be opened (the phone sync still works). */
+    var fleetError by mutableStateOf<String?>(null)
         private set
     var progress by mutableStateOf<Pair<Int, Int>?>(null)
         private set
@@ -28,8 +37,9 @@ class LinkState {
     val log = mutableStateListOf<String>()
     val pcName = Paths.pcName()
 
-    private val server = SyncServer(Paths.sync, { code }, onEvent = ::onEvent)
+    private val server = SyncServer(Paths.sync, { code }, outbox = outbox, onEvent = ::onEvent)
     private val responder = Discovery.Responder(name = { pcName })
+    private var stopFleet: () -> Unit = {}
 
     init {
         try {
@@ -41,6 +51,48 @@ class LinkState {
         } catch (e: Exception) {
             fatal = "Impossible d'ouvrir le port ${server.port} : ${e.message}"
         }
+        if (fatal == null) {
+            try {
+                stopFleet = Fleet.serve({ fleetKey }, ::onReport, ::note)
+            } catch (e: Exception) {
+                fleetError = "Port ${Fleet.PORT} indisponible pour les agents Deck Probe : ${e.message}"
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ edits made on the PC
+
+    /** Saves an edit of a [kind] item ("equipment", "stock", "client", "cable"); the phone gets it at the next sync. */
+    fun edit(kind: String, id: String, fields: Map<String, Any>) {
+        outbox.put(kind, id, fields.mapValues { (_, v) -> if (v is Number) JsonPrimitive(v) else JsonPrimitive(v.toString()) })
+        reload()
+    }
+
+    fun remove(kind: String, id: String) {
+        outbox.delete(kind, id)
+        reload()
+    }
+
+    fun newId(): String = System.currentTimeMillis().toString(36) + (0..999).random().toString(36)
+
+    // ------------------------------------------------------------------ fleet
+
+    @Synchronized
+    private fun onReport(r: Fleet.Report) {
+        val change = Fleet.toEquipment(r, kit)
+        if (change != null) {
+            outbox.put("equipment", change.first, change.second)
+            note("parc : fiche de ${r.hostname} ${if (kit.equipment.any { it.id == change.first }) "mise à jour" else "créée"}")
+        }
+        reload()
+        fleet = Fleet.reports()
+    }
+
+    fun preparePack(): java.io.File = Fleet.writePack(pcName, addresses(), fleetKey).also { note("pack de déploiement prêt : $it") }
+
+    fun renewFleetKey() {
+        fleetKey = Paths.newFleetKey()
+        note("nouvelle clé du parc : prépare à nouveau le pack et redéploie-le")
     }
 
     /** What the phone scans: the code plus the first local address (the phone also searches the network). */
@@ -55,12 +107,13 @@ class LinkState {
     }
 
     fun reload() {
-        kit = KitData.load(Paths.kit)
+        kit = KitData.load(Paths.kit, outbox.changes())
     }
 
     fun stop() {
         server.stop()
         responder.stop()
+        stopFleet()
     }
 
     private fun onEvent(e: SyncServer.Event) {
@@ -74,6 +127,7 @@ class LinkState {
                 progress = null
                 val r = e.report
                 val text = "${Time.format(Instant.ofEpochMilli(r.at))} · ${r.device} · ${r.stored} reçu(s), ${r.removed} retiré(s)" +
+                    (if (r.applied > 0) ", ${r.applied} modif(s) du PC appliquée(s)" else "") +
                     if (r.skipped > 0) ", ${r.skipped} ignoré(s)" else ""
                 lastSync = text
                 Paths.setLastSync(text)

@@ -113,6 +113,72 @@ private fun <R> Table(rows: List<R>, cols: List<Col<R>>, onClick: ((R) -> Unit)?
 private fun matches(query: String, vararg fields: String): Boolean =
     query.isBlank() || query.trim().split(Regex("\\s+")).all { word -> fields.any { it.contains(word, ignoreCase = true) } }
 
+
+/** One field of an [Editor]: free text, several lines, a whole number, or one of [choices]. */
+private class Field(val key: String, val label: String, val initial: String, val lines: Int = 1, val number: Boolean = false, val choices: List<String> = emptyList())
+
+/**
+ * Form for one item: the fields, SAVE (only the fields as typed, numbers as numbers), and
+ * DELETE behind a confirmation. Edits wait in the outbox until the phone syncs.
+ */
+@Composable
+private fun Editor(key: String, title: String, fields: List<Field>, onSave: (Map<String, Any>) -> Unit, onDelete: (() -> Unit)?, onClose: () -> Unit) {
+    val values = remember(key) { androidx.compose.runtime.mutableStateMapOf<String, String>().apply { fields.forEach { put(it.key, it.initial) } } }
+    var deleteArmed by remember(key) { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button("◄ RETOUR", Cp.Cyan, onClick = onClose)
+        T(title, Cp.Yellow, 22.sp, weight = FontWeight.Bold)
+        fields.forEach { f ->
+            T(f.label.uppercase(), Cp.Dim, 12.sp, weight = FontWeight.Bold)
+            if (f.choices.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    f.choices.forEach { c ->
+                        val on = values[f.key] == c
+                        T(
+                            c.uppercase(), if (on) Cp.Background else Cp.Cyan, 12.sp, weight = FontWeight.Bold,
+                            modifier = Modifier.hudPanel(Cp.Cyan.copy(alpha = 0.6f), if (on) Cp.Cyan else Cp.Panel, 4.dp)
+                                .clickable { values[f.key] = c }.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            } else {
+                Box(Modifier.fillMaxWidth().hudPanel(Cp.Cyan.copy(alpha = 0.5f), cut = 6.dp).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                    BasicTextField(
+                        values[f.key].orEmpty(),
+                        { v -> values[f.key] = if (f.number) v.filter { it.isDigit() }.take(9) else v },
+                        singleLine = f.lines == 1,
+                        minLines = f.lines,
+                        textStyle = TextStyle(color = Cp.Text, fontFamily = if (f.lines > 1) MonoFont else HudFont, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                        cursorBrush = SolidColor(Cp.Yellow),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button("ENREGISTRER ►", Cp.Yellow, filled = true) {
+                onSave(fields.associate { f -> f.key to (if (f.number) (values[f.key]?.toIntOrNull() ?: 0) else values[f.key].orEmpty().trim()) })
+                onClose()
+            }
+            if (onDelete != null) {
+                Button(if (deleteArmed) "CONFIRMER LA SUPPRESSION" else "SUPPRIMER", Cp.Red) {
+                    if (deleteArmed) { onDelete(); onClose() } else deleteArmed = true
+                }
+            }
+        }
+        T("Enregistré ici tout de suite, envoyé au téléphone à sa prochaine synchro.", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+    }
+}
+
+@Composable
+private fun ListHeader(query: String, onQuery: (String) -> Unit, hint: String, newLabel: String, onNew: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.weight(1f)) { SearchField(query, onQuery, hint) }
+        Button(newLabel, Cp.Yellow, onClick = onNew)
+    }
+}
+
 // ---------------------------------------------------------------------------------- link
 
 @Composable
@@ -179,23 +245,35 @@ fun LinkScreen(state: LinkState) {
 
 // ---------------------------------------------------------------------------------- inventory
 
+/** Inventory states, as on the phone (kit/KitStore.kt). */
+private val States = listOf("En service", "En stock", "À réparer", "HS", "Prêté")
+
 @Composable
-fun InventoryScreen(kit: KitData) {
+fun InventoryScreen(state: LinkState) {
+    val kit = state.kit
     var query by remember { mutableStateOf("") }
     var open by remember { mutableStateOf<KitData.Equipment?>(null) }
-    if (kit.equipment.isEmpty()) return EmptyKit()
     open?.let { e ->
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("◄ INVENTAIRE", Cp.Cyan) { open = null }
-            T(e.name.ifBlank { e.code }, Cp.Yellow, 22.sp, weight = FontWeight.Bold)
-            listOf("Code" to e.code, "N° de série" to e.serial, "Emplacement" to e.location, "État" to e.state, "Mis à jour" to LinkState.time(e.updated), "Notes" to e.notes)
-                .filter { it.second.isNotBlank() }
-                .forEach { (k, v) -> Row { T(k.uppercase(), Cp.Dim, 13.sp, modifier = Modifier.width(140.dp)); T(v, Cp.Text, 15.sp) } }
-        }
+        val known = kit.equipment.any { it.id == e.id }
+        Editor(
+            e.id,
+            if (known) e.name.ifBlank { e.code } else "Nouvel équipement",
+            listOf(
+                Field("name", "Nom", e.name), Field("code", "Code (code-barres, QR…)", e.code), Field("serial", "N° de série", e.serial),
+                Field("location", "Emplacement", e.location), Field("state", "État", e.state.ifBlank { States[0] }, choices = States),
+                Field("notes", "Notes", e.notes, lines = 6),
+            ),
+            onSave = { state.edit("equipment", e.id, it) },
+            onDelete = if (known) ({ state.remove("equipment", e.id) }) else null,
+            onClose = { open = null },
+        )
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SearchField(query, { query = it }, "Rechercher (nom, code, série, emplacement…)")
+        ListHeader(query, { query = it }, "Rechercher (nom, code, série, emplacement…)", "+ ÉQUIPEMENT") {
+            open = KitData.Equipment(state.newId(), "", "", "", "", States[0], "", 0)
+        }
+        if (kit.equipment.isEmpty()) return@Column EmptyKit()
         val rows = kit.equipment.filter { matches(query, it.name, it.code, it.serial, it.location, it.state, it.notes) }
         T("${rows.size} / ${kit.equipment.size} équipements", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
         Table(
@@ -212,12 +290,35 @@ fun InventoryScreen(kit: KitData) {
     }
 }
 
+/** Units, as on the phone (kit/Stock.kt). */
+private val Units = listOf("pcs", "m", "boîte", "rouleau")
+
 @Composable
-fun StockScreen(kit: KitData) {
+fun StockScreen(state: LinkState) {
+    val kit = state.kit
     var query by remember { mutableStateOf("") }
-    if (kit.stock.isEmpty()) return EmptyKit()
+    var open by remember { mutableStateOf<KitData.StockItem?>(null) }
+    open?.let { s ->
+        val known = kit.stock.any { it.id == s.id }
+        Editor(
+            s.id,
+            if (known) s.name else "Nouveau consommable",
+            listOf(
+                Field("name", "Article", s.name), Field("unit", "Unité", s.unit.ifBlank { Units[0] }, choices = (Units + s.unit).filter { it.isNotBlank() }.distinct()),
+                Field("qty", "Quantité", s.qty.toString(), number = true), Field("threshold", "Seuil d'alerte (0 = aucun)", s.threshold.toString(), number = true),
+                Field("location", "Emplacement", s.location), Field("notes", "Notes", s.notes, lines = 4),
+            ),
+            onSave = { state.edit("stock", s.id, it) },
+            onDelete = if (known) ({ state.remove("stock", s.id) }) else null,
+            onClose = { open = null },
+        )
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SearchField(query, { query = it }, "Rechercher un consommable")
+        ListHeader(query, { query = it }, "Rechercher un consommable", "+ CONSOMMABLE") {
+            open = KitData.StockItem(state.newId(), "", Units[0], 0, 0, "", "", 0)
+        }
+        if (kit.stock.isEmpty()) return@Column EmptyKit()
         val low = kit.stock.count { it.low }
         if (low > 0) T("$low article(s) sous le seuil d'alerte", Cp.Red, 14.sp)
         Table(
@@ -229,16 +330,41 @@ fun StockScreen(kit: KitData) {
                 Col("Emplacement", 1.4f) { it.location },
                 Col("Notes", 1.6f) { it.notes },
             ),
+            onClick = { open = it },
         )
     }
 }
 
+private val PoeModes = listOf("Non", "PoE", "PoE+", "PoE++", "Passif")
+private val TestResults = listOf("Non testé", "OK", "Défaut")
+
 @Composable
-fun CablesScreen(kit: KitData) {
+fun CablesScreen(state: LinkState) {
+    val kit = state.kit
     var query by remember { mutableStateOf("") }
-    if (kit.cables.isEmpty()) return EmptyKit()
+    var open by remember { mutableStateOf<KitData.Cable?>(null) }
+    open?.let { c ->
+        val known = kit.cables.any { it.id == c.id }
+        Editor(
+            c.id,
+            if (known) "Câble ${c.outlet}" else "Nouveau câble",
+            listOf(
+                Field("site", "Site", c.site), Field("outlet", "Prise", c.outlet), Field("switch", "Switch", c.switchName), Field("port", "Port", c.port),
+                Field("vlan", "VLAN", c.vlan), Field("length", "Longueur (m)", c.length),
+                Field("poe", "PoE", c.poe.ifBlank { PoeModes[0] }, choices = PoeModes), Field("test", "Test", c.test.ifBlank { TestResults[0] }, choices = TestResults),
+                Field("notes", "Notes", c.notes, lines = 3),
+            ),
+            onSave = { state.edit("cable", c.id, it) },
+            onDelete = if (known) ({ state.remove("cable", c.id) }) else null,
+            onClose = { open = null },
+        )
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SearchField(query, { query = it }, "Rechercher (site, prise, switch, VLAN…)")
+        ListHeader(query, { query = it }, "Rechercher (site, prise, switch, VLAN…)", "+ CÂBLE") {
+            open = KitData.Cable(state.newId(), "", "", "", "", "", "", PoeModes[0], TestResults[0], "", "")
+        }
+        if (kit.cables.isEmpty()) return@Column EmptyKit()
         Table(
             kit.cables.filter { matches(query, it.site, it.outlet, it.switchName, it.port, it.vlan, it.notes) },
             listOf(
@@ -250,6 +376,7 @@ fun CablesScreen(kit: KitData) {
                 Col("PoE", 0.7f) { it.poe },
                 Col("Test", 0.8f, color = { if (it.test == "Défaut") Cp.Red else Cp.Cyan }) { it.test },
             ),
+            onClick = { open = it },
         )
     }
 }
@@ -331,44 +458,116 @@ fun LogbookScreen(kit: KitData) {
 private val QuoteStates = mapOf("draft" to "Brouillon", "sent" to "Envoyé", "accepted" to "Accepté", "refused" to "Refusé")
 
 @Composable
-fun ClientsScreen(kit: KitData) {
+fun ClientsScreen(state: LinkState) {
+    val kit = state.kit
     var query by remember { mutableStateOf("") }
     var openId by remember { mutableStateOf<String?>(null) }
-    if (kit.clients.isEmpty()) return EmptyKit()
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.width(320.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SearchField(query, { query = it }, "Rechercher un client")
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(kit.clients.filter { matches(query, it.name, it.contact, it.address, it.notes) }) { c ->
-                    T(
-                        c.name.ifBlank { "(sans nom)" }, if (c.id == openId) Cp.Yellow else Cp.Text, 15.sp, maxLines = 1,
-                        modifier = Modifier.fillMaxWidth().hudPanel(Cp.Cyan.copy(alpha = 0.4f), cut = 4.dp).clickable { openId = c.id }.padding(horizontal = 10.dp, vertical = 8.dp),
-                    )
+    var editing by remember { mutableStateOf<KitData.Client?>(null) }
+    editing?.let { c ->
+        val known = kit.clients.any { it.id == c.id }
+        Editor(
+            c.id,
+            if (known) c.name else "Nouveau client",
+            listOf(
+                Field("name", "Nom", c.name), Field("contact", "Contact", c.contact), Field("phone", "Téléphone", c.phone), Field("email", "E-mail", c.email),
+                Field("address", "Adresse", c.address, lines = 2), Field("access", "Accès (horaires, badge, parking…)", c.access, lines = 3),
+                Field("instructions", "Consignes", c.instructions, lines = 3), Field("notes", "Notes", c.notes, lines = 3),
+            ),
+            onSave = { state.edit("client", c.id, it); openId = c.id },
+            onDelete = if (known) ({ state.remove("client", c.id); openId = null }) else null,
+            onClose = { editing = null },
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ListHeader(query, { query = it }, "Rechercher un client", "+ CLIENT") {
+            editing = KitData.Client(state.newId(), "", "", "", "", "", "", "", "", emptyList(), emptyList())
+        }
+        if (kit.clients.isEmpty()) return@Column EmptyKit()
+        Row(Modifier.fillMaxSize()) {
+            Column(Modifier.width(320.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(kit.clients.filter { matches(query, it.name, it.contact, it.address, it.notes) }) { c ->
+                        T(
+                            c.name.ifBlank { "(sans nom)" }, if (c.id == openId) Cp.Yellow else Cp.Text, 15.sp, maxLines = 1,
+                            modifier = Modifier.fillMaxWidth().hudPanel(Cp.Cyan.copy(alpha = 0.4f), cut = 4.dp).clickable { openId = c.id }.padding(horizontal = 10.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            val c = kit.clients.firstOrNull { it.id == openId } ?: kit.clients.first()
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    T(c.name, Cp.Yellow, 22.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Button("MODIFIER", Cp.Cyan) { editing = c }
+                }
+                listOf("Contact" to c.contact, "Téléphone" to c.phone, "E-mail" to c.email, "Adresse" to c.address, "Accès" to c.access, "Consignes" to c.instructions, "Notes" to c.notes)
+                    .filter { it.second.isNotBlank() }
+                    .forEach { (k, v) -> Row { T(k.uppercase(), Cp.Dim, 13.sp, modifier = Modifier.width(120.dp)); T(v, Cp.Text, 15.sp) } }
+                if (c.contracts.isNotEmpty()) {
+                    Section("CONTRATS")
+                    c.contracts.forEach {
+                        T(listOf(it.ref, it.kind, "${LinkState.day(it.start)} → ${LinkState.day(it.end)}", it.amount).filter { s -> s.isNotBlank() && s != " → " }.joinToString(" · "), Cp.Text, 14.sp)
+                    }
+                }
+                if (c.quotes.isNotEmpty()) {
+                    Section("DEVIS")
+                    c.quotes.forEach { T(listOf(it.ref, it.label, LinkState.day(it.date), it.amount, QuoteStates[it.state] ?: it.state).filter { s -> s.isNotBlank() }.joinToString(" · "), Cp.Text, 14.sp) }
+                }
+                if (c.contracts.isNotEmpty() || c.quotes.isNotEmpty()) T("Contrats et devis se modifient sur le téléphone.", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+                val visits = kit.interventions.filter { it.client.equals(c.name, ignoreCase = true) }
+                if (visits.isNotEmpty()) {
+                    Section("INTERVENTIONS (${visits.size})")
+                    visits.forEach { T("${LinkState.time(it.started)} · ${it.title}", Cp.Text, 14.sp) }
                 }
             }
         }
-        Spacer(Modifier.width(16.dp))
-        val c = kit.clients.firstOrNull { it.id == openId } ?: kit.clients.first()
-        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T(c.name, Cp.Yellow, 22.sp, weight = FontWeight.Bold)
-            listOf("Contact" to c.contact, "Téléphone" to c.phone, "E-mail" to c.email, "Adresse" to c.address, "Accès" to c.access, "Consignes" to c.instructions, "Notes" to c.notes)
-                .filter { it.second.isNotBlank() }
-                .forEach { (k, v) -> Row { T(k.uppercase(), Cp.Dim, 13.sp, modifier = Modifier.width(120.dp)); T(v, Cp.Text, 15.sp) } }
-            if (c.contracts.isNotEmpty()) {
-                Section("CONTRATS")
-                c.contracts.forEach {
-                    T(listOf(it.ref, it.kind, "${LinkState.day(it.start)} → ${LinkState.day(it.end)}", it.amount).filter { s -> s.isNotBlank() && s != " → " }.joinToString(" · "), Cp.Text, 14.sp)
-                }
+    }
+}
+
+// ---------------------------------------------------------------------------------- fleet
+
+@Composable
+fun FleetScreen(state: LinkState) {
+    var query by remember { mutableStateOf("") }
+    var renewArmed by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        T(
+            "Deck Probe, installé sur les PC du parc, envoie leurs infos ici (nom, modèle, n° de série, OS, CPU, RAM, disques, IP, MAC). " +
+                "Chaque PC devient une fiche de l'inventaire, envoyée au téléphone à la synchro suivante.",
+            Cp.Text, 14.sp, MonoFont, FontWeight.Normal,
+        )
+        state.fleetError?.let { T(it, Cp.Red, 14.sp) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button("PRÉPARER LE DÉPLOIEMENT ►", Cp.Yellow, filled = true) {
+                val dir = state.preparePack()
+                runCatching { Desktop.getDesktop().open(dir) }
             }
-            if (c.quotes.isNotEmpty()) {
-                Section("DEVIS")
-                c.quotes.forEach { T(listOf(it.ref, it.label, LinkState.day(it.date), it.amount, QuoteStates[it.state] ?: it.state).filter { s -> s.isNotBlank() }.joinToString(" · "), Cp.Text, 14.sp) }
-            }
-            val visits = kit.interventions.filter { it.client.equals(c.name, ignoreCase = true) }
-            if (visits.isNotEmpty()) {
-                Section("INTERVENTIONS (${visits.size})")
-                visits.forEach { T("${LinkState.time(it.started)} · ${it.title}", Cp.Text, 14.sp) }
+            Button(if (renewArmed) "CONFIRMER : NOUVELLE CLÉ" else "NOUVELLE CLÉ DU PARC", Cp.Red) {
+                if (renewArmed) state.renewFleetKey()
+                renewArmed = !renewArmed
             }
         }
+        T(
+            "Le pack (dossier « deploiement ») contient l'agent, install.cmd à lancer en administrateur ou en script de démarrage GPO, et un LISEZMOI. " +
+                "Ouvre le port TCP ${Fleet.PORT} du pare-feu de ce PC pour les agents.",
+            Cp.Dim, 12.sp, MonoFont, FontWeight.Normal,
+        )
+        SearchField(query, { query = it }, "Rechercher un PC (nom, modèle, série, IP, utilisateur…)")
+        val rows = state.fleet.filter { r -> matches(query, r.hostname, r.model, r.serial, r.user, r.os, *r.network.map { it.ipv4 + " " + it.mac }.toTypedArray()) }
+        T("${rows.size} PC", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+        Table(
+            rows,
+            listOf(
+                Col("PC", 1.3f) { it.hostname },
+                Col("Modèle", 1.6f) { listOf(it.manufacturer, it.model).filter { s -> s.isNotBlank() }.joinToString(" ") },
+                Col("Série", 1.1f) { it.serial },
+                Col("OS", 1.5f) { it.os },
+                Col("IP", 1.1f) { it.network.mapNotNull { n -> n.ipv4.takeIf { ip -> ip.isNotBlank() } }.joinToString(", ") },
+                Col("Utilisateur", 1.2f) { it.user },
+                Col("Vu le", 1f) { LinkState.time(it.seen) },
+            ),
+        )
     }
 }

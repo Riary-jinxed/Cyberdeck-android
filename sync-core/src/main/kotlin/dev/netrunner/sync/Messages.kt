@@ -6,10 +6,22 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
 
+/**
+ * A change made on the PC, for the phone to apply to its own data. [json] is opaque here: the
+ * launcher reads it (kit/KitRemote.kt), Deck Link writes it (Outbox.kt).
+ */
+data class Op(val id: String, val json: String)
+
 /** What the phone and the PC say to each other inside a [SecureChannel]. */
 sealed class Message {
-    /** Phone → PC: who is speaking, which folder it syncs, and every file it holds. */
-    data class Hello(val version: Int, val device: String, val folder: String, val files: List<FileEntry>) : Message()
+    /** Phone → PC: who is speaking and which folder it syncs. */
+    data class Hello(val version: Int, val device: String, val folder: String) : Message()
+
+    /** PC → phone: the changes made on the PC since the last sync, for the phone to apply. */
+    data class Ops(val ops: List<Op>) : Message()
+
+    /** Phone → PC: the changes it applied (or dropped as older), then every file it now holds. */
+    data class Manifest(val applied: List<String>, val files: List<FileEntry>) : Message()
 
     /** PC → phone: the files the PC is missing or holds in an older version. */
     data class Want(val paths: List<String>) : Message()
@@ -30,8 +42,15 @@ sealed class Message {
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { o ->
             when (this) {
-                is Hello -> {
-                    o.writeByte(1); o.writeInt(version); o.writeUTF(device); o.writeUTF(folder); o.writeInt(files.size)
+                is Hello -> { o.writeByte(1); o.writeInt(version); o.writeUTF(device); o.writeUTF(folder) }
+                is Ops -> {
+                    o.writeByte(7); o.writeInt(ops.size)
+                    // writeUTF stops at 64 KB: an op's JSON goes as length + bytes.
+                    ops.forEach { op -> o.writeUTF(op.id); val b = op.json.toByteArray(Charsets.UTF_8); o.writeInt(b.size); o.write(b) }
+                }
+                is Manifest -> {
+                    o.writeByte(8); o.writeInt(applied.size); applied.forEach { o.writeUTF(it) }
+                    o.writeInt(files.size)
                     files.forEach { o.writeUTF(it.path); o.writeLong(it.size); o.writeUTF(it.sha256) }
                 }
                 is Want -> { o.writeByte(2); o.writeInt(paths.size); paths.forEach { o.writeUTF(it) } }
@@ -45,17 +64,30 @@ sealed class Message {
     }
 
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
         private const val MAX_FILES = 200_000
 
         fun decode(data: ByteArray): Message {
             val i = DataInputStream(ByteArrayInputStream(data))
             return when (val type = i.readByte().toInt()) {
-                1 -> {
-                    val version = i.readInt(); val device = i.readUTF(); val folder = i.readUTF()
+                1 -> Hello(i.readInt(), i.readUTF(), i.readUTF())
+                7 -> {
                     val n = i.readInt()
                     if (n !in 0..MAX_FILES) throw IOException("liste trop longue")
-                    Hello(version, device, folder, List(n) { FileEntry(i.readUTF(), i.readLong(), i.readUTF()) })
+                    Ops(List(n) {
+                        val id = i.readUTF()
+                        val size = i.readInt()
+                        if (size !in 0..SecureChannel.MAX_FRAME) throw IOException("modification trop longue")
+                        Op(id, String(ByteArray(size).also { b -> i.readFully(b) }, Charsets.UTF_8))
+                    })
+                }
+                8 -> {
+                    val a = i.readInt()
+                    if (a !in 0..MAX_FILES) throw IOException("liste trop longue")
+                    val applied = List(a) { i.readUTF() }
+                    val n = i.readInt()
+                    if (n !in 0..MAX_FILES) throw IOException("liste trop longue")
+                    Manifest(applied, List(n) { FileEntry(i.readUTF(), i.readLong(), i.readUTF()) })
                 }
                 2 -> {
                     val n = i.readInt()

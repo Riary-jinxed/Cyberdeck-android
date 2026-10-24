@@ -748,6 +748,7 @@ internal fun PcLinkView() {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "Deck Link garde une copie du kit sur ton PC (Windows ou Linux) : inventaire, consommables, carnet avec ses photos, clients, câbles, adressage. " +
+                "Ce que tu modifies sur le PC (inventaire, consommables, clients, câbles, PC du parc) arrive ici à la synchro suivante ; la modif la plus récente gagne. " +
                 "Tout passe par ton Wi-Fi ou le câble USB, chiffré avec le code d'appairage, sans Internet.",
             color = Cp.Dim,
             fontFamily = MonoFont,

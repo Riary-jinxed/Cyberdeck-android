@@ -33,7 +33,7 @@ import androidx.compose.ui.window.rememberWindowState
 import java.awt.SystemTray
 
 private enum class Screen(val label: String) {
-    Link("LIAISON"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"),
+    Link("LIAISON"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"), Fleet("PARC"),
 }
 
 /** A small yellow cut-corner badge, for the window and the notification area. */
@@ -107,17 +107,22 @@ private fun App(state: LinkState) {
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                T("lecture seule : le téléphone fait foi", Cp.Dim, 11.sp, MonoFont, FontWeight.Normal)
+                val waiting = state.outbox.count
+                T(
+                    if (waiting == 0) "tout est à jour avec le téléphone" else "$waiting modif(s) en attente du téléphone",
+                    if (waiting == 0) Cp.Dim else Cp.Yellow, 11.sp, MonoFont, FontWeight.Normal,
+                )
             }
             Spacer(Modifier.width(18.dp))
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (screen) {
                     Screen.Link -> LinkScreen(state)
-                    Screen.Inventory -> InventoryScreen(state.kit)
-                    Screen.Stock -> StockScreen(state.kit)
+                    Screen.Inventory -> InventoryScreen(state)
+                    Screen.Stock -> StockScreen(state)
                     Screen.Logbook -> LogbookScreen(state.kit)
-                    Screen.Clients -> ClientsScreen(state.kit)
-                    Screen.Cables -> CablesScreen(state.kit)
+                    Screen.Clients -> ClientsScreen(state)
+                    Screen.Cables -> CablesScreen(state)
+                    Screen.Fleet -> FleetScreen(state)
                 }
             }
         }

@@ -10,7 +10,7 @@ import java.net.Socket
 import java.net.SocketException
 
 /** One finished sync, as the PC saw it. */
-data class SyncReport(val device: String, val folder: String, val files: Int, val stored: Int, val removed: Int, val skipped: Int, val at: Long)
+data class SyncReport(val device: String, val folder: String, val files: Int, val stored: Int, val removed: Int, val skipped: Int, val applied: Int, val at: Long)
 
 /**
  * The PC side: listens on [port], checks each phone against the pairing code, and mirrors the
@@ -21,8 +21,21 @@ class SyncServer(
     private val code: () -> PairingCode?,
     val port: Int = DEFAULT_PORT,
     private val folders: Set<String> = setOf("kit"),
+    private val outbox: Outbox = Outbox.None,
     private val onEvent: (Event) -> Unit = {},
 ) {
+    /** The PC's changes waiting for the phone, per synced folder. */
+    interface Outbox {
+        fun pending(folder: String): List<Op>
+        /** The phone applied (or dropped as older) these: they leave the outbox. */
+        fun applied(folder: String, ids: List<String>)
+
+        object None : Outbox {
+            override fun pending(folder: String) = emptyList<Op>()
+            override fun applied(folder: String, ids: List<String>) {}
+        }
+    }
+
     sealed class Event {
         data class Started(val device: String, val files: Int, val wanted: Int) : Event()
         data class Progress(val done: Int, val total: Int) : Event()
@@ -70,9 +83,15 @@ class SyncServer(
             ch.sendMessage(Message.Error("dossier « ${hello.folder} » non pris en charge par ce PC"))
             throw IOException("dossier ${hello.folder}")
         }
+        // One frame holds the whole list: what does not fit waits for the next sync.
+        var room = SecureChannel.MAX_FRAME - 64 * 1024
+        val ops = outbox.pending(hello.folder).takeWhile { op -> room -= op.json.length * 3 + op.id.length + 16; room > 0 }
+        ch.sendMessage(Message.Ops(ops))
+        val manifest = ch.receiveMessage() as? Message.Manifest ?: throw IOException("liste des fichiers attendue")
+        outbox.applied(hello.folder, manifest.applied)
         val store = MirrorStore(File(root, hello.folder))
-        val plan = store.plan(hello.files)
-        onEvent(Event.Started(hello.device, hello.files.size, plan.wanted.size))
+        val plan = store.plan(manifest.files)
+        onEvent(Event.Started(hello.device, manifest.files.size, plan.wanted.size))
         ch.sendMessage(Message.Want(plan.wanted.map { it.path }))
         val expected = plan.wanted.associateBy { it.path }
         var stored = 0
@@ -93,7 +112,7 @@ class SyncServer(
         }
         val removed = store.remove(plan.removed)
         ch.sendMessage(Message.Ack(stored, removed, skipped))
-        onEvent(Event.Finished(SyncReport(hello.device, hello.folder, hello.files.size, stored, removed, skipped, System.currentTimeMillis())))
+        onEvent(Event.Finished(SyncReport(hello.device, hello.folder, manifest.files.size, stored, removed, skipped, manifest.applied.size, System.currentTimeMillis())))
     }
 
     /** Reads and drops the frames of a file nobody asked for. */
@@ -110,19 +129,22 @@ class SyncServer(
 
 /** The phone side: sends a folder to a paired PC. */
 object SyncClient {
-    data class Result(val host: String, val files: Int, val sent: Int, val stored: Int, val removed: Int, val skipped: Int)
+    data class Result(val host: String, val files: Int, val sent: Int, val stored: Int, val removed: Int, val skipped: Int, val applied: Int)
 
     /**
-     * Mirrors [files] (read through [open]) to the PC at [address]. Throws [NotPairedException]
-     * when the PC holds another pairing code, IOException when the PC cannot be reached.
+     * Applies the PC's changes through [apply] (which returns the ids it handled), then mirrors
+     * the files [scan] lists (read through [open]) to the PC at [address]. Throws
+     * [NotPairedException] when the PC holds another pairing code, IOException when the PC
+     * cannot be reached.
      */
     fun sync(
         address: InetSocketAddress,
         code: PairingCode,
         device: String,
         folder: String,
-        files: List<FileEntry>,
+        scan: () -> List<FileEntry>,
         open: (String) -> InputStream,
+        apply: (List<Op>) -> List<String> = { emptyList() },
         connectTimeoutMs: Int = 3000,
         progress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): Result {
@@ -134,12 +156,20 @@ object SyncClient {
             if (!head.copyOfRange(0, SecureChannel.MAGIC.size).contentEquals(SecureChannel.MAGIC)) throw IOException("ce n'est pas Deck Link")
             val challenge = head.copyOfRange(SecureChannel.MAGIC.size, head.size)
             val ch = SecureChannel(s.getInputStream(), s.getOutputStream(), code.key, challenge, isClient = true)
-            ch.sendMessage(Message.Hello(Message.VERSION, device, folder, files))
+            ch.sendMessage(Message.Hello(Message.VERSION, device, folder))
             // A PC holding another code cannot answer: it hangs up right after the hello.
             val reply = try { ch.receiveMessage() } catch (e: NotPairedException) { throw e } catch (e: IOException) {
                 throw NotPairedException("le PC a refusé la liaison : appaire à nouveau le téléphone")
             }
-            val want = when (val m = reply) {
+            val ops = when (val m = reply) {
+                is Message.Ops -> m.ops
+                is Message.Error -> throw IOException(m.reason)
+                else -> throw IOException("réponse inattendue")
+            }
+            val applied = if (ops.isEmpty()) emptyList() else apply(ops)
+            val files = scan()
+            ch.sendMessage(Message.Manifest(applied, files))
+            val want = when (val m = ch.receiveMessage()) {
                 is Message.Want -> m.paths
                 is Message.Error -> throw IOException(m.reason)
                 else -> throw IOException("réponse inattendue")
@@ -152,7 +182,7 @@ object SyncClient {
             }
             ch.sendMessage(Message.Done)
             return when (val m = ch.receiveMessage()) {
-                is Message.Ack -> Result(address.hostString, files.size, want.size, m.stored, m.removed, m.skipped)
+                is Message.Ack -> Result(address.hostString, files.size, want.size, m.stored, m.removed, m.skipped, applied.size)
                 is Message.Error -> throw IOException(m.reason)
                 else -> throw IOException("réponse inattendue")
             }

@@ -36,6 +36,8 @@ compose.desktop {
             packageVersion = appVersion
             description = "Synchro du kit Netrunner avec le PC"
             vendor = "Netrunner"
+            // The Deck Probe endpoint (Fleet.kt) runs on the JDK's built-in HTTP server.
+            modules("jdk.httpserver")
             windows {
                 // Per-user install with a folder chooser: the sync folder lives next to the app,
                 // so the install folder must stay writable (not Program Files).
