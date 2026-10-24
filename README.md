@@ -193,6 +193,19 @@ Boîte à outils de recherche en sources ouvertes dans le module `osint/` (packa
 - **Hors périmètre, volontairement** : recherche de personnes (nom, téléphone, e-mail) et scan actif de machines.
 - **Mises à jour** : releases GitHub `osint-vX.Y.Z` (jamais marquées « latest »), installables depuis CONFIG › Mise à jour ou depuis Config › Applis du deck du launcher.
 
+## Deck Link (appli PC, Windows et Linux)
+
+Une appli pour le PC, dans `desktop/` (Kotlin, Compose Desktop), qui garde une copie du **kit de terrain** du launcher : inventaire, consommables, carnet d'interventions avec ses photos, clients, câbles, adressage, baies et relevés.
+
+- **Appairage** : Deck Link affiche un QR code ; sur le téléphone, KIT › OUTILS › PC › « Scanner le QR du PC » (ou saisie du code à la main).
+- **Synchro** : à chaque fermeture du kit (désactivable) ou avec « Synchroniser maintenant ». Seuls les fichiers modifiés partent. Le téléphone trouve le PC tout seul sur le Wi-Fi (diffusion UDP sur le port 47321), ou passe par le câble USB avec `adb reverse tcp:47321 tcp:47321`.
+- **Sécurité** : tout est chiffré (AES-256-GCM) avec le code d'appairage, chaque connexion a son propre défi, rien ne passe par Internet. « Nouveau code » sur le PC révoque l'ancien téléphone.
+- **Le téléphone fait foi** : le PC garde une copie en lecture seule ; un fichier supprimé sur le téléphone part dans `sync/kit/.corbeille/` sur le PC, jamais effacé.
+- **Dossier** : la copie est dans le dossier d'installation choisi à l'installation (`<dossier>/sync/kit`), le code dans `<dossier>/config`. Installation par utilisateur (pas besoin d'être admin), pour que ce dossier reste modifiable. Si le dossier n'est pas modifiable (ex. `/opt` sous Linux), la copie va dans `~/DeckLink`.
+- **Arrière-plan** : fermer la fenêtre laisse Deck Link dans la zone de notification, prêt à recevoir ; « Quitter » l'arrête.
+- **Installer** : release `decklink-v<version>` du dépôt, `.msi` pour Windows, `.deb` pour Linux. Au premier lancement, Windows demande d'autoriser Deck Link sur les réseaux privés : il faut accepter.
+- Le protocole de synchro (`sync-core/`) est partagé entre le launcher et Deck Link, et testé (`./gradlew -p desktop test`).
+
 ## Installer sur le téléphone
 
 1. Récupère l'APK : onglet **Actions** du dépôt GitHub › dernier build › artefact `netrunner-launcher` (ou construis-le, voir plus bas).

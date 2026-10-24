@@ -28,8 +28,8 @@ android {
         applicationId = "dev.netrunner.launcher"
         minSdk = 29
         targetSdk = 35
-        versionCode = 51
-        versionName = "1.5.5"
+        versionCode = 52
+        versionName = "1.5.6"
 
         // As//ka's model runtime ships native code: phones only, which keeps the APK small.
         ndk {
@@ -50,6 +50,9 @@ android {
             }
         }
     }
+
+    // The PC sync protocol, shared with the Deck Link desktop app (desktop/).
+    sourceSets["main"].java.srcDir("../sync-core/src/main/kotlin")
 
     buildTypes {
         release {

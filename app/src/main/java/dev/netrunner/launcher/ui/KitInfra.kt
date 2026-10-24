@@ -755,7 +755,7 @@ internal fun SwitchGenerator(onBack: () -> Unit) {
 internal fun ToolsTab() {
     var mode by remember { mutableStateOf("Hash") }
     Column {
-        KitChips(listOf("Hash", "Encodage", "JWT", "Bases", "Regex", "Backup"), mode) { mode = it }
+        KitChips(listOf("Hash", "Encodage", "JWT", "Bases", "Regex", "Backup", "PC"), mode) { mode = it }
         Spacer(Modifier.height(8.dp))
         when (mode) {
             "Hash" -> HashTool()
@@ -763,6 +763,7 @@ internal fun ToolsTab() {
             "JWT" -> JwtTool()
             "Bases" -> BasesTool()
             "Backup" -> BackupView()
+            "PC" -> PcLinkView()
             else -> RegexTool()
         }
     }
