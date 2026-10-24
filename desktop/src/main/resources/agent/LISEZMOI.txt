@@ -1,0 +1,45 @@
+﻿DECK PROBE — inventaire automatique des PC
+==========================================
+
+Deck Probe envoie les infos de chaque PC (nom, fabricant, modèle, numéro de série, OS, processeur,
+mémoire, disques, cartes réseau, domaine, utilisateur connecté) à Deck Link. Deck Link crée ou met
+à jour sa fiche dans l'inventaire du kit, et la fiche arrive sur le téléphone à la synchro suivante.
+
+Ce dossier a été préparé par Deck Link : deck-probe.json contient l'adresse de ce PC et la clé du
+parc. Ne le partage pas au-delà des PC à inventorier.
+
+Prérequis
+---------
+- Le PC où tourne Deck Link doit rester allumé avec Deck Link ouvert (zone de notification), et
+  joignable depuis les autres PC : idéalement une IP fixe ou un nom DNS stable.
+- Pare-feu de ce PC : autoriser le port TCP 47322 en entrée. En invite de commandes administrateur :
+    netsh advfirewall firewall add rule name="Deck Link (Deck Probe)" dir=in action=allow protocol=TCP localport=47322
+- Les PC inventoriés : Windows 10/11 ou Server 2016+, PowerShell 5.1 (inclus).
+- L'heure des PC doit être à l'heure (à 10 minutes près), sinon les rapports sont refusés.
+
+Installer sur un PC
+-------------------
+Clic droit sur install.cmd › Exécuter en tant qu'administrateur. Le script copie l'agent dans
+C:\ProgramData\DeckProbe, crée deux tâches planifiées (au démarrage, et chaque jour à 12:00,
+compte SYSTEM) et envoie un premier inventaire tout de suite.
+
+Déployer par GPO
+----------------
+1. Copie ce dossier sur un partage lisible par les ordinateurs du domaine, par exemple
+   \\mondomaine\NETLOGON\DeckProbe (NETLOGON est déjà lisible par « Ordinateurs du domaine »).
+2. Dans une GPO liée à l'OU des PC : Configuration ordinateur › Stratégies › Paramètres Windows ›
+   Scripts (démarrage/arrêt) › Démarrage › Ajouter :
+       \\mondomaine\NETLOGON\DeckProbe\install.cmd
+3. Au prochain redémarrage, chaque PC installe l'agent (le script peut tourner à chaque démarrage :
+   il met simplement les fichiers à jour).
+
+Si l'adresse ou la clé change (bouton NOUVELLE CLÉ dans Deck Link), prépare à nouveau le pack et
+remplace les fichiers du partage : les PC le reprennent au redémarrage suivant.
+
+Lancer à la main / tester
+-------------------------
+    powershell -ExecutionPolicy Bypass -File C:\ProgramData\DeckProbe\deck-probe.ps1
+
+Désinstaller
+------------
+uninstall.cmd en administrateur (ou en script de démarrage GPO à la place de install.cmd).
