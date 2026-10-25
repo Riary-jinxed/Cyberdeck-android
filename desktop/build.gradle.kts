@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.2.0"
+val appVersion = "0.2.1"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -31,6 +31,8 @@ sourceSets["main"].resources.srcDir(versionResource)
 
 dependencies {
     implementation(compose.desktop.currentOs)
+    // Dispatchers.Main on the desktop (AppsScreen): without it the app dies at launch.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.google.zxing:core:3.5.3")
     testImplementation(kotlin("test"))

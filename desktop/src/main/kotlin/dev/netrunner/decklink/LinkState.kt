@@ -35,6 +35,9 @@ class LinkState {
     var fatal by mutableStateOf<String?>(null)
         private set
     val log = mutableStateListOf<String>()
+    /** Set while this PC's own inventory is being read. */
+    var probing by mutableStateOf(false)
+        private set
     val pcName = Paths.pcName()
 
     private val server = SyncServer(Paths.sync, { code }, outbox = outbox, onEvent = ::onEvent)
@@ -60,6 +63,8 @@ class LinkState {
             }
             // Without it As//ka only reads the kit: nothing else depends on it.
             runCatching { stopAska = AskaLink.serve(::askaEdit, ::note) }
+            // Once added, this PC's sheet follows its changes (RAM, disks, IP) at each launch.
+            if (Paths.probeSelf()) addThisPc()
         }
     }
 
@@ -94,6 +99,24 @@ class LinkState {
         }
         reload()
         fleet = Fleet.reports()
+    }
+
+    /** Reads the inventory of the PC Deck Link runs on and adds or updates its sheet, like an agent's report. */
+    fun addThisPc() {
+        if (probing) return
+        probing = true
+        note("lecture des infos de ce PC…")
+        Thread({
+            val result = runCatching { LocalProbe.run().also { Fleet.save(it) } }
+            javax.swing.SwingUtilities.invokeLater {
+                probing = false
+                result.onSuccess { r ->
+                    if (Fleet.toEquipment(r, kit) == null) note("parc : la fiche de ${r.hostname} est déjà à jour")
+                    onReport(r)
+                    Paths.setProbeSelf(true)
+                }.onFailure { note("impossible de lire les infos de ce PC : ${it.message}") }
+            }
+        }, "local-probe").apply { isDaemon = true }.start()
     }
 
     fun preparePack(): java.io.File = Fleet.writePack(pcName, addresses(), fleetKey).also { note("pack de déploiement prêt : $it") }
