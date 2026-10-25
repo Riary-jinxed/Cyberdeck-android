@@ -42,6 +42,8 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
     var city by remember { mutableStateOf(settings.city) }
     var ollama by remember { mutableStateOf(settings.ollamaUrl) }
     var deck by remember { mutableStateOf(settings.deckLink) }
+    var watchFolder by remember { mutableStateOf(settings.watchFolder) }
+    var comfy by remember { mutableStateOf(settings.comfyUrl) }
     var autostartFailed by remember { mutableStateOf(false) }
 
     Window(
@@ -83,6 +85,20 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
             if (!Autostart.available) T("Disponible une fois As//ka installée.", Cp.Dim, 13.sp)
             if (autostartFailed) T("Le lancement au démarrage n'a pas pu être réglé.", Cp.Red, 13.sp)
 
+            Section("ASSISTANTE")
+            Toggle("Bonjour le matin (avec le résumé du jour) et bonne soirée", settings.greetings) { on -> aska.update { it.copy(greetings = on) } }
+            Toggle("Rappel de pause et d'eau après 2 h d'écran ou de jeu", settings.breaks) { on -> aska.update { it.copy(breaks = on) } }
+            Toggle("Suivre la musique (titre de la fenêtre de Spotify, YouTube Music…)", settings.music) { on -> aska.update { it.copy(music = on) } }
+            Toggle("Signaler les messages non lus (Discord, Telegram, WhatsApp, Gmail… le nombre seulement)", settings.messages) { on -> aska.update { it.copy(messages = on) } }
+            Toggle("Alerter si le PC chauffe, ou manque de mémoire ou de disque", settings.health) { on -> aska.update { it.copy(health = on) } }
+            Toggle("Annoncer les téléchargements terminés", settings.downloads) { on -> aska.update { it.copy(downloads = on) } }
+            Field("Autre dossier à surveiller (sortie d'entraînement LoRA…, vide pour aucun)", watchFolder) { watchFolder = it }
+            Field("Adresse de ComfyUI (elle annonce la fin des rendus)", comfy) { comfy = it }
+            T("Rappels : « rappelle-moi dans 20 min de… » ou /rappel 18:30 texte. Concentration : /pomodoro. Mémoire : « retiens que… ». Texte copié : /traduis, /resume.", Cp.Dim, 13.sp)
+
+            Section("VOIX")
+            VoiceSection(aska)
+
             Section("DECK LINK")
             Field("Dossier de Deck Link (vide : recherche automatique)", deck) { deck = it }
             T(
@@ -91,13 +107,13 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
             )
 
             Section("RACCOURCIS")
-            T("Ctrl+Alt+A : lui parler, même en jeu.  Double-clic : lui parler.  Clic : l'embêter.  Clic droit : ces réglages.  Glisser : la déplacer.", Cp.Text, 14.sp)
+            T("Ctrl+Alt+A : lui parler, même en jeu.  Ctrl+Alt+Espace maintenu : lui parler au micro.  Double-clic : lui parler.  Clic : l'embêter.  Clic droit : ces réglages.  Glisser : la déplacer.", Cp.Text, 14.sp)
             if (!Activity.hooked) T("Le clavier global n'est pas accessible sur cette session (Wayland ?) : ni rebonds, ni raccourci.", Cp.Yellow, 13.sp)
 
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button("ENREGISTRER", Cp.Pink) {
-                    aska.update { it.copy(handle = handle.trim().ifEmpty { "V" }, city = city.trim(), ollamaUrl = ollama.trim().ifEmpty { "http://localhost:11434" }, deckLink = deck.trim()) }
+                    aska.update { it.copy(handle = handle.trim().ifEmpty { "V" }, city = city.trim(), ollamaUrl = ollama.trim().ifEmpty { "http://localhost:11434" }, deckLink = deck.trim(), watchFolder = watchFolder.trim(), comfyUrl = comfy.trim().ifEmpty { "http://127.0.0.1:8188" }) }
                     onClose()
                 }
                 Button("EFFACER SA MÉMOIRE", Cp.Dim) { aska.clearMemory() }
@@ -226,4 +242,25 @@ private fun Toggle(label: String, on: Boolean, enabled: Boolean = true, onChange
 @Composable
 private fun Button(label: String, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
     T(label, color, 13.sp, TitleFont, modifier = Modifier.hudPanel(color, Cp.Panel, 8.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp))
+}
+
+/** Her voice (Piper, Siwis) and her ears (whisper.cpp), downloaded from here. */
+@Composable
+private fun VoiceSection(aska: Aska) {
+    val settings by aska.settings.collectAsState()
+    val setup by aska.voiceSetup.collectAsState()
+    val busy = setup?.working == true
+    if (Voice.canSpeak) Toggle("Lire ses réponses à voix haute (voix Siwis, hors ligne)", settings.voice) { on -> aska.update { it.copy(voice = on) } }
+    else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(if (busy) "…" else "LUI DONNER UNE VOIX", Cp.Pink) { if (!busy) aska.installVoice(ears = false) }
+        T("Piper et la voix française Siwis, environ 85 Mo.", Cp.Dim, 13.sp)
+    }
+    if (Voice.canListen) Toggle("L'écouter quand je maintiens Ctrl+Alt+Espace (whisper.cpp, hors ligne)", settings.listen) { on -> aska.update { it.copy(listen = on) } }
+    else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(if (busy) "…" else "LUI DONNER DES OREILLES", Cp.Pink) { if (!busy) aska.installVoice(ears = true) }
+        T("whisper.cpp et le modèle small, environ 470 Mo." + if (!isWindows) " Sous Linux : whisper-cli dans le PATH." else "", Cp.Dim, 13.sp)
+    }
+    setup?.let { s ->
+        T(s.label + (s.progress?.let { " ${(it * 100).toInt()} %" } ?: ""), if (s.failed) Cp.Red else if (s.working) Cp.Yellow else Cp.Cyan, 13.sp)
+    }
 }

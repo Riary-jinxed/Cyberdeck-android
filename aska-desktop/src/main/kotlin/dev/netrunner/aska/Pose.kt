@@ -48,3 +48,18 @@ enum class Pose(val sprite: String) {
         }
     }
 }
+
+/**
+ * Her small moves at her desk (Bongo Cat drawings, bongo_<name>.png): passing ones (a yawn, a
+ * stretch, a worried look, a sign to show a message) and lasting ones (focused, gamepad in hand).
+ * A drawing not shipped yet is simply skipped.
+ */
+enum class Gesture(val frame: String, val lasting: Boolean = false) {
+    Yawn("bongo_yawn"),
+    Stretch("bongo_stretch"),
+    Worried("bongo_worried"),
+    Happy("bongo_happy"),
+    Sign("bongo_sign"),
+    Focus("bongo_focus", lasting = true),
+    Gamepad("bongo_gamepad", lasting = true),
+}
