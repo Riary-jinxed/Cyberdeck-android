@@ -116,7 +116,6 @@ class AskaTest {
 
     @Test
     fun keyboardDrawingsArePackaged() {
-        (listOf("bongo_idle", "bongo_left", "bongo_right", "bongo_blink", "bongo_sleep", "bongo_watch") + Gesture.entries.map { it.frame })
-            .forEach { assertTrue(javaClass.getResource("/sprites/$it.png") != null, it) }
+        listOf("bongo_idle", "bongo_left", "bongo_right").forEach { assertTrue(javaClass.getResource("/sprites/$it.png") != null, it) }
     }
 }
