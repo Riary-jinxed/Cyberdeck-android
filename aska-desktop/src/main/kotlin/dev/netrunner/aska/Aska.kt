@@ -67,6 +67,8 @@ class Aska(private val scope: CoroutineScope) {
     private var asks = 0
     /** The model refused tools once: no more offers this session. */
     private var noTools = false
+    /** A change of the kit she prepared, waiting for « oui ». */
+    @Volatile private var pendingEdit: Tools.Edit? = null
     private var hideJob: Job? = null
     /** The last time she spoke, asked or not: her remarks keep their distance. */
     private var lastSpoke = System.currentTimeMillis()
@@ -183,11 +185,38 @@ class Aska(private val scope: CoroutineScope) {
         // A remark of hers gives way to the runner; an answer they are waiting for does not.
         if (text.isEmpty() || (_busy.value && !remarking)) return
         if (text == "/aide" || text == "/help") return say(Tools.help())
+        pendingEdit?.let { edit ->
+            pendingEdit = null
+            val answer = DeckLink.normalize(text).trim(' ', '!', '.')
+            if (answer in YES) {
+                history += Turn(true, text)
+                return applyEdit(edit)
+            }
+            if (answer in NO) return say("*range son carnet* D'accord, je ne touche à rien.")
+            // Anything else: the edit is dropped and the conversation goes on.
+        }
         val command = Tools.parseCommand(text)
         if (text.startsWith("/") && command == null) return say("*penche la tête* Je ne connais pas cette commande. " + Tools.help())
         val earlier = history.toList()
         history += Turn(true, text)
         ask(earlier, text + "\n\n" + Persona.note(moment()), isRemark = false, command = command)
+    }
+
+    /** Sends a confirmed edit to Deck Link, which passes it on to the phone. */
+    private fun applyEdit(edit: Tools.Edit) {
+        scope.launch {
+            val home = DeckLink.home(settings.value.deckLink)
+            val error = if (home == null) "Je ne trouve plus Deck Link sur ce PC." else withContext(Dispatchers.IO) { DeckLink.send(home, edit.kind, edit.id, edit.fields) }
+            if (error == null) {
+                say("*griffonne dans le carnet* C'est noté : ${edit.summary}. Le téléphone l'aura à sa prochaine synchro.")
+                history += Turn(false, "Modification enregistrée dans Deck Link : ${edit.summary}.")
+                refreshDeck()
+            } else {
+                // Kept: a « oui » once Deck Link is open sends it again.
+                pendingEdit = edit
+                say("*grimace* $error")
+            }
+        }
     }
 
     // ---- Her own remarks.
@@ -242,7 +271,7 @@ class Aska(private val scope: CoroutineScope) {
                 if (command != null) {
                     val (tool, args) = command
                     _bubble.value = "*${tool.doing}…*"
-                    toolResult = Tools.run(tool, args, settings.value.deckLink)
+                    toolResult = Tools.run(tool, args, settings.value.deckLink) { pendingEdit = it }
                     userMessage = "$message\n\n[Résultat de l'outil ${tool.name} :\n$toolResult]\nExplique ce résultat en bref : l'essentiel, puis la vérification suivante s'il y en a une."
                 }
                 val installed = ollama.models().also { _models.value = it }
@@ -287,7 +316,7 @@ class Aska(private val scope: CoroutineScope) {
                         talking = false
                         _bubble.value = "*${tool?.doing ?: "cherche"}…*"
                         refreshPose()
-                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), settings.value.deckLink)
+                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), settings.value.deckLink) { pendingEdit = it }
                         messages += Ollama.Message("tool", result, toolName = call.name)
                     }
                     round++
@@ -468,5 +497,7 @@ class Aska(private val scope: CoroutineScope) {
         const val CONTEXT_CHARS = 6000
         /** Tool calls before she must answer. */
         const val TOOL_ROUNDS = 4
+        val YES = setOf("oui", "ok", "okay", "vas-y", "vas y", "valide", "confirme", "go", "yes", "d'accord", "dac", "ouais")
+        val NO = setOf("non", "annule", "stop", "laisse", "no", "laisse tomber")
     }
 }

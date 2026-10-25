@@ -33,6 +33,20 @@ object Tools {
         Tool("subnet_calc", "calc", "Calcul IP : réseau, masque, broadcast, plage d'hôtes et nombre d'adresses d'un CIDR.", listOf(Param("cidr", "par exemple 10.0.12.37/22")), "fait le calcul"),
         Tool("diagnose_internet", "diag", "Diagnostic « pas d'internet » pas à pas : carte, adresse, passerelle, internet, DNS, web, et où ça casse.", doing = "déroule le diagnostic"),
         Tool("deck_search", "kit", "Cherche dans le kit Deck Link : équipements, câbles (prise, switch, port, VLAN, PoE), consommables, interventions, clients (accès, consignes, contrats) et PC du parc.", listOf(Param("query", "les mots à chercher, par exemple « B12 » ou « Dupont accès »")), "fouille le kit"),
+        Tool(
+            "deck_use_stock", "conso",
+            "Prépare la sortie d'un consommable du kit (ce qui a été utilisé en intervention). Rien n'est enregistré avant que l'utilisateur dise oui.",
+            listOf(Param("quantity", "quantité utilisée", "integer"), Param("item", "le consommable, par exemple « RJ45 »")), "prépare la sortie de stock",
+        ),
+        Tool(
+            "deck_update", "maj",
+            "Prépare la modification d'un champ d'une fiche du kit. Fiches et champs : équipement (code, name, serial, location, state, notes), consommable (name, unit, qty, threshold, location, notes), câble (outlet, switch, port, vlan, length, poe, test, site, notes), client (name, contact, phone, email, address, access, instructions, notes). Rien n'est enregistré avant que l'utilisateur dise oui.",
+            listOf(
+                Param("kind", "equipment, stock, cable ou client"), Param("item", "les mots qui désignent la fiche, par exemple « B12 » ou « Switch SW-2 »"),
+                Param("field", "le champ à changer"), Param("value", "la nouvelle valeur"),
+            ),
+            "prépare la modification",
+        ),
         Tool("deck_fleet", "parc", "Le parc de PC remonté par Deck Probe : nom, modèle, n° de série, OS, CPU, RAM, disques, IP, MAC.", doing = "ouvre la fiche du parc"),
     )
 
@@ -67,6 +81,8 @@ object Tools {
         val args = when {
             tool.params.isEmpty() -> emptyMap()
             tool.name == "deck_search" -> mapOf("query" to rest.joinToString(" "))
+            tool.name == "deck_use_stock" -> mapOf("quantity" to rest.firstOrNull().orEmpty(), "item" to rest.drop(1).joinToString(" "))
+            tool.name == "deck_update" -> mapOf("kind" to rest.getOrElse(0) { "" }, "item" to rest.getOrElse(1) { "" }, "field" to rest.getOrElse(2) { "" }, "value" to rest.drop(3).joinToString(" "))
             else -> tool.params.zip(rest).associate { (p, v) -> p.name to v }
         }
         return tool to args
@@ -77,8 +93,28 @@ object Tools {
 
     fun args(o: JsonObject): Map<String, String> = o.mapValues { (_, v) -> runCatching { v.jsonPrimitive.contentOrNull }.getOrNull().orEmpty() }
 
+    /** A change of the kit waiting for the runner's « oui ». */
+    data class Edit(val kind: String, val id: String, val fields: Map<String, String>, val summary: String)
+
+    private val KINDS = mapOf(
+        "equipment" to "equipment", "equipement" to "equipment", "stock" to "stock", "consommable" to "stock",
+        "cable" to "cable", "client" to "client",
+    )
+
+    /** Finds the item and prepares the edit, or says why it cannot. */
+    fun prepare(deckLink: String, kind: String, item: String, change: (DeckLink.Item) -> Pair<Map<String, String>, String>?): Pair<Edit?, String> {
+        val home = DeckLink.home(deckLink) ?: return null to "Je ne trouve pas Deck Link sur ce PC."
+        val found = DeckLink.find(home, kind, item)
+        if (found.isEmpty()) return null to "Aucune fiche $kind ne correspond à « $item »."
+        if (found.size > 1) return null to "Plusieurs fiches correspondent, il faut préciser : " + found.take(6).joinToString(", ") { it.label }
+        val target = found.single()
+        val (fields, summary) = change(target) ?: return null to "Cette modification n'est pas possible sur ${target.label}."
+        return Edit(kind, target.id, fields, summary) to
+            "Prêt, mais PAS encore enregistré : $summary. Demande à l'utilisateur de confirmer par « oui » (ou « non » pour annuler)."
+    }
+
     /** Runs [tool] and answers in text, errors included: the model reads them too. */
-    suspend fun run(tool: Tool, args: Map<String, String>, deckLink: String): String = withContext(Dispatchers.IO) {
+    suspend fun run(tool: Tool, args: Map<String, String>, deckLink: String, propose: (Edit) -> Unit = {}): String = withContext(Dispatchers.IO) {
         fun need(name: String) = args[name]?.trim()?.takeIf { it.isNotEmpty() }
         runCatching {
             when (tool.name) {
@@ -97,6 +133,30 @@ object Tools {
                 "diagnose_internet" -> Net.diagnose()
                 "deck_search" -> need("query")?.let { DeckLink.search(deckLink, it) } ?: "Que faut-il chercher dans le kit ?"
                 "deck_fleet" -> DeckLink.fleet(deckLink)
+                "deck_use_stock" -> {
+                    val used = need("quantity")?.toLongOrNull()?.takeIf { it > 0 } ?: return@runCatching "Quelle quantité a été utilisée ?"
+                    val item = need("item") ?: return@runCatching "Quel consommable ?"
+                    val (edit, text) = prepare(deckLink, "stock", item) {
+                        val qty = it.s("qty").toLongOrNull() ?: 0L
+                        val unit = it.s("unit").let { u -> if (u.isBlank()) "" else " $u" }
+                        mapOf("qty" to (qty - used).coerceAtLeast(0).toString()) to "${it.label} : $qty$unit → ${(qty - used).coerceAtLeast(0)}$unit (−$used)"
+                    }
+                    edit?.let(propose)
+                    text
+                }
+                "deck_update" -> {
+                    val kind = KINDS[DeckLink.normalize(need("kind").orEmpty())] ?: return@runCatching "Quelle fiche : equipment, stock, cable ou client ?"
+                    val item = need("item") ?: return@runCatching "Quelle fiche faut-il modifier ?"
+                    val field = need("field")?.lowercase() ?: return@runCatching "Quel champ ?"
+                    if (field !in DeckLink.FIELDS.getValue(kind)) return@runCatching "Le champ « $field » n'existe pas. Champs possibles : " + DeckLink.FIELDS.getValue(kind).joinToString(", ")
+                    val value = args["value"]?.trim().orEmpty()
+                    if (field in setOf("qty", "threshold") && value.toLongOrNull() == null) return@runCatching "« $field » attend un nombre."
+                    val (edit, text) = prepare(deckLink, kind, item) {
+                        mapOf(field to value) to "${it.label}, $field : « ${it.s(field)} » → « $value »"
+                    }
+                    edit?.let(propose)
+                    text
+                }
                 else -> "Outil inconnu : ${tool.name}"
             }
         }.getOrElse { "L'outil ${tool.name} a échoué : ${it.message ?: it.javaClass.simpleName}" }

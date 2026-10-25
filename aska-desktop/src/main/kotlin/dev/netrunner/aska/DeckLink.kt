@@ -147,4 +147,82 @@ object DeckLink {
 
     fun normalize(text: String): String =
         java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+
+    // ---- Editing the kit, through Deck Link (desktop/…/AskaLink.kt).
+
+    /** Where each kind of item lives in the phone's files. */
+    private val SOURCES = mapOf(
+        "equipment" to ("kit.json" to "equipment"),
+        "cable" to ("kit.json" to "cables"),
+        "stock" to ("kit_stock.json" to "stock"),
+        "client" to ("kit_clients.json" to "clients"),
+    )
+
+    /** The fields she may change, as Deck Link accepts them. */
+    val FIELDS = mapOf(
+        "equipment" to listOf("code", "name", "serial", "location", "state", "notes"),
+        "stock" to listOf("name", "unit", "qty", "threshold", "location", "notes"),
+        "cable" to listOf("outlet", "switch", "port", "vlan", "length", "poe", "test", "site", "notes"),
+        "client" to listOf("name", "contact", "phone", "email", "address", "access", "instructions", "notes"),
+    )
+
+    data class Item(val kind: String, val id: String, val fields: JsonObject) {
+        fun s(key: String) = fields[key]?.let { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }.orEmpty()
+        val label get() = listOf("name", "outlet", "code").map { s(it) }.firstOrNull { it.isNotBlank() } ?: id
+    }
+
+    /** The items of [kind], with the PC's edits still waiting for the phone laid over them. */
+    fun items(home: File, kind: String): List<Item> {
+        val (file, key) = SOURCES[kind] ?: return emptyList()
+        val base = runCatching { json.parseToJsonElement(File(home, "sync/kit/$file").readText()).jsonObject[key]!!.jsonArray.map { it.jsonObject } }
+            .getOrDefault(emptyList())
+        val out = LinkedHashMap<String, JsonObject>()
+        base.forEach { o -> o["id"]?.jsonPrimitive?.contentOrNull?.let { out[it] = o } }
+        runCatching { json.parseToJsonElement(File(home, "config/outbox.json").readText()).jsonArray }.getOrNull()?.forEach { e ->
+            val c = e.jsonObject
+            if (c["kind"]?.jsonPrimitive?.contentOrNull != kind) return@forEach
+            val id = c["id"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            if (c["deleted"]?.jsonPrimitive?.contentOrNull == "true") out.remove(id)
+            else out[id] = JsonObject((out[id] ?: emptyMap()) + (c["item"] as? JsonObject ?: JsonObject(emptyMap())))
+        }
+        return out.map { (id, o) -> Item(kind, id, o) }
+    }
+
+    /** The items of [kind] whose fields hold the most words of [query]. */
+    fun find(home: File, kind: String, query: String): List<Item> {
+        val words = normalize(query).split(Regex("[^a-z0-9.:-]+")).filter { it.length >= 2 }
+        if (words.isEmpty()) return emptyList()
+        val scored = items(home, kind).map { it to words.count { w -> normalize(flatten(it.fields)).contains(w) } }.filter { it.second > 0 }
+        val best = scored.maxOfOrNull { it.second } ?: return emptyList()
+        return scored.filter { it.second == best }.map { it.first }
+    }
+
+    /** Sends an edit to the running Deck Link. Null when saved, else why not. */
+    fun send(home: File, kind: String, id: String, fields: Map<String, String>): String? {
+        val token = runCatching { File(home, "config/aska.token").readText().trim() }.getOrNull()
+            ?: return "Deck Link doit être ouvert au moins une fois dans sa version 0.1.1 ou plus."
+        val body = kotlinx.serialization.json.buildJsonObject {
+            put("kind", kotlinx.serialization.json.JsonPrimitive(kind))
+            put("id", kotlinx.serialization.json.JsonPrimitive(id))
+            put("fields", JsonObject(fields.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }))
+        }.toString()
+        return try {
+            val request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:$EDIT_PORT/aska/edit"))
+                .header("Content-Type", "application/json").header("X-Aska-Token", token)
+                .timeout(java.time.Duration.ofSeconds(10))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body)).build()
+            val status = java.net.http.HttpClient.newBuilder().proxy(java.net.ProxySelector.of(null)).build()
+                .send(request, java.net.http.HttpResponse.BodyHandlers.discarding()).statusCode()
+            when (status) {
+                204 -> null
+                401 -> "Deck Link a refusé la clé : relance Deck Link puis réessaie."
+                400 -> "Deck Link n'accepte pas cette modification."
+                else -> "Deck Link a répondu $status."
+            }
+        } catch (e: Exception) {
+            "Deck Link n'est pas ouvert : lance-le, puis redis-moi « oui »."
+        }
+    }
+
+    const val EDIT_PORT = 47323
 }

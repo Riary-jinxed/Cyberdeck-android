@@ -103,4 +103,31 @@ class NetTest {
         assertNotNull(DeckLink.home(dir))
         home.deleteRecursively()
     }
+
+    @Test
+    fun preparesKitEditsWithoutSavingThem() {
+        val home = Files.createTempDirectory("decklink").toFile()
+        File(home, "sync/kit").mkdirs()
+        File(home, "config").mkdirs()
+        File(home, "sync/kit/kit_stock.json").writeText("""{"stock":[{"id":"s1","name":"Connecteurs RJ45","unit":"pcs","qty":10},{"id":"s2","name":"Colliers","qty":50}]}""")
+        // A PC edit not yet sent to the phone wins over the phone's copy.
+        File(home, "config/outbox.json").writeText("""[{"op":"x","kind":"stock","id":"s1","at":1,"deleted":false,"item":{"qty":12}}]""")
+        assertEquals("12", DeckLink.items(home, "stock").first { it.id == "s1" }.s("qty"))
+        var proposed: Tools.Edit? = null
+        val text = kotlinx.coroutines.runBlocking {
+            Tools.run(Tools.byName("deck_use_stock")!!, mapOf("quantity" to "3", "item" to "rj45"), home.path) { proposed = it }
+        }
+        assertTrue(text.contains("PAS encore enregistré"), text)
+        assertEquals(Tools.Edit("stock", "s1", mapOf("qty" to "9"), "Connecteurs RJ45 : 12 pcs → 9 pcs (−3)"), proposed)
+        val (conso, args) = Tools.parseCommand("/conso 3 câble RJ45")!!
+        assertEquals("deck_use_stock", conso.name)
+        assertEquals(mapOf("quantity" to "3", "item" to "câble RJ45"), args)
+        // Unknown field: nothing prepared.
+        proposed = null
+        kotlinx.coroutines.runBlocking {
+            Tools.run(Tools.byName("deck_update")!!, mapOf("kind" to "stock", "item" to "colliers", "field" to "couleur", "value" to "rouge"), home.path) { proposed = it }
+        }
+        assertNull(proposed)
+        home.deleteRecursively()
+    }
 }
