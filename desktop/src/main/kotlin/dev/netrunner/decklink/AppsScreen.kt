@@ -41,6 +41,21 @@ class AppsState(private val quit: () -> Unit) {
     /** Per app id: download progress (0 to 1), or null while the installer runs. */
     val busy = mutableStateMapOf<String, Float?>()
     val messages = mutableStateMapOf<String, String>()
+    /** Per app id: the folder picked by hand for a first install, on Windows. */
+    val chosen = mutableStateMapOf<String, java.io.File>()
+
+    fun folder(app: Apps.App): java.io.File? = if (app.installed == null) chosen[app.id] ?: Apps.folder(app) else Apps.folder(app)
+
+    /** Lets the runner pick where a new app goes; it lands in a subfolder named after it. */
+    fun pickFolder(app: Apps.App) {
+        val chooser = javax.swing.JFileChooser(folder(app)?.parentFile).apply {
+            fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
+            dialogTitle = "Où installer ${app.title} ?"
+        }
+        if (chooser.showOpenDialog(null) != javax.swing.JFileChooser.APPROVE_OPTION) return
+        val picked = chooser.selectedFile ?: return
+        chosen[app.id] = if (picked.name.equals(app.windowsName, ignoreCase = true)) picked else java.io.File(picked, app.windowsName)
+    }
     val updates get() = apps.count { it.updatable }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -76,7 +91,7 @@ class AppsState(private val quit: () -> Unit) {
                 when {
                     !Apps.windows && !Apps.canInstall -> return@runCatching "Téléchargé. Pour l'installer, dans un terminal : sudo apt install '${file.absolutePath}'"
                     app.self -> withContext(Dispatchers.IO) { Apps.installSelf(file, app) }
-                    else -> withContext(Dispatchers.IO) { Apps.install(file, app) }
+                    else -> folder(app).let { dir -> withContext(Dispatchers.IO) { Apps.install(file, app, dir) } }
                 }
             }.getOrElse { it.message ?: "Téléchargement impossible." }
             busy.remove(app.id)
@@ -150,6 +165,16 @@ private fun AppCard(app: Apps.App, state: AppsState) {
             )
         } else if (!app.self && Apps.windows && (app.installed == null || app.updatable)) {
             T("Ferme ${app.title} avant de lancer l'installation.", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+        }
+        if (Apps.windows && !app.self && (app.installed == null || app.updatable)) {
+            val dir = state.folder(app)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                T(
+                    "Dossier : " + (dir?.absolutePath ?: if (app.installed != null) "celui de l'installation actuelle" else "celui proposé par l'installeur"),
+                    Cp.Text, 12.sp, MonoFont, FontWeight.Normal,
+                )
+                if (app.installed == null && app.id !in state.busy) Button("CHANGER", Cp.Cyan) { state.pickFolder(app) }
+            }
         }
         state.messages[app.id]?.let { T(it, if (it.endsWith("installé.")) Cp.Cyan else if (it.startsWith("Téléchargé")) Cp.Yellow else Cp.Red, 14.sp) }
     }

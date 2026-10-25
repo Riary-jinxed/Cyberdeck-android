@@ -113,4 +113,9 @@ class AskaTest {
         assertTrue(Foreground.isShell("explorer"))
         assertFalse(Foreground.isShell("eldenring"))
     }
+
+    @Test
+    fun keyboardDrawingsArePackaged() {
+        listOf("bongo_idle", "bongo_left", "bongo_right").forEach { assertTrue(javaClass.getResource("/sprites/$it.png") != null, it) }
+    }
 }

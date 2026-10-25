@@ -190,9 +190,38 @@ object Apps {
         return file
     }
 
-    /** The command that installs [file]; for Deck Link itself, into the folder it runs from (its sync data lives there). */
-    fun installCommand(file: File, self: Boolean): List<String> = if (windows) {
-        listOfNotNull("msiexec", "/i", file.absolutePath, "/passive", Paths.installDir?.takeIf { self }?.let { "INSTALLDIR=\"${it.absolutePath.trimEnd('\\')}\"" })
+    // ---- Where each app goes, on Windows (a .deb always installs under /opt).
+
+    private val foldersFile get() = File(File(Paths.home, "config").also { it.mkdirs() }, "apps.properties")
+
+    private fun folders() = java.util.Properties().apply { if (foldersFile.isFile) foldersFile.inputStream().use { load(it) } }
+
+    fun remember(app: App, dir: File) {
+        runCatching { foldersFile.outputStream().use { out -> folders().apply { setProperty(app.id, dir.absolutePath) }.store(out, "Deck Link : dossier de chaque appli") } }
+    }
+
+    /**
+     * Where [app] is, or goes: Deck Link's own folder for itself; for the others, the folder it was
+     * installed in (as Deck Link remembers it, or as the app wrote it in %APPDATA%\<name>\install.dir),
+     * else next to Deck Link.
+     */
+    fun folder(app: App): File? {
+        if (!windows) return null
+        if (app.self) return Paths.installDir
+        folders().getProperty(app.id)?.let { return File(it) }
+        if (app.installed != null) {
+            System.getenv("APPDATA")?.let { File(File(it, app.windowsName), "install.dir") }?.takeIf { it.isFile }
+                ?.readText()?.trim()?.takeIf { it.isNotBlank() }?.let { return File(it) }
+            return null
+        }
+        return besideDeckLink(app)
+    }
+
+    fun besideDeckLink(app: App): File? = Paths.installDir?.parentFile?.let { File(it, app.windowsName) }
+
+    /** The command that installs [file] into [dir] (null: the installer's own default). */
+    fun installCommand(file: File, dir: File?): List<String> = if (windows) {
+        listOfNotNull("msiexec", "/i", file.absolutePath, "/passive", dir?.let { "INSTALLDIR=\"${it.absolutePath.trimEnd('\\')}\"" })
     } else {
         listOf("pkexec", "apt-get", "install", "-y", "--allow-downgrades", file.absolutePath)
     }
@@ -200,11 +229,17 @@ object Apps {
     val canInstall: Boolean get() = windows || File("/usr/bin/pkexec").canExecute() && File("/usr/bin/apt-get").canExecute()
 
     /** Installs another app and waits; null when it went well, else what went wrong. */
-    fun install(file: File, app: App): String? {
-        val p = ProcessBuilder(installCommand(file, false)).redirectErrorStream(true).start()
+    fun install(file: File, app: App, dir: File? = folder(app)): String? {
+        // On Windows through a script: msiexec wants INSTALLDIR="…" as written, which Java's quoting would change.
+        val command = if (windows) {
+            val script = File(file.parentFile, "install.cmd")
+            script.writeText("@echo off\r\nchcp 65001 >nul\r\n${cmdLine(installCommand(file, dir))}\r\nexit /b %errorlevel%\r\n")
+            listOf("cmd", "/c", script.absolutePath)
+        } else installCommand(file, dir)
+        val p = ProcessBuilder(command).redirectErrorStream(true).start()
         val out = p.inputStream.use { it.readBytes().decodeToString() }
         return when (val code = p.waitFor()) {
-            0, 3010 -> null
+            0, 3010 -> { if (dir != null) remember(app, dir); null }
             1602, 126 -> "Installation annulée."
             1618 -> "Une autre installation est en cours, réessaie après."
             else -> "L'installation de ${app.title} a échoué (code $code). " + out.lines().lastOrNull { it.isNotBlank() }.orEmpty().take(200)
@@ -221,9 +256,9 @@ object Apps {
         val dir = file.parentFile
         if (windows) {
             val script = File(dir, "update.cmd")
-            val install = installCommand(file, true).joinToString(" ") { if (it.contains(' ') && !it.contains('"')) "\"$it\"" else it }
+            val install = cmdLine(installCommand(file, Paths.installDir))
             script.writeText(
-                listOfNotNull("@echo off", "timeout /t 3 /nobreak >nul", install, launcher?.let { "start \"\" \"$it\"" })
+                listOfNotNull("@echo off", "chcp 65001 >nul", "timeout /t 3 /nobreak >nul", install, launcher?.let { "start \"\" \"$it\"" })
                     .joinToString("\r\n") + "\r\n",
             )
             ProcessBuilder("cmd", "/c", script.absolutePath).start()
@@ -238,6 +273,8 @@ object Apps {
         }
         return null
     }
+
+    private fun cmdLine(args: List<String>) = args.joinToString(" ") { if (it.contains(' ') && !it.contains('"')) "\"$it\"" else it }
 
     private fun JsonObject.text(key: String) = this[key]?.let { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }.orEmpty()
     private fun JsonObject.bool(key: String) = text(key) == "true"
