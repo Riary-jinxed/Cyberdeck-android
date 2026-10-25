@@ -15,8 +15,8 @@ import java.util.zip.ZipOutputStream
  */
 object KitBackup {
     private const val MANIFEST = "netrunner-kit.json"
-    private val Files = listOf("kit.json", "kit_net.json", "kit_log.json", "kit_clients.json", "kit_stock.json", "kit_coverage.json")
-    private val Dirs = listOf("logbook", "coverage", "clients")
+    internal val Files = listOf("kit.json", "kit_net.json", "kit_log.json", "kit_clients.json", "kit_stock.json", "kit_coverage.json")
+    internal val Dirs = listOf("logbook", "coverage", "clients")
     /** A restore never writes more than this, whatever the archive claims. */
     private const val MAX_BYTES = 1L shl 30
 
@@ -44,6 +44,10 @@ object KitBackup {
         } ?: error("no stream")
         Summary(count, bytes)
     }.getOrNull()
+
+    /** True when [name] is part of the kit: a known JSON or a file under a known folder (not a temp file). */
+    internal fun isKitFile(name: String): Boolean =
+        (name in Files || Dirs.any { name.startsWith("$it/") }) && !name.endsWith(".tmp") && !name.endsWith(".tmp.jpg") && !name.endsWith(".part")
 
     /** True when [name] is a file this backup may write: a known JSON or something under a known folder. */
     private fun allowed(name: String): Boolean {

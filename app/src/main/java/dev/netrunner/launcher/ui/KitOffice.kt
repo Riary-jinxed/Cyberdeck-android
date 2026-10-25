@@ -43,12 +43,14 @@ import dev.netrunner.launcher.kit.Intervention
 import dev.netrunner.launcher.kit.KitBackup
 import dev.netrunner.launcher.kit.KitStore
 import dev.netrunner.launcher.kit.Logbook
+import dev.netrunner.launcher.kit.PcLink
 import dev.netrunner.launcher.kit.Quote
 import dev.netrunner.launcher.kit.QuoteState
 import dev.netrunner.launcher.kit.Stock
 import dev.netrunner.launcher.kit.StockItem
 import dev.netrunner.launcher.kit.TimeSheet
 import dev.netrunner.launcher.system.ConfigBackup
+import dev.netrunner.launcher.system.UiSound
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -699,6 +701,115 @@ internal fun BackupView() {
             } else {
                 restoreArmed = false
                 restore.launch(arrayOf("application/zip", "application/octet-stream"))
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------- PC link
+
+/**
+ * Pairing with Deck Link on the PC (scan its QR code, or type its code) and manual sync. Once
+ * paired, the kit also syncs on its own each time it is closed.
+ */
+@Composable
+internal fun PcLinkView() {
+    val context = LocalContext.current
+    val app = context.applicationContext
+    val scope = rememberCoroutineScope()
+    remember { PcLink.load(app) }
+    var paired by remember { mutableStateOf(PcLink.paired(app)) }
+    var auto by remember { mutableStateOf(PcLink.autoEnabled(app)) }
+    var typing by remember { mutableStateOf(false) }
+    var typed by remember { mutableStateOf("") }
+    var unpairArmed by remember { mutableStateOf(false) }
+
+    fun accept(text: String) {
+        if (PcLink.pair(app, text)) {
+            paired = true
+            typing = false
+            typed = ""
+            UiSound.play(context, UiSound.Cue.Confirm)
+            scope.launch { withContext(Dispatchers.IO) { PcLink.sync(app) } }
+        } else {
+            Toast.makeText(context, "Ce n'est pas un code Deck Link", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun scan() {
+        val options = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+            .build()
+        com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { barcode -> barcode.rawValue?.let { accept(it) } }
+            .addOnFailureListener { typing = true }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Deck Link garde une copie du kit sur ton PC (Windows ou Linux) : inventaire, consommables, carnet avec ses photos, clients, câbles, adressage. " +
+                "Ce que tu modifies sur le PC (inventaire, consommables, clients, câbles, PC du parc) arrive ici à la synchro suivante ; la modif la plus récente gagne. " +
+                "Tout passe par ton Wi-Fi ou le câble USB, chiffré avec le code d'appairage, sans Internet.",
+            color = Cp.Dim,
+            fontFamily = MonoFont,
+            fontSize = 11.sp,
+        )
+        if (!paired) {
+            Text("> ouvre Deck Link sur le PC, puis scanne le QR code affiché", color = Cp.Cyan, fontFamily = MonoFont, fontSize = 12.sp)
+            KitButton("SCANNER LE QR DU PC ►", Cp.Yellow, Modifier.fillMaxWidth(), filled = true) { scan() }
+            if (!typing) {
+                KitButton("SAISIR LE CODE À LA MAIN", Cp.Cyan, Modifier.fillMaxWidth()) { typing = true }
+            } else {
+                KitField("Code affiché par Deck Link", typed, { typed = it.take(40) }, onDone = { accept(typed) })
+                KitButton("APPAIRER", Cp.Cyan, Modifier.fillMaxWidth()) { accept(typed) }
+            }
+            return@Column
+        }
+
+        Text("LIÉ À ${PcLink.pcName.orEmpty().uppercase()}", color = Cp.Yellow, fontFamily = HudFont, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        val label = when {
+            !PcLink.busy -> "SYNCHRONISER MAINTENANT ►"
+            PcLink.progress != null -> "ENVOI ${PcLink.progress!!.first}/${PcLink.progress!!.second}…"
+            else -> "RECHERCHE DU PC…"
+        }
+        KitButton(label, Cp.Yellow, Modifier.fillMaxWidth(), filled = true) {
+            if (!PcLink.busy) scope.launch { withContext(Dispatchers.IO) { PcLink.sync(app) } }
+        }
+        PcLink.status?.let { s ->
+            Text(
+                (if (s.ok) "✓ " else "✕ ") + DateFmt.format(Instant.ofEpochMilli(s.at)) + " · " + s.text,
+                color = if (s.ok) Cp.Cyan else Cp.Red,
+                fontFamily = MonoFont,
+                fontSize = 11.sp,
+            )
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .hudPanel(borderColor = Cp.Cyan.copy(alpha = 0.35f), cut = 6.dp)
+                .clickable {
+                    auto = !auto
+                    PcLink.setAuto(app, auto)
+                }
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Synchro à la fermeture du kit", color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(if (auto) "ON" else "OFF", color = if (auto) Cp.Yellow else Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        Text(
+            "Par câble USB : branche le téléphone et lance « adb reverse tcp:47321 tcp:47321 » sur le PC, la synchro passe alors par le câble.",
+            color = Cp.Dim,
+            fontFamily = MonoFont,
+            fontSize = 11.sp,
+        )
+        KitButton(if (unpairArmed) "CONFIRMER : OUBLIER CE PC" else "OUBLIER CE PC", Cp.Red, Modifier.fillMaxWidth()) {
+            if (!unpairArmed) {
+                unpairArmed = true
+            } else {
+                PcLink.unpair(app)
+                paired = false
+                unpairArmed = false
             }
         }
     }
