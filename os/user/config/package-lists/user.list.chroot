@@ -37,9 +37,8 @@ fonts-crosextra-caladea
 
 # Internet: Web is home-made too (netrunner-apps, on the Chromium engine)
 
-# Video editor
-kdenlive
-breeze-icon-theme
+# Video editor: Montage is home-made (netrunner-apps), ffmpeg makes the videos
+ffmpeg
 
 # French everywhere
 locales

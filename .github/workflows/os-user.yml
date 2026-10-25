@@ -57,7 +57,7 @@ jobs:
           sudo apt-get install -y xvfb libvlc5 vlc-plugin-base >/dev/null
           JAR=$(ls os-apps/build/compose/jars/*.jar)
           mkdir -p "$RUNNER_TEMP/media" && cp os/apps/netrunner-photos.svg "$RUNNER_TEMP/media/"
-          for app in photos video pdf texte tableur presentation web; do
+          for app in photos video pdf texte tableur presentation web montage; do
             set +e
             SKIKO_RENDER_API=SOFTWARE timeout 30 xvfb-run -a java -jar "$JAR" "$app" "$RUNNER_TEMP/media" > "launch-$app.log" 2>&1
             code=$?

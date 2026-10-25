@@ -1,5 +1,6 @@
 package dev.netrunner.os
 
+import dev.netrunner.os.montage.montage
 import dev.netrunner.os.pdf.pdf
 import dev.netrunner.os.photos.photos
 import dev.netrunner.os.sheet.tableur
@@ -20,8 +21,9 @@ fun main(args: Array<String>) {
         "tableur" -> tableur(rest)
         "presentation" -> presentation(rest)
         "web" -> web(rest)
+        "montage" -> montage(rest)
         else -> {
-            System.err.println("usage : netrunner-apps <photos|video|pdf|texte|tableur|presentation|web> [fichiers…]")
+            System.err.println("usage : netrunner-apps <photos|video|pdf|texte|tableur|presentation|web|montage> [fichiers…]")
             exitProcess(2)
         }
     }

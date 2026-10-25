@@ -8,7 +8,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 JAR=${1:?jar}
 OUT=${2:-.}
 VERSION=$(grep -o 'val appVersion = "[^"]*"' "$HERE/../../os-apps/build.gradle.kts" | cut -d'"' -f2)
-APPS="photos video pdf texte tableur presentation web"
+APPS="photos video pdf texte tableur presentation web montage"
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 chmod 755 "$ROOT"
@@ -41,7 +41,7 @@ Package: netrunner-apps
 Version: $VERSION
 Architecture: amd64
 Maintainer: Netrunner <noreply@netrunner.invalid>
-Depends: default-jre (>= 2:1.17), libglib2.0-bin, xdg-user-dirs, xdg-utils, libvlc5, vlc-plugin-base,
+Depends: default-jre (>= 2:1.17), libglib2.0-bin, xdg-user-dirs, xdg-utils, libvlc5, vlc-plugin-base, ffmpeg,
  libnss3, libgbm1, libxkbcommon0, libxcomposite1, libxdamage1, libxrandr2,
  libasound2t64 | libasound2, libatk-bridge2.0-0t64 | libatk-bridge2.0-0, libcups2t64 | libcups2
 Section: graphics
@@ -51,7 +51,8 @@ Description: Applis de Netrunner OS
  Photos (galerie, visionneuse, diaporama), Video (lecteur sur libVLC), PDF (lecteur),
  Texte (traitement de texte, Word et OpenDocument), Tableur (classeurs Excel,
  OpenDocument et CSV), Presentation (diaporamas PowerPoint et OpenDocument),
- Web (navigateur sur le moteur Chromium).
+ Web (navigateur sur le moteur Chromium), Montage (videos, photos, titres et musique
+ mis bout a bout, export MP4 par ffmpeg).
 CONTROL
 mkdir -p "$OUT"
 dpkg-deb --root-owner-group --build "$ROOT" "$OUT/netrunner-apps_${VERSION}_amd64.deb"
