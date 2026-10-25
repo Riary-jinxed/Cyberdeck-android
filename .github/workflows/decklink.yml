@@ -42,6 +42,7 @@ jobs:
       - name: Package
         run: ./gradlew --no-daemon -p desktop ${{ matrix.task }}
       # The packaged app must stay up: a missing library or module only shows once it runs.
+      # (Skiko falling back from OpenGL under Xvfb logs a RenderException: harmless.)
       - name: Launch check (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -51,7 +52,7 @@ jobs:
           DECKLINK_HOME="$RUNNER_TEMP/home" timeout 30 xvfb-run -a "$RUNNER_TEMP/deb/opt/deck-link/bin/Deck Link" > launch.log 2>&1
           code=$?
           cat launch.log
-          if [ $code -ne 124 ] || grep -q "Exception" launch.log; then echo "Deck Link stopped at launch ($code)"; exit 1; fi
+          if [ $code -ne 124 ] || grep -qE "Exception in thread|Error was captured" launch.log; then echo "Deck Link stopped at launch ($code)"; exit 1; fi
       - name: Agent report (Windows)
         if: runner.os == 'Windows'
         shell: powershell
