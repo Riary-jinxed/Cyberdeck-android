@@ -30,6 +30,8 @@ sourceSets["main"].resources.srcDir(files(layout.buildDirectory.dir("generated/f
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // Vidéo decodes with libVLC (the system's libvlc5), through its Java binding.
+    implementation("uk.co.caprica:vlcj:4.8.3")
     testImplementation(kotlin("test"))
 }
 
