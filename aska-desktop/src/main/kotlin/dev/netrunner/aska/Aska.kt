@@ -124,7 +124,8 @@ class Aska(private val scope: CoroutineScope) {
         override suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?): String {
             comfyOwn = true
             try {
-                val pictures = Studio.generate(settings.value.comfyUrl, kind, prompt, listOf(Studio.NEGATIVE, negative).filter { it.isNotBlank() }.joinToString(", "), seed)
+                val pictures = Studio.generate(settings.value.comfyUrl, kind, prompt, listOf(Studio.negative(kind), negative).filter { it.isNotBlank() }.joinToString(", "), seed)
+                if (pictures.all { Studio.isBlack(it.file) }) return "Le rendu est sorti tout noir (ça arrive sur une carte de 8 Go) : relance avec un autre seed."
                 _pictures.value = pictures
                 pictures.firstOrNull()?.let { p -> withContext(Dispatchers.IO) { javax.imageio.ImageIO.read(p.file) }?.let { attached += Screen.encode(it) } }
                 return "Image prête (workflow ${pictures.first().workflow}, seed ${pictures.first().seed}) : ${pictures.joinToString(", ") { it.file.absolutePath }}. Elle s'affiche pour ${settings.value.handle} et elle est jointe : regarde-la."

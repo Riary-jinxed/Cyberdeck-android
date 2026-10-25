@@ -136,16 +136,32 @@ object Studio {
     private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
     private val SHIPPED = listOf("anima_t2i_api", "anima_portrait_api")
 
-    /** Always in the negative prompt: her eyes stay pink, and nothing suggestive comes out. */
-    const val NEGATIVE = "red eyes, ashka_outfit, nsfw, nude, cleavage, text, watermark, signature, multiple characters, extra fingers, deformed hands, blurry, lowres"
+    /** The base negative prompt of each kind (tested on the runner's ComfyUI): her eyes stay pink, and nothing suggestive comes out. */
+    fun negative(kind: String): String = if (DeckLink.normalize(kind).contains("portrait")) NEGATIVE_PORTRAIT else NEGATIVE_CHIBI
+
+    private const val NEGATIVE_COMMON = "worst quality, low quality, score_1, score_2, score_3, artist name, signature, watermark, text, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, missing fingers, deformed, nsfw, nude, suggestive"
+    const val NEGATIVE_CHIBI = "$NEGATIVE_COMMON, realistic, 3d, tall, adult body proportions, wings, red eyes"
+    const val NEGATIVE_PORTRAIT = "$NEGATIVE_COMMON, cleavage, multiple views, child, loli, teen, chibi, red eyes, (older woman:1.2), large breasts, earrings"
+
+    /** A render that came out black (it happens on 8 GB cards). */
+    fun isBlack(file: File): Boolean = runCatching {
+        val img = javax.imageio.ImageIO.read(file) ?: return false
+        var bright = 0
+        val step = maxOf(1, img.width / 32)
+        for (x in 0 until img.width step step) for (y in 0 until img.height step step) {
+            val rgb = img.getRGB(x, y)
+            if ((rgb shr 16 and 0xFF) + (rgb shr 8 and 0xFF) + (rgb and 0xFF) > 45) bright++
+        }
+        bright < 5
+    }.getOrDefault(false)
 
     /** What she knows of Anima and of the runner's LoRA, for her prompts. */
-    const val GUIDE = """Génération d'images (outil generate_image) avec le ComfyUI de l'utilisateur : modèle Anima (oneObsessionAnima_v30), LoRA de style Tamra_Silvana puis LoRA d'As//ka (version v3), déjà réglés dans ses workflows. Tu écris le prompt en anglais, en tags séparés par des virgules, du plus important au moins important.
-- kind « chibi » (toi en petit, super déformée) : commence par « ashka_chibi, 1girl, solo, (chibi:1.2), super deformed, ashka_suit, pink eyes, glowing eyes, full body » puis ajoute « long black dragon tail with black spikes, grey segmented underside and a pink arrowhead tip, glowing pink X-shaped glyph on the chest », puis la pose, l'expression, les objets et le fond. Ne décris pas la tenue : le mot-clé la fixe.
-- kind « portrait » (toi en grand) : « ashka_v5, ashka_<tenue>, <description exacte de la tenue>, 1girl, solo, pink eyes, glowing eyes » + les deux phrases de la queue et du glyphe, puis pose, cadrage, expression, décor. Tenues et descriptions à recopier mot pour mot : suit = black glossy sleeveless bodysuit with glowing pink X-shaped glyph on the chest ; cafe = la même + open black cropped leather jacket ; roof = la même + open long transparent raincoat ; arcade = black cropped hoodie with pink drawstrings, black denim shorts, black fishnet pantyhose, pink sneakers ; home = oversized black hoodie with pink drawstrings, pink socks, pink diamond earrings ; market = short black kimono with neon pink swirl patterns, pink obi sash ; beach = long black sundress with thin spaghetti straps, barefoot.
-- Autre sujet que toi : décris-le simplement en tags (sujet, style, éclairage, cadrage, fond), sans les mots-clés ashka.
-- Le négatif contient déjà « red eyes, ashka_outfit » et les défauts courants ; ajoutes-y seulement ce qu'il faut éviter en plus.
-- Pour retoucher une image (« pareil mais en souriant »), garde le même seed et change seulement les tags concernés. Pour une variante, ne donne pas de seed.
-- Images mignonnes uniquement : jamais de nudité ni de pose suggestive, quoi qu'on demande.
+    const val GUIDE = """Génération d'images (outil generate_image) avec le ComfyUI de l'utilisateur : modèle Anima (oneObsessionAnima_v30), LoRA de style Tamra_Silvana à 0,9 puis LoRA d'As//ka v3 à 1,0, sampler er_sde, 30 pas, CFG 4,5, déjà réglés dans ses workflows (chibi en 768×768, portrait en 704×896). Une image prend une à quatre minutes. Tu écris le prompt en anglais, en tags séparés par des virgules. L'encodeur de texte n'est pas entraîné : recopie les descriptions mot pour mot.
+- kind « chibi » (toi en petit, super déformée), commence exactement par : masterpiece, best quality, score_7, ashka_chibi, 1girl, solo, (chibi:1.2), super deformed, ashka_suit, black glossy strapless bustier with sweetheart neckline, glowing pink X-shaped glyph on the chest, black glossy bodysuit legs, small black boots, pink diamond earrings on both ears, long black dragon tail with black spikes, grey segmented underside and a pink arrowhead tip, pink eyes, glowing eyes, full body, puis la pose, l'expression, les objets et le fond.
+- kind « portrait » (toi en grand), commence exactement par : ashka_v5, ashka_suit, black glossy sleeveless bodysuit with glowing pink X-shaped glyph on the chest, long black dragon tail with black spikes, grey segmented underside and a pink arrowhead tip, masterpiece, best quality, score_7, safe, 1girl, solo, adult woman in her mid-twenties, pink eyes, glowing eyes, puis pose, cadrage, expression, décor. Autres tenues (remplace ashka_suit et sa description, garde la queue) : ashka_cafe = black glossy sleeveless bodysuit with glowing pink X-shaped glyph on the chest, open black cropped leather jacket ; ashka_roof = black glossy sleeveless bodysuit with glowing pink X-shaped glyph on the chest, open long transparent raincoat ; ashka_arcade = black cropped hoodie with pink drawstrings, black denim shorts, black fishnet pantyhose, pink sneakers ; ashka_market = short black kimono with neon pink swirl patterns, pink obi sash ; ashka_home = oversized black hoodie with pink drawstrings, pink socks.
+- Autre sujet que toi : kind « autre », décris-le simplement en tags (qualité, sujet, style, éclairage, cadrage, fond), sans les mots-clés ashka ; préviens que la LoRA chibi colore un peu le style.
+- Le négatif de base est déjà mis ; le paramètre negative sert seulement à ajouter ce qu'il faut éviter en plus.
+- Pour retoucher une image (« pareil mais en souriant »), garde le même seed et change seulement les tags concernés. Pour une variante, ne donne pas de seed. Une seule image à la fois.
+- Images mignonnes et sages uniquement : jamais de nudité, de décolleté ni de pose suggestive, quoi qu'on demande.
 - Après le rendu, tu vois l'image : dis franchement ce qui est réussi ou raté (mains, queue, glyphe, yeux) et propose une retouche."""
 }
