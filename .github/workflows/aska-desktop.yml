@@ -39,6 +39,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Tests
         run: ./gradlew --no-daemon -p aska-desktop test
+      # She must stay up for a while on a real (virtual) screen, without an exception.
+      - name: Smoke test
+        if: runner.os == 'Linux'
+        run: |
+          export ASKA_HOME="$RUNNER_TEMP/aska-home"
+          xvfb-run -a ./gradlew --no-daemon -p aska-desktop run > "$RUNNER_TEMP/run.log" 2>&1 &
+          PID=$!
+          sleep 60
+          if ! kill -0 "$PID" 2>/dev/null; then echo "As//ka stopped"; cat "$RUNNER_TEMP/run.log"; exit 1; fi
+          kill "$PID" || true
+          if grep -E "Exception|Error:" "$RUNNER_TEMP/run.log" | grep -v "^Picked up"; then cat "$RUNNER_TEMP/run.log"; exit 1; fi
+          tail -20 "$RUNNER_TEMP/run.log"
       - name: Package
         run: ./gradlew --no-daemon -p aska-desktop ${{ matrix.task }}
       - uses: actions/upload-artifact@v4

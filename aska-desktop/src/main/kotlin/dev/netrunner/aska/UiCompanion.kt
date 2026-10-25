@@ -65,6 +65,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import java.awt.GraphicsDevice
 import java.awt.GraphicsEnvironment
 import java.awt.MouseInfo
 import java.awt.Window.Type
@@ -93,7 +94,9 @@ fun Companion(aska: Aska, visible: Boolean, onSettings: () -> Unit) {
                 // A utility window has no taskbar button and stays out of Alt+Tab.
                 type = Type.UTILITY
                 isUndecorated = true
-                isTransparent = true
+                // Without a compositor (some Linux desktops), she gets a dark backdrop instead.
+                val device = GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice
+                if (device.isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)) isTransparent = true
                 isAlwaysOnTop = true
                 isResizable = false
                 title = "As//ka"
