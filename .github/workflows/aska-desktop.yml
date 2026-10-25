@@ -44,6 +44,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           export ASKA_HOME="$RUNNER_TEMP/aska-home"
+          # No GPU on the runner: straight to software rendering.
+          export SKIKO_RENDER_API=SOFTWARE
           xvfb-run -a ./gradlew --no-daemon -p aska-desktop run > "$RUNNER_TEMP/run.log" 2>&1 &
           PID=$!
           sleep 60
