@@ -158,15 +158,17 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
     val bounce = remember { Animatable(1f) }
     var tilt by remember { mutableFloatStateOf(0f) }
     val taps by Activity.taps.collectAsState()
+    // The count comes back from her last session: only new presses make her play.
+    val typedFrom = remember { taps }
     LaunchedEffect(taps) {
-        if (!keyboard || taps == 0L) return@LaunchedEffect
+        if (!keyboard || taps == typedFrom) return@LaunchedEffect
         tilt = if (tilt > 0f) -2.5f else 2.5f
         bounce.snapTo(0.93f)
         bounce.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 700f))
         tilt = 0f
     }
     val typing by produceState(false, taps) {
-        value = taps > 0
+        value = taps > typedFrom
         delay(3_000)
         value = false
     }
@@ -174,55 +176,58 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
     var pendingClick by remember { mutableStateOf<Job?>(null) }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Crossfade(pose, animationSpec = tween(250)) { p ->
-            Image(
-                sprites.getValue(p), contentDescription = "As//ka",
-                contentScale = ContentScale.Fit,
-                alignment = Alignment.BottomCenter,
-                modifier = Modifier.height(height.dp).graphicsLayer {
-                    transformOrigin = TransformOrigin(0.5f, 1f)
-                    scaleY = breath * bounce.value
-                    scaleX = 2f - bounce.value
-                    rotationZ = tilt
-                }.pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        if (currentEvent.buttons.isSecondaryPressed) {
-                            onSettings()
-                            return@awaitEachGesture
-                        }
-                        val startMouse = MouseInfo.getPointerInfo().location
-                        val startX = window.x
-                        val startY = window.y
-                        var dragged = false
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            val p2 = MouseInfo.getPointerInfo().location
-                            val dx = p2.x - startMouse.x
-                            val dy = p2.y - startMouse.y
-                            if (!dragged && abs(dx) + abs(dy) > 4) dragged = true
+        Box(contentAlignment = Alignment.BottomCenter) {
+            Crossfade(pose, animationSpec = tween(250)) { p ->
+                Image(
+                    sprites.getValue(p), contentDescription = "As//ka",
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.BottomCenter,
+                    modifier = Modifier.height(height.dp).graphicsLayer {
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                        scaleY = breath * bounce.value
+                        scaleX = 2f - bounce.value
+                        rotationZ = tilt
+                    }.pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            if (currentEvent.buttons.isSecondaryPressed) {
+                                onSettings()
+                                return@awaitEachGesture
+                            }
+                            val startMouse = MouseInfo.getPointerInfo().location
+                            val startX = window.x
+                            val startY = window.y
+                            var dragged = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                val p2 = MouseInfo.getPointerInfo().location
+                                val dx = p2.x - startMouse.x
+                                val dy = p2.y - startMouse.y
+                                if (!dragged && abs(dx) + abs(dy) > 4) dragged = true
+                                if (dragged) {
+                                    window.setLocation(startX + dx, startY + dy)
+                                    change.consume()
+                                }
+                            }
                             if (dragged) {
-                                window.setLocation(startX + dx, startY + dy)
-                                change.consume()
+                                onMoved(window.x, window.y + window.height)
+                            } else if (pendingClick?.isActive == true) {
+                                // Double click: she listens.
+                                pendingClick?.cancel()
+                                aska.openChat()
+                            } else {
+                                pendingClick = scope.launch {
+                                    delay(DOUBLE_CLICK_MS)
+                                    aska.poke()
+                                }
                             }
                         }
-                        if (dragged) {
-                            onMoved(window.x, window.y + window.height)
-                        } else if (pendingClick?.isActive == true) {
-                            // Double click: she listens.
-                            pendingClick?.cancel()
-                            aska.openChat()
-                        } else {
-                            pendingClick = scope.launch {
-                                delay(DOUBLE_CLICK_MS)
-                                aska.poke()
-                            }
-                        }
-                    }
-                },
-            )
+                    },
+                )
+            }
+            BongoKeyboard(taps, keyboard && typing, (height * 0.8f).dp)
         }
         Box(Modifier.height(FOOTER.dp)) {
             if (keyboard && typing) T("⌨ $taps", Cp.Pink, 12.sp, MonoFont)

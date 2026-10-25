@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.1.0"
+val appVersion = "0.1.1"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -41,6 +41,8 @@ compose.desktop {
             modules("java.net.http")
             windows {
                 perUserInstall = true
+                // Its folder can be chosen by hand; Deck Link installs it next to itself (Apps.kt).
+                dirChooser = true
                 menu = true
                 menuGroup = "Netrunner"
                 shortcut = true

@@ -26,8 +26,8 @@ import java.util.logging.Logger
  * pressed), the window in front, the battery. Everything stays on this PC.
  */
 object Activity {
-    /** Grows by one on every key press anywhere: she bounces along. */
-    private val _taps = MutableStateFlow(0L)
+    /** Grows by one on every key press anywhere: she plays along. Kept from one session to the next. */
+    private val _taps = MutableStateFlow(Store.taps())
     val taps: StateFlow<Long> = _taps
 
     /** Grows by one on every Ctrl+Alt+A: she opens her bubble. */

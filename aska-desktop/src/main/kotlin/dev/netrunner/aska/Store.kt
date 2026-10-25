@@ -66,6 +66,22 @@ object Store {
         runCatching { chatFile.writeText(json.encodeToString(turns.takeLast(KEPT_TURNS))) }
     }
 
+    private val tapsFile get() = File(dir, "taps.txt")
+
+    /** The keys counted since she was installed, like Bongo Cat's counter. */
+    fun taps(): Long = runCatching { tapsFile.readText().trim().toLong() }.getOrDefault(0L)
+
+    fun saveTaps(count: Long) {
+        runCatching { tapsFile.writeText(count.toString()) }
+    }
+
+    /** Tells Deck Link where she is installed (install.dir), so its updates land in the same folder. */
+    fun recordInstall() {
+        val app = System.getProperty("jpackage.app-path") ?: return
+        val home = File(app).absoluteFile.parentFile.let { if (it.name == "bin") it.parentFile else it }
+        runCatching { File(dir, "install.dir").writeText(home.absolutePath) }
+    }
+
     /** Held while she runs, so a second launch does not put two of her on the screen. */
     private var lock: FileLock? = null
 

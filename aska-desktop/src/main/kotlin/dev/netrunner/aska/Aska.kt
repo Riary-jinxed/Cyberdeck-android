@@ -86,6 +86,15 @@ class Aska(private val scope: CoroutineScope) {
 
     fun start() {
         Activity.start()
+        Store.recordInstall()
+        scope.launch {
+            var saved = Activity.taps.value
+            while (isActive) {
+                delay(30_000)
+                val now = Activity.taps.value
+                if (now != saved) withContext(Dispatchers.IO) { Store.saveTaps(now) }.also { saved = now }
+            }
+        }
         scope.launch { tick() }
         scope.launch { watchForeground() }
         scope.launch { while (isActive) { refreshWeather(); delay(WEATHER_EVERY_MS) } }
@@ -153,6 +162,7 @@ class Aska(private val scope: CoroutineScope) {
 
     fun stop() {
         Activity.stop()
+        Store.saveTaps(Activity.taps.value)
     }
 
     // ---- What the runner does with her.
