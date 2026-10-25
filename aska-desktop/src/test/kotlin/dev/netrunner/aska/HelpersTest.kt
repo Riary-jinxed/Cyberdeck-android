@@ -145,4 +145,12 @@ class HelpersTest {
         assertTrue(Foreground.isGame(Foreground("Warframe", "Warframe.x64", false)))
         assertTrue(!Foreground.isGame(Foreground("Doc", "WINWORD", false, "C:\\Program Files\\Microsoft Office\\WINWORD.EXE")))
     }
+
+    @Test
+    fun shrinksPicturesForHerEyes() {
+        val big = java.awt.image.BufferedImage(3840, 2160, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        val back = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(java.util.Base64.getDecoder().decode(Screen.encode(big))))
+        assertEquals(1536, back.width)
+        assertEquals(864, back.height)
+    }
 }

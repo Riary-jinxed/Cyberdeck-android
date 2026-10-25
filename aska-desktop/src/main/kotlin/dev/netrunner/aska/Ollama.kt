@@ -36,7 +36,8 @@ class Ollama(private val baseUrl: () -> String) {
 
     data class Call(val name: String, val arguments: JsonObject)
 
-    data class Message(val role: String, val content: String, val calls: List<Call> = emptyList(), val toolName: String? = null)
+    /** [images]: base64 pictures for a model that sees (Gemma 3 and 4). */
+    data class Message(val role: String, val content: String, val calls: List<Call> = emptyList(), val toolName: String? = null, val images: List<String> = emptyList())
 
     /** What comes out of a chat: words, or a tool she wants to use. */
     sealed interface Event {
@@ -79,6 +80,7 @@ class Ollama(private val baseUrl: () -> String) {
                         put("role", m.role)
                         put("content", m.content)
                         m.toolName?.let { put("tool_name", it) }
+                        if (m.images.isNotEmpty()) putJsonArray("images") { m.images.forEach { add(JsonPrimitive(it)) } }
                         if (m.calls.isNotEmpty()) putJsonArray("tool_calls") {
                             m.calls.forEach { c -> addJsonObject { putJsonObject("function") { put("name", c.name); put("arguments", c.arguments) } } }
                         }

@@ -105,7 +105,13 @@ class Aska(private val scope: CoroutineScope) {
     }
 
     /** What her tools need from her. */
+    /** Pictures her tools took for the model's next look. */
+    private val attached = java.util.Collections.synchronizedList(mutableListOf<String>())
+
+    private fun takeAttached(): List<String> = synchronized(attached) { attached.toList().also { attached.clear() } }
+
     private val host = object : Tools.Host {
+        override fun attach(image: String) { attached += image }
         override val deckLink get() = settings.value.deckLink
         override fun propose(edit: Tools.Edit) { pendingEdit = edit }
         override fun song() = _music.value
@@ -325,6 +331,7 @@ class Aska(private val scope: CoroutineScope) {
             var toolResult: String? = null
             try {
                 var userMessage = message
+                takeAttached()
                 if (command != null) {
                     val tool = command.tool
                     _bubble.value = "*${tool.doing}…*"
@@ -337,7 +344,7 @@ class Aska(private val scope: CoroutineScope) {
                 val messages = buildList {
                     add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Memory.prompt(settings.value.handle)).joinToString("\n\n")))
                     recent(earlier).forEach { add(Ollama.Message(if (it.fromUser) "user" else "assistant", it.text)) }
-                    add(Ollama.Message("user", userMessage))
+                    add(Ollama.Message("user", userMessage, images = takeAttached()))
                 }.toMutableList()
                 val buffer = StringBuilder()
                 var round = 0
@@ -376,6 +383,8 @@ class Aska(private val scope: CoroutineScope) {
                         val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), host)
                         messages += Ollama.Message("tool", result, toolName = call.name)
                     }
+                    // A picture can't ride on a tool's answer: it comes as the runner's.
+                    takeAttached().takeIf { it.isNotEmpty() }?.let { messages += Ollama.Message("user", "[Voici l'image demandée.]", images = it) }
                     round++
                 }
                 val answer = Persona.visible(buffer.toString()).trim().ifEmpty { toolResult ?: "*hausse les épaules* …" }
@@ -388,6 +397,10 @@ class Aska(private val scope: CoroutineScope) {
             } catch (e: Ollama.Unreachable) {
                 // Without her core, a /command still gives its raw result.
                 say(toolResult ?: Persona.noKernel)
+            } catch (e: Ollama.Failed) {
+                // A model without eyes refuses pictures.
+                if (e.message.orEmpty().contains("image", ignoreCase = true) || e.message.orEmpty().contains("vision", ignoreCase = true)) say(Persona.noEyes)
+                else say(toolResult ?: "*grimace* Mon noyau a buggé : ${e.message?.take(140) ?: e.javaClass.simpleName}")
             } catch (e: Exception) {
                 say(toolResult ?: "*grimace* Mon noyau a buggé : ${e.message?.take(140) ?: e.javaClass.simpleName}")
             } finally {

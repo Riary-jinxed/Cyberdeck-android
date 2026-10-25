@@ -71,7 +71,12 @@ object Tools {
         ),
         Tool("pc_health", "sante", "La santé du PC maintenant : charge du processeur, mémoire, disques, carte graphique (température, charge, VRAM), température du processeur si disponible.", doing = "prend le pouls du PC"),
         Tool("launch_app", "lance", "Ouvre un programme ou un jeu du menu Démarrer par son nom (Steam, Discord, ComfyUI, Warframe…).", listOf(Param("name", "le nom du programme")), "ouvre le programme"),
-        Tool("read_clipboard", "presse", "Le texte copié dans le presse-papiers, pour le traduire, le résumer ou l'expliquer.", doing = "jette un œil au presse-papiers"),
+        Tool("read_clipboard", "presse", "Le texte (ou l'image) copié dans le presse-papiers, pour le traduire, le résumer ou l'expliquer.", doing = "jette un œil au presse-papiers"),
+        Tool(
+            "look_at_screen", "ecran",
+            "Prend une capture de l'écran (celui où est la souris) pour la regarder : un message d'erreur, une page, un menu de jeu, un rendu. Seulement quand l'utilisateur demande de regarder son écran.",
+            doing = "jette un œil à ton écran",
+        ),
         Tool("remember", "retiens", "Retient durablement un fait sur l'utilisateur (goûts, jeux, projets, dates) quand il le demande ou que c'est clairement utile pour plus tard.", listOf(Param("fact", "le fait, en une phrase courte")), "le note dans son carnet"),
         Tool("forget", "oublie", "Oublie ce qu'elle avait retenu à propos de quelque chose (« tout » pour tout).", listOf(Param("what", "les mots du souvenir à oublier")), "gomme une page"),
         Tool("memories", "memoire", "Tout ce qu'elle a retenu durablement sur l'utilisateur.", doing = "relit son carnet"),
@@ -164,6 +169,8 @@ object Tools {
 
     /** What the tools need from her. */
     interface Host {
+        /** A picture for her next look (base64 JPEG). */
+        fun attach(image: String)
         val deckLink: String
         fun propose(edit: Edit)
         fun pomodoro(action: String, minutes: Int?): String
@@ -209,7 +216,10 @@ object Tools {
                 "pc_health" -> Health.read().text()
                 "launch_app" -> need("name")?.let { Launcher.launch(it) } ?: "Quel programme faut-il ouvrir ?"
                 "read_clipboard" -> clipboard()?.let { "Texte copié :\n" + it.take(CLIPBOARD_CHARS) + if (it.length > CLIPBOARD_CHARS) "\n[… coupé]" else "" }
-                    ?: "Le presse-papiers ne contient pas de texte."
+                    ?: Screen.clipboardImage()?.let { host.attach(it); "Le presse-papiers contient une image : elle est jointe, regarde-la." }
+                    ?: "Le presse-papiers est vide (ni texte ni image)."
+                "look_at_screen" -> Screen.capture()?.let { host.attach(it); "Capture de l'écran jointe : regarde-la pour répondre." }
+                    ?: "Impossible de capturer l'écran sur ce système."
                 "remember" -> need("fact")?.let { Memory.remember(it) } ?: "Que faut-il retenir ?"
                 "forget" -> Memory.forget(need("what").orEmpty())
                 "memories" -> Memory.text()
