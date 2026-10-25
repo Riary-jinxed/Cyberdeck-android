@@ -62,6 +62,10 @@ object Paths {
     /** The last report of each PC of the fleet, one JSON file per PC. */
     val fleet: File get() = File(sync, "parc").also { it.mkdirs() }
     val deployment: File get() = File(home, "deploiement")
+    /** Dated copies of the kit (Backups.kt). */
+    val backups: File get() = File(home, "sauvegardes")
+    /** Excel exports, PDF reports and label sheets. */
+    val exports: File get() = File(home, "exports")
 
     fun pcName(): String = props().getProperty("name")
         ?: System.getenv("COMPUTERNAME") ?: runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull() ?: "PC"

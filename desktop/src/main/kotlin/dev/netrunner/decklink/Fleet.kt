@@ -22,14 +22,24 @@ import java.util.concurrent.Executors
  */
 object Fleet {
     const val PORT = 47322
-    private const val MAX_BODY = 256 * 1024
+    // The installed software list makes reports far bigger than the rest.
+    private const val MAX_BODY = 2 * 1024 * 1024
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; prettyPrint = true }
 
-    data class Disk(val name: String, val sizeGB: Long)
+    /** [freeGB] is -1 when the agent is older than this field. */
+    data class Disk(val name: String, val sizeGB: Long, val freeGB: Long = -1)
     data class Nic(val name: String, val mac: String, val ipv4: String)
+    data class Software(val name: String, val version: String, val publisher: String)
+    /**
+     * Windows Update as the agent saw it: [lastInstalled] is the newest installed update (0 if
+     * unknown), [pending] the updates waiting (-1 when the search failed or was not run).
+     */
+    data class Updates(val lastInstalled: Long = 0, val pending: Int = -1, val rebootRequired: Boolean = false)
     data class Report(
         val hostname: String, val domain: String, val user: String, val manufacturer: String, val model: String, val serial: String,
         val os: String, val osBuild: String, val cpu: String, val ramGB: Long, val disks: List<Disk>, val network: List<Nic>, val seen: Long,
+        val software: List<Software> = emptyList(),
+        val updates: Updates = Updates(),
     )
 
     /** Starts the agents' endpoint; [onReport] gets each valid report. Returns a stop function. */
@@ -74,9 +84,16 @@ object Fleet {
                 "user" to JsonPrimitive(r.user), "manufacturer" to JsonPrimitive(r.manufacturer), "model" to JsonPrimitive(r.model),
                 "serial" to JsonPrimitive(r.serial), "os" to JsonPrimitive(r.os), "osBuild" to JsonPrimitive(r.osBuild),
                 "cpu" to JsonPrimitive(r.cpu), "ramGB" to JsonPrimitive(r.ramGB),
-                "disks" to JsonArray(r.disks.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "sizeGB" to JsonPrimitive(it.sizeGB))) }),
+                "disks" to JsonArray(r.disks.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "sizeGB" to JsonPrimitive(it.sizeGB), "freeGB" to JsonPrimitive(it.freeGB))) }),
                 "network" to JsonArray(r.network.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "mac" to JsonPrimitive(it.mac), "ipv4" to JsonPrimitive(it.ipv4))) }),
                 "seen" to JsonPrimitive(r.seen),
+                "software" to JsonArray(r.software.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "version" to JsonPrimitive(it.version), "publisher" to JsonPrimitive(it.publisher))) }),
+                "updates" to JsonObject(
+                    mapOf(
+                        "lastInstalled" to JsonPrimitive(r.updates.lastInstalled), "pending" to JsonPrimitive(r.updates.pending),
+                        "rebootRequired" to JsonPrimitive(r.updates.rebootRequired),
+                    ),
+                ),
             ),
         )
         File(Paths.fleet, safeName(r.hostname) + ".json").writeText(json.encodeToString(JsonElement.serializer(), o))
@@ -96,9 +113,18 @@ object Fleet {
         Report(
             s("hostname").ifEmpty { return null }, s("domain"), s("user"), s("manufacturer"), s("model"), s("serial"),
             s("os"), s("osBuild"), s("cpu"), l("ramGB"),
-            objects("disks").map { Disk(s("name", it), l("sizeGB", it)) },
+            objects("disks").map { Disk(s("name", it), l("sizeGB", it), if (it.containsKey("freeGB")) l("freeGB", it) else -1) },
             objects("network").map { Nic(s("name", it), s("mac", it), s("ipv4", it)) },
             (o["seen"] as? JsonPrimitive)?.longOrNull ?: seen,
+            objects("software").map { Software(s("name", it), s("version", it), s("publisher", it)) }
+                .filter { it.name.isNotBlank() }.distinctBy { it.name.lowercase() + "|" + it.version }.sortedBy { it.name.lowercase() },
+            (o["updates"] as? JsonObject)?.let { u ->
+                Updates(
+                    l("lastInstalled", u),
+                    if (u.containsKey("pending")) l("pending", u).toInt() else -1,
+                    (u["rebootRequired"] as? JsonPrimitive)?.contentOrNull == "true",
+                )
+            } ?: Updates(),
         )
     }.getOrNull()
 
@@ -121,11 +147,29 @@ object Fleet {
         if (r.os.isNotBlank()) appendLine("OS : ${r.os}" + if (r.osBuild.isNotBlank()) " (build ${r.osBuild})" else "")
         if (r.cpu.isNotBlank()) appendLine("CPU : ${r.cpu}")
         if (r.ramGB > 0) appendLine("RAM : ${r.ramGB} Go")
-        if (r.disks.isNotEmpty()) appendLine("Disques : " + r.disks.joinToString(", ") { "${it.name} ${it.sizeGB} Go" })
+        if (r.disks.isNotEmpty()) appendLine("Disques : " + r.disks.joinToString(", ") { "${it.name} ${it.sizeGB} Go" + if (it.freeGB >= 0) " (${it.freeGB} libres)" else "" })
         r.network.forEach { appendLine("Réseau : ${it.name} · ${it.mac}" + if (it.ipv4.isNotBlank()) " · ${it.ipv4}" else "") }
+        updatesLine(r.updates)?.let { appendLine("Mises à jour : $it") }
+        if (r.software.isNotEmpty()) appendLine("Logiciels : ${r.software.size} (liste dans Deck Link)")
         if (r.domain.isNotBlank()) appendLine("Domaine : ${r.domain}")
         if (r.user.isNotBlank()) appendLine("Utilisateur : ${r.user}")
         append(BLOCK_END)
+    }
+
+    /** "dernière le 12.10.26, 3 en attente, redémarrage requis", or null when the agent said nothing. */
+    private val Day = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy").withZone(java.time.ZoneId.systemDefault())
+
+    fun updatesLine(u: Updates): String? {
+        val parts = listOfNotNull(
+            if (u.lastInstalled > 0) "dernière le ${Day.format(java.time.Instant.ofEpochMilli(u.lastInstalled))}" else null,
+            when {
+                u.pending > 0 -> "${u.pending} en attente"
+                u.pending == 0 -> "à jour"
+                else -> null
+            },
+            if (u.rebootRequired) "redémarrage requis" else null,
+        )
+        return parts.joinToString(", ").ifEmpty { null }
     }
 
     /** [notes] with its Deck Probe block replaced by [block] (the user's own lines stay). */

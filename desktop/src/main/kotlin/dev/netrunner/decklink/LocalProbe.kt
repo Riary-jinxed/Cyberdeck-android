@@ -19,6 +19,7 @@ object LocalProbe {
         val script = File.createTempFile("deck-probe", ".ps1")
         try {
             script.writeBytes(Fleet::class.java.getResourceAsStream("/agent/deck-probe.ps1")!!.use { it.readBytes() })
+            // The Windows Update search inside can take up to two minutes.
             val out = exec("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script.path, "-Print")
                 ?: error("PowerShell n'a pas répondu")
             val line = out.lines().lastOrNull { it.trimStart().startsWith("{") } ?: error("PowerShell : ${out.trim().take(200)}")
@@ -49,19 +50,39 @@ object LocalProbe {
             disks = linuxDisks(),
             network = nics(),
             seen = System.currentTimeMillis(),
+            software = linuxPackages(),
+            updates = Fleet.Updates(rebootRequired = File("/var/run/reboot-required").exists()),
         )
     }
 
     private val Placeholders = setOf("to be filled by o.e.m.", "default string", "system product name", "not specified", "none")
 
-    /** Whole physical disks (not partitions, loops or RAM disks), from /sys/block. */
-    private fun linuxDisks(): List<Fleet.Disk> = File("/sys/block").listFiles().orEmpty()
-        .filter { File(it, "device").exists() && !it.name.startsWith("loop") && !it.name.startsWith("zram") }
-        .mapNotNull { dev ->
-            val sectors = runCatching { File(dev, "size").readText().trim().toLong() }.getOrNull() ?: return@mapNotNull null
-            Fleet.Disk(dev.name, Math.round(sectors * 512.0 / 1e9)).takeIf { it.sizeGB > 0 }
+    private val DiskTypes = setOf("ext2", "ext3", "ext4", "xfs", "btrfs", "f2fs", "zfs", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk")
+
+    /** Mounted file systems on real disks, by mount point, with their free space (like the C:, D: of Windows). */
+    private fun linuxDisks(): List<Fleet.Disk> = runCatching { read("/proc/mounts").lines() }.getOrDefault(emptyList())
+        .map { it.split(' ') }
+        .filter { it.size > 2 && it[2] in DiskTypes && it[0].startsWith("/dev/") }
+        .distinctBy { it[0] }
+        .mapNotNull { m ->
+            val store = runCatching { java.nio.file.Files.getFileStore(java.nio.file.Path.of(m[1].replace("\\040", " "))) }.getOrNull() ?: return@mapNotNull null
+            val size = runCatching { store.totalSpace }.getOrDefault(0L)
+            if (size <= 0) return@mapNotNull null
+            Fleet.Disk(m[1].replace("\\040", " "), Math.round(size / GB), (runCatching { store.usableSpace }.getOrDefault(0L) / GB).toLong())
         }
         .sortedBy { it.name }
+
+    private const val GB = 1024.0 * 1024 * 1024
+
+    /** Installed packages: dpkg (Debian, Ubuntu…) or rpm (Fedora, openSUSE…). */
+    private fun linuxPackages(): List<Fleet.Software> {
+        val dpkg = exec("dpkg-query", "-W", "-f", "\${Package}\t\${Version}\t\${Maintainer}\n")
+        val rpm = if (dpkg == null) exec("rpm", "-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\t%{VENDOR}\n") else null
+        return (dpkg ?: rpm).orEmpty().lines().mapNotNull { line ->
+            val f = line.split('\t')
+            if (f.size < 2 || f[0].isBlank()) null else Fleet.Software(f[0], f[1], f.getOrElse(2) { "" }.substringBefore(" <"))
+        }.sortedBy { it.name }
+    }
 
     /** Cards that are up, with a MAC address and an IPv4 address. */
     private fun nics(): List<Fleet.Nic> = runCatching { NetworkInterface.getNetworkInterfaces().toList() }.getOrDefault(emptyList())
@@ -81,12 +102,12 @@ object LocalProbe {
 
     private fun read(path: String) = runCatching { File(path).readText().trim() }.getOrDefault("")
 
-    /** Standard output of a command, or null when it fails or takes over a minute. */
+    /** Standard output of a command, or null when it fails or takes over three minutes. */
     private fun exec(vararg command: String): String? = runCatching {
         val p = ProcessBuilder(*command).redirectErrorStream(true).start()
         p.outputStream.close()
         val out = p.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
-        if (!p.waitFor(60, TimeUnit.SECONDS)) { p.destroyForcibly(); return null }
+        if (!p.waitFor(180, TimeUnit.SECONDS)) { p.destroyForcibly(); return null }
         if (p.exitValue() == 0) out else null
     }.getOrNull()
 }

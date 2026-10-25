@@ -248,6 +248,24 @@ fun LinkScreen(state: LinkState) {
 /** Inventory states, as on the phone (kit/KitStore.kt). */
 private val States = listOf("En service", "En stock", "À réparer", "HS", "Prêté")
 
+private val DayInput = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+/** A typed date (25.10.2027, 25/10/27, 2027-10-25…) as midnight local time; 0 when blank, null when unreadable. */
+internal fun parseDay(text: String): Long? {
+    val t = text.trim()
+    if (t.isEmpty()) return 0
+    val iso = Regex("""(\d{4})-(\d{1,2})-(\d{1,2})""").matchEntire(t)
+    val fr = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})""").matchEntire(t)
+    val (y, m, d) = when {
+        iso != null -> Triple(iso.groupValues[1].toInt(), iso.groupValues[2].toInt(), iso.groupValues[3].toInt())
+        fr != null -> Triple(fr.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }, fr.groupValues[2].toInt(), fr.groupValues[1].toInt())
+        else -> return null
+    }
+    return runCatching { java.time.LocalDate.of(y, m, d).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
+}
+
+internal fun dayText(ms: Long) = if (ms <= 0) "" else DayInput.format(java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()))
+
 @Composable
 fun InventoryScreen(state: LinkState) {
     val kit = state.kit
@@ -261,21 +279,50 @@ fun InventoryScreen(state: LinkState) {
             listOf(
                 Field("name", "Nom", e.name), Field("code", "Code (code-barres, QR…)", e.code), Field("serial", "N° de série", e.serial),
                 Field("location", "Emplacement", e.location), Field("state", "État", e.state.ifBlank { States[0] }, choices = States),
+                Field("warranty", "Fin de garantie (jj.mm.aaaa, vide si aucune)", dayText(e.warranty)),
                 Field("notes", "Notes", e.notes, lines = 6),
             ),
-            onSave = { state.edit("equipment", e.id, it) },
+            // An unreadable date leaves the warranty as it was.
+            onSave = { m -> state.edit("equipment", e.id, (m - "warranty") + (parseDay(m["warranty"].toString())?.let { mapOf("warranty" to it) } ?: emptyMap())) },
             onDelete = if (known) ({ state.remove("equipment", e.id) }) else null,
             onClose = { open = null },
         )
         return
     }
+    var labelsArmed by remember { mutableStateOf(false) }
+    var skip by remember { mutableStateOf("0") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ListHeader(query, { query = it }, "Rechercher (nom, code, série, emplacement…)", "+ ÉQUIPEMENT") {
             open = KitData.Equipment(state.newId(), "", "", "", "", States[0], "", 0)
         }
         if (kit.equipment.isEmpty()) return@Column EmptyKit()
         val rows = kit.equipment.filter { matches(query, it.name, it.code, it.serial, it.location, it.state, it.notes) }
-        T("${rows.size} / ${kit.equipment.size} équipements", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            T("${rows.size} / ${kit.equipment.size} équipements", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal, Modifier.weight(1f))
+            if (labelsArmed) {
+                T("cases déjà utilisées sur la planche :", Cp.Dim, 12.sp, MonoFont, FontWeight.Normal)
+                Box(Modifier.width(56.dp).hudPanel(Cp.Cyan.copy(alpha = 0.5f), cut = 4.dp).padding(horizontal = 8.dp, vertical = 6.dp)) {
+                    BasicTextField(
+                        skip, { v -> skip = v.filter { it.isDigit() }.take(2) }, singleLine = true,
+                        textStyle = TextStyle(color = Cp.Text, fontFamily = MonoFont, fontSize = 14.sp), cursorBrush = SolidColor(Cp.Yellow),
+                    )
+                }
+                Button("IMPRIMER ${rows.size} ►", Cp.Yellow, filled = true) {
+                    state.labels(rows, (skip.toIntOrNull() ?: 0).coerceIn(0, Pdf.LABEL_COLS * Pdf.LABEL_ROWS - 1))
+                    labelsArmed = false
+                }
+                Button("ANNULER", Cp.Dim) { labelsArmed = false }
+            } else {
+                Button("▣ ÉTIQUETTES QR", Cp.Cyan) { labelsArmed = true }
+            }
+        }
+        if (labelsArmed) {
+            T(
+                "Planche A4 de ${Pdf.LABEL_COLS} × ${Pdf.LABEL_ROWS} étiquettes (70 × 37 mm) pour les ${rows.size} équipements affichés (filtre la liste pour en choisir). " +
+                    "Une fiche sans code reçoit « NR-… », comme sur le téléphone : le scanner de l'inventaire ouvre alors sa fiche.",
+                Cp.Dim, 12.sp, MonoFont, FontWeight.Normal,
+            )
+        }
         Table(
             rows,
             listOf(
@@ -284,6 +331,7 @@ fun InventoryScreen(state: LinkState) {
                 Col("Série", 1.3f) { it.serial },
                 Col("Emplacement", 1.4f) { it.location },
                 Col("État", 1f, color = { if (it.state == "HS" || it.state == "À réparer") Cp.Red else Cp.Cyan }) { it.state },
+                Col("Garantie", 0.9f, color = { if (it.warranty in 1 until System.currentTimeMillis() + Alerts.WARRANTY_DAYS * 86_400_000) Cp.Red else Cp.Text }) { dayText(it.warranty) },
             ),
             onClick = { open = it },
         )
@@ -396,7 +444,8 @@ private fun Photo(file: File, height: Dp) {
 }
 
 @Composable
-fun LogbookScreen(kit: KitData) {
+fun LogbookScreen(state: LinkState) {
+    val kit = state.kit
     var query by remember { mutableStateOf("") }
     var openId by remember { mutableStateOf<String?>(null) }
     if (kit.interventions.isEmpty()) return EmptyKit()
@@ -422,7 +471,10 @@ fun LogbookScreen(kit: KitData) {
         val i = kit.interventions.firstOrNull { it.id == openId } ?: kit.interventions.first()
         LaunchedEffect(kit) { if (kit.interventions.none { it.id == openId }) openId = kit.interventions.first().id }
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T(i.title.ifBlank { "(sans titre)" }, Cp.Yellow, 22.sp, weight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(i.title.ifBlank { "(sans titre)" }, Cp.Yellow, 22.sp, weight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Button("RAPPORT PDF ►", Cp.Yellow, filled = true) { state.report(i) }
+            }
             T(
                 listOf(
                     "début ${LinkState.time(i.started)}",
@@ -532,6 +584,8 @@ fun ClientsScreen(state: LinkState) {
 fun FleetScreen(state: LinkState) {
     var query by remember { mutableStateOf("") }
     var renewArmed by remember { mutableStateOf(false) }
+    var openPc by remember { mutableStateOf<String?>(null) }
+    state.fleet.firstOrNull { it.hostname == openPc }?.let { return PcDetail(it, state.alerts().filter { a -> a.subject == it.hostname && a.kind == Alerts.Kind.Fleet }) { openPc = null } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         T(
             "Deck Probe, installé sur les PC du parc, envoie leurs infos ici (nom, modèle, n° de série, OS, CPU, RAM, disques, IP, MAC). " +
@@ -572,6 +626,53 @@ fun FleetScreen(state: LinkState) {
                 Col("Utilisateur", 1.2f) { it.user },
                 Col("Vu le", 1f) { LinkState.time(it.seen) },
             ),
+            onClick = { openPc = it.hostname },
         )
+    }
+}
+
+/** One PC of the fleet: its alerts, hardware, Windows Update and installed software. */
+@Composable
+private fun PcDetail(r: Fleet.Report, alerts: List<Alerts.Alert>, onClose: () -> Unit) {
+    var query by remember(r.hostname) { mutableStateOf("") }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button("◄ RETOUR", Cp.Cyan, onClick = onClose)
+        T(r.hostname, Cp.Yellow, 22.sp, weight = FontWeight.Bold)
+        T(
+            listOf(listOf(r.manufacturer, r.model).filter { it.isNotBlank() }.joinToString(" "), r.os, "vu le ${LinkState.time(r.seen)}")
+                .filter { it.isNotBlank() }.joinToString(" · "),
+            Cp.Cyan, 13.sp, MonoFont, FontWeight.Normal,
+        )
+        alerts.forEach { T("! " + it.text, if (it.level == Alerts.Level.Urgent) Cp.Red else Cp.Yellow, 14.sp) }
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Section("MATÉRIEL")
+                listOf("CPU" to r.cpu, "RAM" to if (r.ramGB > 0) "${r.ramGB} Go" else "", "N° de série" to r.serial, "Utilisateur" to r.user, "Domaine" to r.domain)
+                    .filter { it.second.isNotBlank() }
+                    .forEach { (k, v) -> Row { T(k, Cp.Dim, 13.sp, MonoFont, FontWeight.Normal, Modifier.width(110.dp)); T(v, Cp.Text, 14.sp) } }
+                r.disks.forEach { d ->
+                    val low = d.freeGB in 0 until Alerts.DISK_FREE_GB || (d.freeGB >= 0 && d.sizeGB > 0 && d.freeGB * 100 / d.sizeGB < Alerts.DISK_FREE_PERCENT)
+                    Row {
+                        T("Disque ${d.name}", Cp.Dim, 13.sp, MonoFont, FontWeight.Normal, Modifier.width(110.dp))
+                        T("${d.sizeGB} Go" + if (d.freeGB >= 0) " · ${d.freeGB} Go libres" else "", if (low) Cp.Red else Cp.Text, 14.sp)
+                    }
+                }
+                r.network.forEach { n -> Row { T("Réseau", Cp.Dim, 13.sp, MonoFont, FontWeight.Normal, Modifier.width(110.dp)); T(listOf(n.ipv4, n.mac, n.name).filter { it.isNotBlank() }.joinToString(" · "), Cp.Text, 14.sp) } }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Section("WINDOWS UPDATE")
+                T(Fleet.updatesLine(r.updates) ?: "pas d'information (agent à mettre à jour ?)", Cp.Text, 14.sp)
+            }
+        }
+        Section("LOGICIELS INSTALLÉS (${r.software.size})")
+        if (r.software.isEmpty()) {
+            T("Aucune liste : redéploie le pack (PARC › PRÉPARER LE DÉPLOIEMENT) pour mettre l'agent à jour.", Cp.Dim, 13.sp, MonoFont, FontWeight.Normal)
+        } else {
+            SearchField(query, { query = it }, "Rechercher un logiciel, une version, un éditeur")
+            Table(
+                r.software.filter { matches(query, it.name, it.version, it.publisher) },
+                listOf(Col("Logiciel", 2.4f) { it.name }, Col("Version", 1f) { it.version }, Col("Éditeur", 1.4f) { it.publisher }),
+            )
+        }
     }
 }

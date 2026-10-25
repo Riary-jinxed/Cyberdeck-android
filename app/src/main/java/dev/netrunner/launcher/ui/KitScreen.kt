@@ -379,10 +379,15 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
     var location by remember { mutableStateOf(item.location) }
     var state by remember { mutableStateOf(item.state) }
     var notes by remember { mutableStateOf(item.notes) }
+    var warranty by remember { mutableStateOf(warrantyText(item.warranty)) }
     var showLabel by remember { mutableStateOf(false) }
     val known = KitStore.equipment.any { it.id == item.id }
 
-    fun current() = item.copy(code = code.trim(), name = name.trim(), serial = serial.trim(), location = location.trim(), state = state, notes = notes.trim())
+    // An unreadable date keeps the warranty the sheet had.
+    fun current() = item.copy(
+        code = code.trim(), name = name.trim(), serial = serial.trim(), location = location.trim(), state = state, notes = notes.trim(),
+        warranty = parseWarranty(warranty) ?: item.warranty,
+    )
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -403,6 +408,12 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             KitChips(KitStore.States, state) { state = it }
         }
+        item {
+            Column {
+                KitField("Fin de garantie (jj.mm.aaaa)", warranty, { warranty = it.take(10) })
+                if (parseWarranty(warranty) == null) Text("date illisible : écris par ex. 25.10.2027", color = Cp.Red, fontFamily = MonoFont, fontSize = 11.sp)
+            }
+        }
         item { KitField("Notes", notes, { notes = it }, singleLine = false) }
         val linked = if (known) KitStore.cablesFor(item.id) else emptyList()
         if (linked.isNotEmpty()) {
@@ -412,7 +423,7 @@ private fun EquipmentSheet(item: Equipment, onDone: () -> Unit) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 KitButton("ENREGISTRER", Cp.Yellow, Modifier.weight(1f), filled = true) {
-                    KitStore.upsert(context, item.copy(code = code.trim(), name = name.trim(), serial = serial.trim(), location = location.trim(), state = state, notes = notes.trim()))
+                    KitStore.upsert(context, current())
                     UiSound.play(context, UiSound.Cue.Confirm)
                     onDone()
                 }
@@ -776,4 +787,22 @@ private fun SubnetTab() {
             }
         }
     }
+}
+
+private val WarrantyFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.systemDefault())
+
+private fun warrantyText(ms: Long) = if (ms <= 0) "" else WarrantyFmt.format(Instant.ofEpochMilli(ms))
+
+/** "25.10.2027", "25/10/27" or "2027-10-25" as midnight local time; 0 when blank, null when unreadable. */
+private fun parseWarranty(text: String): Long? {
+    val t = text.trim()
+    if (t.isEmpty()) return 0
+    val iso = Regex("""(\d{4})-(\d{1,2})-(\d{1,2})""").matchEntire(t)
+    val fr = Regex("""(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})""").matchEntire(t)
+    val (y, m, d) = when {
+        iso != null -> Triple(iso.groupValues[1].toInt(), iso.groupValues[2].toInt(), iso.groupValues[3].toInt())
+        fr != null -> Triple(fr.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }, fr.groupValues[2].toInt(), fr.groupValues[1].toInt())
+        else -> return null
+    }
+    return runCatching { java.time.LocalDate.of(y, m, d).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }.getOrNull()
 }

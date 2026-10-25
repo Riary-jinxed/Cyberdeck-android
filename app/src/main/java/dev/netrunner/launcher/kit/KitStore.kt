@@ -21,6 +21,8 @@ data class Equipment(
     val state: String,
     val notes: String,
     val updated: Long,
+    /** End of the warranty (midnight, local time), 0 when not set. Deck Link raises an alert before it. */
+    val warranty: Long = 0,
 )
 
 data class ChecklistTemplate(val id: String, val name: String, val steps: List<String>)
@@ -91,6 +93,7 @@ object KitStore {
                 equipment += Equipment(
                     o.getString("id"), o.optString("code"), o.optString("name"), o.optString("serial"),
                     o.optString("location"), o.optString("state", States[0]), o.optString("notes"), o.optLong("updated"),
+                    o.optLong("warranty"),
                 )
             }
             root.optJSONArray("templates")?.objects()?.forEach { o ->
@@ -124,6 +127,7 @@ object KitStore {
             .put("equipment", JSONArray(equipment.map { e ->
                 JSONObject().put("id", e.id).put("code", e.code).put("name", e.name).put("serial", e.serial)
                     .put("location", e.location).put("state", e.state).put("notes", e.notes).put("updated", e.updated)
+                    .put("warranty", e.warranty)
             }))
             .put("templates", JSONArray(templates.map { t ->
                 JSONObject().put("id", t.id).put("name", t.name).put("steps", JSONArray(t.steps))

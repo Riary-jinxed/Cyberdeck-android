@@ -23,7 +23,14 @@ class SyncServer(
     private val folders: Set<String> = setOf("kit"),
     private val outbox: Outbox = Outbox.None,
     private val onEvent: (Event) -> Unit = {},
+    private val backups: Backups? = null,
 ) {
+    /** The dated kit backups the PC keeps, which the phone can list and download to restore one. */
+    interface Backups {
+        fun list(): List<FileEntry>
+        fun open(path: String): InputStream
+    }
+
     /** The PC's changes waiting for the phone, per synced folder. */
     interface Outbox {
         fun pending(folder: String): List<Op>
@@ -41,6 +48,7 @@ class SyncServer(
         data class Progress(val done: Int, val total: Int) : Event()
         data class Finished(val report: SyncReport) : Event()
         data class Failed(val reason: String) : Event()
+        data class BackupSent(val device: String, val path: String) : Event()
     }
 
     private var socket: ServerSocket? = null
@@ -79,6 +87,7 @@ class SyncServer(
             ch.sendMessage(Message.Error("version du protocole différente : mets à jour le launcher et Deck Link"))
             throw IOException("version ${hello.version}")
         }
+        if (hello.folder == BACKUPS && backups != null) return serveBackups(ch, hello.device, backups)
         if (hello.folder !in folders) {
             ch.sendMessage(Message.Error("dossier « ${hello.folder} » non pris en charge par ce PC"))
             throw IOException("dossier ${hello.folder}")
@@ -115,6 +124,19 @@ class SyncServer(
         onEvent(Event.Finished(SyncReport(hello.device, hello.folder, manifest.files.size, stored, removed, skipped, manifest.applied.size, System.currentTimeMillis())))
     }
 
+    /** The list of backups, then the one the phone picked (if any). */
+    private fun serveBackups(ch: SecureChannel, device: String, backups: Backups) {
+        val list = backups.list()
+        ch.sendMessage(Message.Listing(list))
+        val want = ch.receiveMessage() as? Message.Want ?: throw IOException("choix attendu")
+        want.paths.take(1).forEach { path ->
+            val entry = list.firstOrNull { it.path == path } ?: throw IOException("sauvegarde inconnue")
+            sendFile(ch, entry) { backups.open(it) }
+            onEvent(Event.BackupSent(device, path))
+        }
+        ch.sendMessage(Message.Done)
+    }
+
     /** Reads and drops the frames of a file nobody asked for. */
     private fun drain(ch: SecureChannel, size: Long): Boolean {
         var left = size
@@ -124,6 +146,8 @@ class SyncServer(
 
     companion object {
         const val DEFAULT_PORT = 47321
+        /** The hello folder that asks for the backups instead of a sync. */
+        const val BACKUPS = "sauvegardes"
     }
 }
 
@@ -147,68 +171,126 @@ object SyncClient {
         apply: (List<Op>) -> List<String> = { emptyList() },
         connectTimeoutMs: Int = 3000,
         progress: (done: Int, total: Int) -> Unit = { _, _ -> },
-    ): Result {
-        Socket().use { s ->
-            s.connect(address, connectTimeoutMs)
-            s.soTimeout = 60_000
-            val head = ByteArray(SecureChannel.MAGIC.size + SecureChannel.CHALLENGE)
-            DataInputStream(s.getInputStream()).readFully(head)
-            if (!head.copyOfRange(0, SecureChannel.MAGIC.size).contentEquals(SecureChannel.MAGIC)) throw IOException("ce n'est pas Deck Link")
-            val challenge = head.copyOfRange(SecureChannel.MAGIC.size, head.size)
-            val ch = SecureChannel(s.getInputStream(), s.getOutputStream(), code.key, challenge, isClient = true)
-            ch.sendMessage(Message.Hello(Message.VERSION, device, folder))
-            // A PC holding another code cannot answer: it hangs up right after the hello.
-            val reply = try { ch.receiveMessage() } catch (e: NotPairedException) { throw e } catch (e: IOException) {
-                throw NotPairedException("le PC a refusé la liaison : appaire à nouveau le téléphone")
-            }
-            val ops = when (val m = reply) {
-                is Message.Ops -> m.ops
-                is Message.Error -> throw IOException(m.reason)
-                else -> throw IOException("réponse inattendue")
-            }
-            val applied = if (ops.isEmpty()) emptyList() else apply(ops)
-            val files = scan()
-            ch.sendMessage(Message.Manifest(applied, files))
-            val want = when (val m = ch.receiveMessage()) {
-                is Message.Want -> m.paths
-                is Message.Error -> throw IOException(m.reason)
-                else -> throw IOException("réponse inattendue")
-            }
-            val byPath = files.associateBy { it.path }
-            want.forEachIndexed { index, path ->
-                val entry = byPath[path] ?: throw IOException("le PC demande un fichier inconnu")
-                sendFile(ch, entry, open)
-                progress(index + 1, want.size)
-            }
-            ch.sendMessage(Message.Done)
-            return when (val m = ch.receiveMessage()) {
-                is Message.Ack -> Result(address.hostString, files.size, want.size, m.stored, m.removed, m.skipped, applied.size)
-                is Message.Error -> throw IOException(m.reason)
-                else -> throw IOException("réponse inattendue")
-            }
+    ): Result = session(address, code, device, folder, connectTimeoutMs) { ch, reply ->
+        val ops = when (val m = reply) {
+            is Message.Ops -> m.ops
+            is Message.Error -> throw IOException(m.reason)
+            else -> throw IOException("réponse inattendue")
+        }
+        val applied = if (ops.isEmpty()) emptyList() else apply(ops)
+        val files = scan()
+        ch.sendMessage(Message.Manifest(applied, files))
+        val want = when (val m = ch.receiveMessage()) {
+            is Message.Want -> m.paths
+            is Message.Error -> throw IOException(m.reason)
+            else -> throw IOException("réponse inattendue")
+        }
+        val byPath = files.associateBy { it.path }
+        want.forEachIndexed { index, path ->
+            val entry = byPath[path] ?: throw IOException("le PC demande un fichier inconnu")
+            sendFile(ch, entry, open)
+            progress(index + 1, want.size)
+        }
+        ch.sendMessage(Message.Done)
+        when (val m = ch.receiveMessage()) {
+            is Message.Ack -> Result(address.hostString, files.size, want.size, m.stored, m.removed, m.skipped, applied.size)
+            is Message.Error -> throw IOException(m.reason)
+            else -> throw IOException("réponse inattendue")
         }
     }
 
-    /**
-     * Sends exactly [FileEntry.size] bytes: a file that grew is cut, one that shrank is padded.
-     * Either way its hash no longer matches and the PC keeps its copy until the next sync.
-     */
-    private fun sendFile(ch: SecureChannel, entry: FileEntry, open: (String) -> InputStream) {
-        ch.sendMessage(Message.FileStart(entry.path, entry.size, entry.sha256))
-        var left = entry.size
-        runCatching {
-            MirrorStore.chunks(open(entry.path)) { buffer, n ->
-                if (left <= 0) return@chunks
-                val take = minOf(n.toLong(), left).toInt()
-                ch.send(buffer, 0, take)
-                left -= take
+    /** The kit backups the PC keeps, newest first. */
+    fun backups(address: InetSocketAddress, code: PairingCode, device: String, connectTimeoutMs: Int = 3000): List<FileEntry> =
+        session(address, code, device, SyncServer.BACKUPS, connectTimeoutMs) { ch, reply ->
+            val list = listing(reply)
+            ch.sendMessage(Message.Want(emptyList()))
+            ch.receiveMessage()
+            list
+        }
+
+    /** Downloads the backup [path] into [target], checked against its hash. */
+    fun fetchBackup(
+        address: InetSocketAddress,
+        code: PairingCode,
+        device: String,
+        path: String,
+        target: File,
+        connectTimeoutMs: Int = 3000,
+        progress: (done: Long, total: Long) -> Unit = { _, _ -> },
+    ): Unit = session(address, code, device, SyncServer.BACKUPS, connectTimeoutMs) { ch, reply ->
+        val entry = listing(reply).firstOrNull { it.path == path } ?: throw IOException("cette sauvegarde n'est plus sur le PC")
+        ch.sendMessage(Message.Want(listOf(path)))
+        val start = ch.receiveMessage() as? Message.FileStart ?: throw IOException("réponse inattendue")
+        if (start.path != path || start.size != entry.size) throw IOException("réponse inattendue")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        target.outputStream().use { out ->
+            var left = start.size
+            while (left > 0) {
+                val chunk = ch.receive()
+                if (chunk.isEmpty() || chunk.size > left) throw IOException("trame invalide")
+                out.write(chunk)
+                digest.update(chunk)
+                left -= chunk.size
+                progress(start.size - left, start.size)
             }
-        }.onFailure { if (it is SocketException) throw it }
-        val pad = ByteArray(64 * 1024)
-        while (left > 0) {
-            val take = minOf(pad.size.toLong(), left).toInt()
-            ch.send(pad, 0, take)
+        }
+        if (Hashes.hex(digest.digest()) != start.sha256) {
+            target.delete()
+            throw IOException("sauvegarde abîmée pendant le transfert : réessaie")
+        }
+        ch.receiveMessage()
+    }
+
+    private fun listing(reply: Message): List<FileEntry> = when (reply) {
+        is Message.Listing -> reply.files
+        is Message.Error -> throw IOException(reply.reason)
+        else -> throw IOException("réponse inattendue")
+    }
+
+    /** Opens the sealed channel, says hello for [folder] and hands the PC's first answer to [block]. */
+    private fun <T> session(
+        address: InetSocketAddress,
+        code: PairingCode,
+        device: String,
+        folder: String,
+        connectTimeoutMs: Int,
+        block: (SecureChannel, Message) -> T,
+    ): T = Socket().use { s ->
+        s.connect(address, connectTimeoutMs)
+        s.soTimeout = 60_000
+        val head = ByteArray(SecureChannel.MAGIC.size + SecureChannel.CHALLENGE)
+        DataInputStream(s.getInputStream()).readFully(head)
+        if (!head.copyOfRange(0, SecureChannel.MAGIC.size).contentEquals(SecureChannel.MAGIC)) throw IOException("ce n'est pas Deck Link")
+        val challenge = head.copyOfRange(SecureChannel.MAGIC.size, head.size)
+        val ch = SecureChannel(s.getInputStream(), s.getOutputStream(), code.key, challenge, isClient = true)
+        ch.sendMessage(Message.Hello(Message.VERSION, device, folder))
+        // A PC holding another code cannot answer: it hangs up right after the hello.
+        val reply = try { ch.receiveMessage() } catch (e: NotPairedException) { throw e } catch (e: IOException) {
+            throw NotPairedException("le PC a refusé la liaison : appaire à nouveau le téléphone")
+        }
+        block(ch, reply)
+    }
+}
+
+/**
+ * Sends exactly [FileEntry.size] bytes: a file that grew is cut, one that shrank is padded.
+ * Either way its hash no longer matches and the PC keeps its copy until the next sync.
+ */
+internal fun sendFile(ch: SecureChannel, entry: FileEntry, open: (String) -> InputStream) {
+    ch.sendMessage(Message.FileStart(entry.path, entry.size, entry.sha256))
+    var left = entry.size
+    runCatching {
+        MirrorStore.chunks(open(entry.path)) { buffer, n ->
+            if (left <= 0) return@chunks
+            val take = minOf(n.toLong(), left).toInt()
+            ch.send(buffer, 0, take)
             left -= take
         }
+    }.onFailure { if (it is SocketException) throw it }
+    val pad = ByteArray(64 * 1024)
+    while (left > 0) {
+        val take = minOf(pad.size.toLong(), left).toInt()
+        ch.send(pad, 0, take)
+        left -= take
     }
 }

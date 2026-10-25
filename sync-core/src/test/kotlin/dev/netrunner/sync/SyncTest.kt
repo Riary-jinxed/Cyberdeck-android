@@ -207,4 +207,34 @@ class SyncTest {
         assertFalse(AgentAuth(AgentAuth.keyBytes(AgentAuth.newKey())!!).verify(now, body, sig, now), "autre clé")
         assertNull(AgentAuth.keyBytes("abc"))
     }
+
+    @Test
+    fun phoneListsAndDownloadsBackups() {
+        val dir = tempDir()
+        File(dir, "kit-2026-10-25_120000.zip").writeBytes(ByteArray(700_000) { (it % 13).toByte() })
+        File(dir, "kit-2026-10-24_120000.zip").writeBytes(ByteArray(10) { 1 })
+        val backups = object : SyncServer.Backups {
+            override fun list() = dir.listFiles()!!.sortedByDescending { it.name }.map { FileEntry(it.name, it.length(), it.inputStream().use { s -> Hashes.sha256(s) }) }
+            override fun open(path: String) = File(dir, path).inputStream()
+        }
+        val code = PairingCode.random()
+        val server = SyncServer(tempDir(), { code }, port = java.net.ServerSocket(0).use { it.localPort }, backups = backups)
+        server.start()
+        try {
+            val address = InetSocketAddress("127.0.0.1", server.port)
+            val list = SyncClient.backups(address, code, "tel")
+            assertEquals(listOf("kit-2026-10-25_120000.zip", "kit-2026-10-24_120000.zip"), list.map { it.path })
+            val target = File(tempDir(), "restore.zip")
+            var last = 0L
+            SyncClient.fetchBackup(address, code, "tel", list[0].path, target) { done, _ -> last = done }
+            assertTrue(File(dir, list[0].path).readBytes().contentEquals(target.readBytes()))
+            assertEquals(700_000L, last)
+            assertFailsWith<java.io.IOException> { SyncClient.fetchBackup(address, code, "tel", "../secret", File(tempDir(), "x")) }
+            assertFailsWith<java.io.IOException> { SyncClient.backups(address, PairingCode.random(), "intrus") }
+            // A normal sync still works on the same server.
+            SyncClient.sync(address, code, "tel", "kit", { emptyList() }, { error("rien") })
+        } finally {
+            server.stop()
+        }
+    }
 }

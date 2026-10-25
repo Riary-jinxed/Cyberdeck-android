@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.2.2"
+val appVersion = "0.3.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -35,6 +35,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.google.zxing:core:3.5.3")
+    // Intervention reports and label sheets (Pdf.kt).
+    implementation("org.apache.pdfbox:pdfbox:3.0.5")
     testImplementation(kotlin("test"))
 }
 
@@ -47,8 +49,8 @@ compose.desktop {
             packageVersion = appVersion
             description = "Synchro du kit Netrunner avec le PC"
             vendor = "Netrunner"
-            // The Deck Probe endpoint (Fleet.kt) runs on the JDK's built-in HTTP server.
-            modules("jdk.httpserver")
+            // The Deck Probe endpoint (Fleet.kt) runs on the JDK's built-in HTTP server; PDFBox frees its buffers through jdk.unsupported.
+            modules("jdk.httpserver", "jdk.unsupported")
             windows {
                 // Per-user install with a folder chooser: the sync folder lives next to the app,
                 // so the install folder must stay writable (not Program Files).

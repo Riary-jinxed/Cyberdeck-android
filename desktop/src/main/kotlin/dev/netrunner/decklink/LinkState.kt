@@ -8,6 +8,7 @@ import dev.netrunner.sync.Discovery
 import dev.netrunner.sync.PairingOffer
 import dev.netrunner.sync.SyncServer
 import kotlinx.serialization.json.JsonPrimitive
+import java.io.File
 import java.net.BindException
 import java.time.Instant
 import java.time.ZoneId
@@ -40,7 +41,11 @@ class LinkState {
         private set
     val pcName = Paths.pcName()
 
-    private val server = SyncServer(Paths.sync, { code }, outbox = outbox, onEvent = ::onEvent)
+    val backups = Backups(Paths.kit, Paths.backups)
+    var backupList by mutableStateOf(backups.backups())
+        private set
+
+    private val server = SyncServer(Paths.sync, { code }, outbox = outbox, onEvent = ::onEvent, backups = backups)
     private val responder = Discovery.Responder(name = { pcName })
     private var stopFleet: () -> Unit = {}
     private var stopAska: () -> Unit = {}
@@ -119,6 +124,62 @@ class LinkState {
         }, "local-probe").apply { isDaemon = true }.start()
     }
 
+    // ------------------------------------------------------------------ documents and backups
+
+    /** What needs looking at, from the fleet and the kit. */
+    fun alerts(): List<Alerts.Alert> = Alerts.compute(kit, fleet)
+
+    /** A dated copy of the kit; [force] also when nothing changed since the last one. */
+    fun backupNow(force: Boolean = true) = background("sauvegarde") {
+        val b = backups.take(force)
+        javax.swing.SwingUtilities.invokeLater {
+            backupList = backups.backups()
+            if (b != null) note("sauvegarde du kit : ${b.file.name} (${b.files} fichiers)")
+            else if (force) note("rien à sauvegarder : le kit est vide")
+        }
+    }
+
+    /** The whole kit and the fleet in one Excel workbook, opened once written. */
+    fun exportExcel() = background("export Excel") {
+        val f = File(Paths.exports.apply { mkdirs() }, "deck-link-${FileStamp.format(Instant.now())}.xlsx")
+        Excel.write(f, Excel.kitWorkbook(kit, fleet))
+        done("export Excel : ${f.name}", f)
+    }
+
+    /** The PDF report of an intervention, opened once written. */
+    fun report(i: KitData.Intervention) = background("rapport PDF") {
+        val name = (i.title.ifBlank { "intervention" } + " " + LinkState.day(i.started)).replace(Regex("[^\\p{L}\\p{N}]+"), "-").trim('-').take(60)
+        val f = File(File(Paths.exports, "rapports").apply { mkdirs() }, "rapport-$name.pdf")
+        Pdf.interventionReport(i, kit, File(File(Paths.kit, "logbook"), i.id), f)
+        done("rapport PDF : ${f.name}", f)
+    }
+
+    /**
+     * A sheet of QR labels for [items]. A sheet without a code gets "NR-<id>", as on the phone, so
+     * its label scans back to it; that new code reaches the phone at the next sync.
+     */
+    fun labels(items: List<KitData.Equipment>, skip: Int) {
+        val coded = items.map { e ->
+            if (e.code.isNotBlank()) e else e.copy(code = "NR-" + e.id.uppercase()).also { edit("equipment", e.id, mapOf("code" to it.code)) }
+        }
+        background("étiquettes") {
+            val f = File(Paths.exports.apply { mkdirs() }, "etiquettes-${FileStamp.format(Instant.now())}.pdf")
+            Pdf.labels(coded.map { Pdf.Label(it.code, it.name.ifBlank { it.serial }, listOf(it.location, it.serial).filter { s -> s.isNotBlank() }.joinToString(" · ")) }, f, skip)
+            done("${coded.size} étiquette(s) : ${f.name}", f)
+        }
+    }
+
+    private fun done(text: String, file: File) = javax.swing.SwingUtilities.invokeLater {
+        note(text)
+        runCatching { java.awt.Desktop.getDesktop().open(file) }
+    }
+
+    private fun background(what: String, block: () -> Unit) {
+        Thread({
+            runCatching(block).onFailure { e -> javax.swing.SwingUtilities.invokeLater { note("échec ($what) : ${e.message ?: e.javaClass.simpleName}") } }
+        }, what).apply { isDaemon = true }.start()
+    }
+
     fun preparePack(): java.io.File = Fleet.writePack(pcName, addresses(), fleetKey).also { note("pack de déploiement prêt : $it") }
 
     fun renewFleetKey() {
@@ -165,7 +226,9 @@ class LinkState {
                 Paths.setLastSync(text)
                 note("synchro terminée : $text")
                 reload()
+                if (r.stored > 0 || r.removed > 0) backupNow(force = false)
             }
+            is SyncServer.Event.BackupSent -> note("${e.device} a téléchargé la sauvegarde ${e.path} pour la restaurer")
             is SyncServer.Event.Failed -> {
                 progress = null
                 note("échec : ${e.reason}")
@@ -181,6 +244,7 @@ class LinkState {
     companion object {
         val Time: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm").withZone(ZoneId.systemDefault())
         val Day: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yy").withZone(ZoneId.systemDefault())
+        private val FileStamp: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm").withZone(ZoneId.systemDefault())
 
         fun time(ms: Long) = if (ms <= 0) "" else Time.format(Instant.ofEpochMilli(ms))
         fun day(ms: Long) = if (ms <= 0) "" else Day.format(Instant.ofEpochMilli(ms))

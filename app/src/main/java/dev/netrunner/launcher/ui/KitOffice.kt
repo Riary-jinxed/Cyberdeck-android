@@ -723,6 +723,37 @@ internal fun PcLinkView() {
     var typing by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf("") }
     var unpairArmed by remember { mutableStateOf(false) }
+    var backups by remember { mutableStateOf<List<dev.netrunner.sync.FileEntry>?>(null) }
+    var backupsBusy by remember { mutableStateOf(false) }
+    var backupsError by remember { mutableStateOf<String?>(null) }
+    var restoreArmed by remember { mutableStateOf<String?>(null) }
+    var restoring by remember { mutableStateOf<Float?>(null) }
+
+    fun loadBackups() {
+        backupsBusy = true
+        backupsError = null
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { PcLink.backups(app) } }
+            backupsBusy = false
+            r.onSuccess { backups = it }.onFailure { backupsError = it.message ?: "échec" }
+        }
+    }
+
+    fun restoreBackup(path: String) {
+        restoring = 0f
+        scope.launch {
+            val r = withContext(Dispatchers.IO) {
+                // A sync first: the PC then holds a backup of the kit as it is now, to come back to it.
+                PcLink.sync(app)
+                runCatching { PcLink.restore(app, path) { p -> restoring = p } }
+            }
+            restoring = null
+            r.onSuccess { s ->
+                Toast.makeText(context, "Kit restauré (${s.files} fichiers), redémarrage…", Toast.LENGTH_LONG).show()
+                ConfigBackup.restart(context)
+            }.onFailure { backupsError = it.message ?: "échec" }
+        }
+    }
 
     fun accept(text: String) {
         if (PcLink.pair(app, text)) {
@@ -797,6 +828,44 @@ internal fun PcLinkView() {
             Text("Synchro à la fermeture du kit", color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(if (auto) "ON" else "OFF", color = if (auto) Cp.Yellow else Cp.Dim, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
+        if (backups == null) {
+            KitButton(if (backupsBusy) "RECHERCHE…" else "RESTAURER UNE SAUVEGARDE DU PC", Cp.Cyan, Modifier.fillMaxWidth()) {
+                if (!backupsBusy) loadBackups()
+            }
+        } else {
+            Text("SAUVEGARDES DU KIT SUR LE PC", color = Cp.Yellow, fontFamily = HudFont, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Choisis une date : le kit de ce téléphone est remplacé par celui de la sauvegarde, puis le launcher redémarre. " +
+                    "Une synchro part juste avant, pour que le PC garde aussi le kit actuel.",
+                color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp,
+            )
+            val list = backups.orEmpty()
+            if (list.isEmpty()) Text("> aucune sauvegarde sur le PC pour l'instant", color = Cp.Cyan, fontFamily = MonoFont, fontSize = 12.sp)
+            list.take(15).forEach { b ->
+                val on = restoreArmed == b.path
+                Row(
+                    Modifier.fillMaxWidth()
+                        .hudPanel(borderColor = (if (on) Cp.Red else Cp.Cyan).copy(alpha = 0.5f), cut = 6.dp)
+                        .clickable { if (restoring == null) restoreArmed = if (on) null else b.path }
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(backupDate(b.path), color = Cp.Text, fontFamily = HudFont, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text("${(b.size + 1023) / 1024} Ko", color = Cp.Dim, fontFamily = MonoFont, fontSize = 11.sp)
+                }
+            }
+            restoreArmed?.let { path ->
+                val p = restoring
+                KitButton(
+                    if (p != null) "RESTAURATION ${(p * 100).toInt()} %…" else "CONFIRMER : REMPLACER LE KIT (${backupDate(path)})",
+                    Cp.Red, Modifier.fillMaxWidth(), filled = true,
+                ) { if (restoring == null) restoreBackup(path) }
+            }
+            KitButton("FERMER", Cp.Dim, Modifier.fillMaxWidth()) {
+                if (restoring == null) { backups = null; restoreArmed = null }
+            }
+        }
+        backupsError?.let { Text("✕ $it", color = Cp.Red, fontFamily = MonoFont, fontSize = 11.sp) }
         Text(
             "Par câble USB : branche le téléphone et lance « adb reverse tcp:47321 tcp:47321 » sur le PC, la synchro passe alors par le câble.",
             color = Cp.Dim,
@@ -813,4 +882,11 @@ internal fun PcLinkView() {
             }
         }
     }
+}
+
+/** "kit-2026-10-25_143012.zip" → "25.10.2026 14:30". */
+private fun backupDate(name: String): String {
+    val m = Regex("""kit-(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})""").find(name) ?: return name
+    val (y, mo, d, h, mi) = m.destructured
+    return "$d.$mo.$y $h:$mi"
 }
