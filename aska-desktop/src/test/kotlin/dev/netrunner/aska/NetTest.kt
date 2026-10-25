@@ -134,7 +134,7 @@ class NetTest {
     @Test
     fun modelNeedsYesToRememberAndStaysOnTheLocalNetwork() {
         var asked: Tools.Confirm? = null
-        val host = host("", {}) { asked = it }
+        val host = host("", onConfirm = { asked = it }) {}
         val text = kotlinx.coroutines.runBlocking {
             Tools.run(Tools.byName("remember")!!, mapOf("fact" to "Il adore les macarons"), host, fromModel = true)
         }
@@ -152,7 +152,7 @@ class NetTest {
         assertTrue(!Net.local("100.128.0.1"))
     }
 
-    private fun host(deck: String, onEdit: (Tools.Edit) -> Unit, onConfirm: (Tools.Confirm) -> Unit = {}) = object : Tools.Host {
+    private fun host(deck: String, onConfirm: (Tools.Confirm) -> Unit = {}, onEdit: (Tools.Edit) -> Unit) = object : Tools.Host {
         override val deckLink = deck
         override fun propose(edit: Tools.Edit) = onEdit(edit)
         override fun confirm(action: Tools.Confirm) = onConfirm(action)
