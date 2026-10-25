@@ -540,7 +540,10 @@ fun FleetScreen(state: LinkState) {
         )
         state.fleetError?.let { T(it, Cp.Red, 14.sp) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("PRÉPARER LE DÉPLOIEMENT ►", Cp.Yellow, filled = true) {
+            Button(if (state.probing) "LECTURE DE CE PC…" else "AJOUTER CE PC À L'INVENTAIRE", Cp.Cyan, filled = true) {
+                state.addThisPc()
+            }
+            Button("PRÉPARER LE DÉPLOIEMENT ►", Cp.Yellow, filled = false) {
                 val dir = state.preparePack()
                 runCatching { Desktop.getDesktop().open(dir) }
             }
@@ -551,7 +554,8 @@ fun FleetScreen(state: LinkState) {
         }
         T(
             "Le pack (dossier « deploiement ») contient l'agent, install.cmd à lancer en administrateur ou en script de démarrage GPO, et un LISEZMOI. " +
-                "Ouvre le port TCP ${Fleet.PORT} du pare-feu de ce PC pour les agents.",
+                "Ouvre le port TCP ${Fleet.PORT} du pare-feu de ce PC pour les agents. " +
+                "« Ajouter ce PC » lit les infos de ce PC sans agent ; sa fiche est ensuite remise à jour à chaque lancement de Deck Link.",
             Cp.Dim, 12.sp, MonoFont, FontWeight.Normal,
         )
         SearchField(query, { query = it }, "Rechercher un PC (nom, modèle, série, IP, utilisateur…)")

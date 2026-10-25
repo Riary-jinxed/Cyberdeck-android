@@ -41,6 +41,25 @@ jobs:
         run: ./gradlew --no-daemon -p desktop test
       - name: Package
         run: ./gradlew --no-daemon -p desktop ${{ matrix.task }}
+      # The packaged app must stay up: a missing library or module only shows once it runs.
+      - name: Launch check (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb >/dev/null
+          dpkg-deb -x desktop/build/compose/binaries/main/deb/*.deb "$RUNNER_TEMP/deb"
+          set +e
+          DECKLINK_HOME="$RUNNER_TEMP/home" timeout 30 xvfb-run -a "$RUNNER_TEMP/deb/opt/deck-link/bin/Deck Link" > launch.log 2>&1
+          code=$?
+          cat launch.log
+          if [ $code -ne 124 ] || grep -q "Exception" launch.log; then echo "Deck Link stopped at launch ($code)"; exit 1; fi
+      - name: Agent report (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $json = powershell -NoProfile -ExecutionPolicy Bypass -File desktop/src/main/resources/agent/deck-probe.ps1 -Print
+          $json
+          $r = $json | ConvertFrom-Json
+          if (-not $r.hostname -or -not $r.cpu -or $r.ramGB -le 0) { throw "incomplete report" }
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}

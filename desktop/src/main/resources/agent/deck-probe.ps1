@@ -2,12 +2,12 @@
 # network cards) to Deck Link, which adds or updates its sheet in the field kit inventory.
 # Windows PowerShell 5.1 or later. Config: deck-probe.json next to this script
 # (written by Deck Link: servers, port, fleet key). Kept ASCII-only on purpose.
+# -Print writes the report to the output instead of sending it (Deck Link uses it to add its own PC).
 param(
-    [string]$Config = (Join-Path $PSScriptRoot 'deck-probe.json')
+    [string]$Config = (Join-Path $PSScriptRoot 'deck-probe.json'),
+    [switch]$Print
 )
 $ErrorActionPreference = 'Stop'
-
-$cfg = Get-Content -Raw -Encoding UTF8 -Path $Config | ConvertFrom-Json
 
 function Try-Get([scriptblock]$block) { try { & $block } catch { $null } }
 function Text($value) { if ($null -eq $value) { '' } else { ([string]$value).Trim() } }
@@ -47,6 +47,13 @@ $report = [ordered]@{
 }
 
 $json = $report | ConvertTo-Json -Depth 5 -Compress
+if ($Print) {
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    Write-Output $json
+    exit 0
+}
+
+$cfg = Get-Content -Raw -Encoding UTF8 -Path $Config | ConvertFrom-Json
 $body = [Text.Encoding]::UTF8.GetBytes($json)
 $time = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 

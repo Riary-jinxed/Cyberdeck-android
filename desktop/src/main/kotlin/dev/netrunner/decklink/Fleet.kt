@@ -66,6 +66,22 @@ object Fleet {
         return { server.stop(0) }
     }
 
+    /** Keeps [r] in sync/parc, like a report received from an agent. */
+    fun save(r: Report) {
+        val o = JsonObject(
+            mapOf(
+                "probe" to JsonPrimitive(1), "hostname" to JsonPrimitive(r.hostname), "domain" to JsonPrimitive(r.domain),
+                "user" to JsonPrimitive(r.user), "manufacturer" to JsonPrimitive(r.manufacturer), "model" to JsonPrimitive(r.model),
+                "serial" to JsonPrimitive(r.serial), "os" to JsonPrimitive(r.os), "osBuild" to JsonPrimitive(r.osBuild),
+                "cpu" to JsonPrimitive(r.cpu), "ramGB" to JsonPrimitive(r.ramGB),
+                "disks" to JsonArray(r.disks.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "sizeGB" to JsonPrimitive(it.sizeGB))) }),
+                "network" to JsonArray(r.network.map { JsonObject(mapOf("name" to JsonPrimitive(it.name), "mac" to JsonPrimitive(it.mac), "ipv4" to JsonPrimitive(it.ipv4))) }),
+                "seen" to JsonPrimitive(r.seen),
+            ),
+        )
+        File(Paths.fleet, safeName(r.hostname) + ".json").writeText(json.encodeToString(JsonElement.serializer(), o))
+    }
+
     private fun safeName(host: String) = host.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.ifEmpty { "pc" }.take(64)
 
     fun parse(text: String, seen: Long = System.currentTimeMillis()): Report? = runCatching {

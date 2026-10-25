@@ -66,6 +66,11 @@ object Paths {
     fun pcName(): String = props().getProperty("name")
         ?: System.getenv("COMPUTERNAME") ?: runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull() ?: "PC"
 
+    /** True once this PC was added to the inventory: its sheet is then refreshed at each launch. */
+    fun probeSelf(): Boolean = props().getProperty("probeSelf") == "true"
+
+    fun setProbeSelf(on: Boolean) = save(props().apply { setProperty("probeSelf", on.toString()) })
+
     fun lastSync(): String? = props().getProperty("last")
 
     fun setLastSync(text: String) = save(props().apply { setProperty("last", text) })
