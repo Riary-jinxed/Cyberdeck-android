@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Inscrire ce PC à l'inventaire
+Comment=Relie ce PC à Deck Link avec le fichier deck-probe.json du pack de déploiement
+Exec=deck-probe-inscrire
+Icon=computer
+Terminal=false
+Categories=System;Settings;

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Installer As//ka
+Comment=Ajoute As//ka, la compagne du deck, sur ce PC (en option)
+Exec=netrunner-installer-aska
+Icon=system-software-install
+Terminal=false
+Categories=System;Settings;

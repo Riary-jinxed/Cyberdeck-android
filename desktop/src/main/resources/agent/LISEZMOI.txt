@@ -18,7 +18,8 @@ Prérequis
   joignable depuis les autres PC : idéalement une IP fixe ou un nom DNS stable.
 - Pare-feu de ce PC : autoriser le port TCP 47322 en entrée. En invite de commandes administrateur :
     netsh advfirewall firewall add rule name="Deck Link (Deck Probe)" dir=in action=allow protocol=TCP localport=47322
-- Les PC inventoriés : Windows 10/11 ou Server 2016+, PowerShell 5.1 (inclus).
+- Les PC inventoriés : Windows 10/11 ou Server 2016+, PowerShell 5.1 (inclus), ou Linux avec
+  systemd et Python 3 (Debian, Ubuntu, Fedora…, et Netrunner OS qui a déjà l'agent).
 - L'heure des PC doit être à l'heure (à 10 minutes près), sinon les rapports sont refusés.
 
 Installer sur un PC
@@ -47,3 +48,19 @@ Lancer à la main / tester
 Désinstaller
 ------------
 uninstall.cmd en administrateur (ou en script de démarrage GPO à la place de install.cmd).
+
+PC Linux
+--------
+Netrunner OS : copie ce dossier sur une clé USB, puis dans le menu des applications ouvre
+« Inscrire ce PC à l'inventaire » et choisis deck-probe.json (le mot de passe administrateur est
+demandé). Un premier inventaire part tout de suite.
+
+Autres distributions : dans un terminal, depuis ce dossier :
+    sudo sh install-linux.sh
+L'agent va dans /usr/lib/deck-probe, la config dans /etc/deck-probe (lisible par root seul), et un
+minuteur systemd envoie l'inventaire 3 minutes après le démarrage et chaque jour à 12:00.
+Les logiciels relevés sont les paquets installés (dpkg ou rpm), les mises à jour en attente celles
+d'apt.
+
+Lancer à la main : sudo python3 /usr/lib/deck-probe/deck-probe.py (--print pour voir le rapport).
+Désinstaller : sudo sh uninstall-linux.sh

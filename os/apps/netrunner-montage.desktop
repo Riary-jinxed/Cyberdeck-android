@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Montage
+GenericName=Montage vidéo
+Comment=Monter des vidéos, des photos et des titres avec de la musique, et en faire une vidéo MP4
+Exec=netrunner-montage %f
+Icon=netrunner-montage
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=montage;vidéo;film;éditer;couper;mp4;

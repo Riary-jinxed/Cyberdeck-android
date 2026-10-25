@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Tableur
+GenericName=Tableur
+Comment=Calculer et ranger des données dans des classeurs Excel (.xlsx), OpenDocument (.ods) et CSV
+Exec=netrunner-tableur %f
+Icon=netrunner-tableur
+Terminal=false
+Categories=Office;Spreadsheet;
+MimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel;application/vnd.oasis.opendocument.spreadsheet;text/csv;
+Keywords=excel;tableur;classeur;calcul;xlsx;ods;csv;

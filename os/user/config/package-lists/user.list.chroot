@@ -1,0 +1,63 @@
+# Netrunner OS, édition User : ce qu'un utilisateur lambda a sous la main.
+
+# Live session and installer (Calamares, removed from the installed system by its own config)
+live-boot
+live-config
+live-config-systemd
+calamares
+calamares-settings-debian
+
+# Desktop: XFCE, sound, network, Bluetooth, printing
+xfce4
+xfce4-goodies
+lightdm
+lightdm-gtk-greeter
+lightdm-gtk-greeter-settings
+network-manager-gnome
+pipewire-audio
+wireplumber
+pavucontrol
+blueman
+cups
+system-config-printer
+printer-driver-gutenprint
+hplip
+gvfs-backends
+file-roller
+xdg-user-dirs
+xdg-utils
+fonts-noto
+fonts-noto-color-emoji
+fonts-dejavu
+fonts-liberation2
+fonts-crosextra-carlito
+fonts-crosextra-caladea
+
+# Office: Texte, Tableur and Présentation are home-made (netrunner-apps, built by os/apps)
+
+# Internet: Web is home-made too (netrunner-apps, on the Chromium engine)
+
+# Video editor: Montage is home-made (netrunner-apps), ffmpeg makes the videos
+ffmpeg
+
+# French everywhere
+locales
+console-setup
+keyboard-configuration
+task-french
+
+# Hardware support (Wi-Fi cards, CPU fixes)
+firmware-linux
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+intel-microcode
+amd64-microcode
+
+# Security updates on their own, inventory agent needs, As//ka installer
+unattended-upgrades
+python3
+iproute2
+zenity
+pkexec

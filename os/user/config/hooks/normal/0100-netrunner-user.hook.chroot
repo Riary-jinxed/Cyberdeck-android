@@ -1,0 +1,29 @@
+#!/bin/sh
+# Netrunner OS, édition User: French by default, security updates on their own, As//ka's
+# dependencies ready when its package is bundled (so it installs without a network).
+set -e
+
+sed -i 's/^# *\(fr_FR.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+locale-gen
+update-locale LANG=fr_FR.UTF-8
+ln -sf /usr/share/zoneinfo/Europe/Paris /etc/localtime
+echo Europe/Paris > /etc/timezone
+cat > /etc/default/keyboard <<KEYBOARD
+XKBMODEL="pc105"
+XKBLAYOUT="fr"
+XKBVARIANT="latin9"
+XKBOPTIONS=""
+BACKSPACE="guess"
+KEYBOARD
+
+echo netrunner > /etc/hostname
+
+if [ -f /opt/netrunner/extras/aska.deb ]; then
+    apt-get satisfy -y "$(dpkg-deb -f /opt/netrunner/extras/aska.deb Depends)" ||
+        echo "As//ka : dépendances non installées, son installation demandera le réseau"
+else
+    rm -f /usr/share/applications/netrunner-aska.desktop /usr/bin/netrunner-installer-aska
+fi
+
+# Web is the browser everywhere (links from other apps, x-www-browser).
+update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/netrunner-web 250

@@ -3,9 +3,9 @@ name: Build As//ka (PC)
 on:
   push:
     branches: [main]
-    paths: ["aska-desktop/**", ".github/workflows/aska-desktop.yml"]
+    paths: ["aska-desktop/**", "os-bridge/**", ".github/workflows/aska-desktop.yml"]
   pull_request:
-    paths: ["aska-desktop/**", ".github/workflows/aska-desktop.yml"]
+    paths: ["aska-desktop/**", "os-bridge/**", ".github/workflows/aska-desktop.yml"]
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Vidéo
+GenericName=Lecteur vidéo
+Comment=Regarder une vidéo ou écouter un morceau, puis le reste du dossier
+Exec=netrunner-video %f
+Icon=netrunner-video
+Terminal=false
+Categories=AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/mp2t;video/x-ms-wmv;video/x-flv;video/ogg;video/3gpp;audio/mpeg;audio/flac;audio/ogg;audio/x-wav;audio/mp4;audio/aac;
+Keywords=film;vidéo;lecteur;musique;

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Netrunner OS: installs As//ka, in option, from the package bundled on the image.
+TITLE="Installer As//ka"
+if dpkg -s aska >/dev/null 2>&1; then
+    zenity --info --title="$TITLE" --text="As//ka est déjà installée : elle est dans le menu des applications."
+    exit 0
+fi
+zenity --question --title="$TITLE" --text="Installer As//ka, la compagne du deck, sur ce PC ?\nLe mot de passe administrateur est demandé." || exit 0
+if pkexec apt-get install -y /opt/netrunner/extras/aska.deb 2>&1 | zenity --progress --pulsate --auto-close --no-cancel --title="$TITLE" --text="Installation d'As//ka…"; then
+    if dpkg -s aska >/dev/null 2>&1; then
+        zenity --info --title="$TITLE" --text="As//ka est installée : elle est dans le menu des applications."
+        exit 0
+    fi
+fi
+dpkg -s aska >/dev/null 2>&1 || zenity --error --title="$TITLE" --text="L'installation d'As//ka n'a pas abouti."
