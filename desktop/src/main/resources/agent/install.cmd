@@ -11,11 +11,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "%DEST%" mkdir "%DEST%"
+rem Any user may create a folder in %ProgramData% and would own it: whoever owns it can rewrite
+rem its permissions and swap the script SYSTEM runs. Start from a fresh folder owned by the
+rem administrators, locked down before anything goes in.
+if exist "%DEST%" rmdir /s /q "%DEST%"
+if exist "%DEST%" (
+    echo Deck Probe : impossible de remplacer %DEST%.
+    exit /b 1
+)
+mkdir "%DEST%" || exit /b 1
+rem The fleet key stays readable by SYSTEM and administrators only.
+icacls "%DEST%" /setowner "*S-1-5-32-544" >nul || exit /b 1
+icacls "%DEST%" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" >nul || exit /b 1
 copy /y "%SRC%deck-probe.ps1" "%DEST%\" >nul || exit /b 1
 copy /y "%SRC%deck-probe.json" "%DEST%\" >nul || exit /b 1
-rem The fleet key stays readable by SYSTEM and administrators only.
-icacls "%DEST%" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" >nul
 
 set "RUN=powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"%DEST%\deck-probe.ps1\""
 schtasks /create /f /tn "Deck Probe (demarrage)" /ru SYSTEM /sc onstart /delay 0003:00 /tr "%RUN%" >nul || exit /b 1

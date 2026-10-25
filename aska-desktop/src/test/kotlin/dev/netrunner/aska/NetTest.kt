@@ -131,9 +131,31 @@ class NetTest {
         home.deleteRecursively()
     }
 
-    private fun host(deck: String, onEdit: (Tools.Edit) -> Unit) = object : Tools.Host {
+    @Test
+    fun modelNeedsYesToRememberAndStaysOnTheLocalNetwork() {
+        var asked: Tools.Confirm? = null
+        val host = host("", {}) { asked = it }
+        val text = kotlinx.coroutines.runBlocking {
+            Tools.run(Tools.byName("remember")!!, mapOf("fact" to "Il adore les macarons"), host, fromModel = true)
+        }
+        assertTrue(text.contains("PAS encore fait"), text)
+        assertEquals("retenir « Il adore les macarons »", asked?.summary)
+        val probe = kotlinx.coroutines.runBlocking {
+            Tools.run(Tools.byName("port_check")!!, mapOf("host" to "8.8.8.8", "port" to "53"), host, fromModel = true)
+        }
+        assertTrue(probe.contains("/port 8.8.8.8 53"), probe)
+        assertTrue(Net.local("192.168.1.10"))
+        assertTrue(Net.local("10.0.0.0/8"))
+        assertTrue(Net.local("100.64.1.1"))
+        assertTrue(Net.local("127.0.0.1"))
+        assertTrue(!Net.local("8.8.8.8"))
+        assertTrue(!Net.local("100.128.0.1"))
+    }
+
+    private fun host(deck: String, onEdit: (Tools.Edit) -> Unit, onConfirm: (Tools.Confirm) -> Unit = {}) = object : Tools.Host {
         override val deckLink = deck
         override fun propose(edit: Tools.Edit) = onEdit(edit)
+        override fun confirm(action: Tools.Confirm) = onConfirm(action)
         override fun attach(image: String) {}
         override fun pomodoro(action: String, minutes: Int?) = ""
         override fun song(): String? = null

@@ -68,7 +68,11 @@ object Store {
             isWindows && appData != null -> File(appData, "Aska")
             else -> File(System.getenv("XDG_CONFIG_HOME") ?: File(System.getProperty("user.home"), ".config").path, "aska")
         }
-    }.also { it.mkdirs() }
+    }.also {
+        it.mkdirs()
+        // Her chat, memories and settings: the owner's only on Linux (rwx------).
+        runCatching { java.nio.file.Files.setPosixFilePermissions(it.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")) }
+    }
 
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = true }
     private val settingsFile get() = File(dir, "settings.json")

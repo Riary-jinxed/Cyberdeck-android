@@ -32,7 +32,7 @@ object AskaLink {
     )
     private val NUMBERS = setOf("qty", "threshold")
 
-    val tokenFile: File get() = File(File(Paths.home, "config").also { it.mkdirs() }, "aska.token")
+    val tokenFile: File get() = File(Paths.config, "aska.token")
 
     private fun token(): String = tokenFile.takeIf { it.isFile }?.readText()?.trim()?.takeIf { it.length == 64 } ?: run {
         val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }

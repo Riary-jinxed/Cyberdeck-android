@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: same exclusions as backup_rules.xml, for the cloud backup and a device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="pc_link.xml" />
+        <exclude domain="file" path="kit_clients.json" />
+        <exclude domain="file" path="clients/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="pc_link.xml" />
+        <exclude domain="file" path="kit_clients.json" />
+        <exclude domain="file" path="clients/" />
+    </device-transfer>
+</data-extraction-rules>
