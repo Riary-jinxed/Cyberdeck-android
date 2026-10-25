@@ -64,4 +64,87 @@ object DeckLink {
         val props = Properties().apply { if (config.isFile) config.inputStream().use { load(it) } }
         return Summary(props.getProperty("last"), file("kit.json").list("equipment").size, low, open)
     }
+
+    // ---- Searching the kit, for her answers.
+
+    private val LABELS = mapOf(
+        "equipment" to "équipement", "cables" to "câble", "stock" to "consommable",
+        "interventions" to "intervention", "clients" to "client",
+    )
+
+    /** Field names that only matter to the sync. */
+    private val SKIPPED = setOf("id", "updated", "photos", "at", "started", "ended", "date", "start", "end", "equipment")
+
+    /** Every record of the kit and of the fleet, one line each: "câble · outlet: B12 · switch: SW-2 · port: 14". */
+    fun records(chosen: String): List<String> = runCatching {
+        val home = home(chosen) ?: return emptyList()
+        val kit = File(home, "sync/kit")
+        val lines = mutableListOf<String>()
+        listOf("kit.json", "kit_stock.json", "kit_log.json", "kit_clients.json").forEach { name ->
+            val o = runCatching { json.parseToJsonElement(File(kit, name).readText()).jsonObject }.getOrNull() ?: return@forEach
+            o.forEach { (key, value) ->
+                val items = runCatching { value.jsonArray }.getOrNull() ?: return@forEach
+                items.forEach { item -> runCatching { lines += (LABELS[key] ?: key) + " · " + flatten(item.jsonObject) } }
+            }
+        }
+        fleetFiles(home).forEach { o -> lines += "PC du parc · " + flatten(o) }
+        lines
+    }.getOrDefault(emptyList())
+
+    private fun flatten(o: JsonObject, depth: Int = 0): String = o.entries.filter { it.key !in SKIPPED }.mapNotNull { (k, v) ->
+        when (v) {
+            is kotlinx.serialization.json.JsonPrimitive -> v.contentOrNull?.takeIf { it.isNotBlank() && it != "0" }?.let { "$k: ${it.take(200)}" }
+            is JsonObject -> if (depth < 2) "$k: (" + flatten(v, depth + 1) + ")" else null
+            is kotlinx.serialization.json.JsonArray -> if (depth < 2) v.mapNotNull { e ->
+                (e as? JsonObject)?.let { flatten(it, depth + 1) } ?: (e as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+            }.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { "$k: [" + it.joinToString(" ; ") + "]" } else null
+        }
+    }.joinToString(" · ")
+
+    private fun fleetFiles(home: File): List<JsonObject> = File(home, "sync/parc").listFiles { f -> f.extension == "json" }.orEmpty()
+        .mapNotNull { f -> runCatching { json.parseToJsonElement(f.readText()).jsonObject }.getOrNull() }
+
+    /** The lines that hold every word of [query] (accents and case aside), best matches first. */
+    fun search(chosen: String, query: String, limit: Int = 15): String {
+        val all = records(chosen)
+        if (all.isEmpty()) return "Je ne trouve pas le kit de Deck Link sur ce PC."
+        val words = normalize(query).split(Regex("[^a-z0-9.:-]+")).filter { it.length >= 2 }
+        if (words.isEmpty()) return "Que faut-il chercher dans le kit ?"
+        val scored = all.map { line -> line to words.count { normalize(line).contains(it) } }.filter { it.second > 0 }
+            .sortedByDescending { it.second }
+        val full = scored.filter { it.second == words.size }
+        val shown = (full.ifEmpty { scored }).take(limit).map { it.first.take(500) }
+        if (shown.isEmpty()) return "Rien dans le kit pour « $query »."
+        return (if (full.isEmpty()) "Rien ne contient tous les mots ; les plus proches :\n" else "") + shown.joinToString("\n")
+    }
+
+    /** The fleet, one PC a line, for questions on RAM, OS, disks or addresses. */
+    fun fleet(chosen: String): String {
+        val home = home(chosen) ?: return "Je ne trouve pas Deck Link sur ce PC."
+        val pcs = fleetFiles(home)
+        if (pcs.isEmpty()) return "Aucun PC dans le parc pour l'instant (Deck Probe n'a rien envoyé)."
+        return pcs.joinToString("\n") { flatten(it) }.take(5000)
+    }
+
+    /** MAC (AA:BB:…) and IPv4 to PC name, to tell known devices from strangers in a scan. */
+    fun fleetAddresses(chosen: String): Map<String, String> {
+        val home = home(chosen) ?: return emptyMap()
+        val map = mutableMapOf<String, String>()
+        fleetFiles(home).forEach { o ->
+            val name = o["hostname"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            val nics = when (val n = o["network"]) {
+                is kotlinx.serialization.json.JsonArray -> n.mapNotNull { it as? JsonObject }
+                is JsonObject -> listOf(n)
+                else -> emptyList()
+            }
+            nics.forEach { nic ->
+                nic["mac"]?.jsonPrimitive?.contentOrNull?.uppercase()?.replace('-', ':')?.takeIf { it.isNotBlank() }?.let { map[it] = name }
+                nic["ipv4"]?.jsonPrimitive?.contentOrNull?.split(',', ' ', ';')?.filter { it.isNotBlank() }?.forEach { map[it.trim()] = name }
+            }
+        }
+        return map
+    }
+
+    fun normalize(text: String): String =
+        java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 }

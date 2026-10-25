@@ -65,6 +65,8 @@ class Aska(private val scope: CoroutineScope) {
     private var replyJob: Job? = null
     private var remarking = false
     private var asks = 0
+    /** The model refused tools once: no more offers this session. */
+    private var noTools = false
     private var hideJob: Job? = null
     /** The last time she spoke, asked or not: her remarks keep their distance. */
     private var lastSpoke = System.currentTimeMillis()
@@ -180,9 +182,12 @@ class Aska(private val scope: CoroutineScope) {
         val text = input.trim()
         // A remark of hers gives way to the runner; an answer they are waiting for does not.
         if (text.isEmpty() || (_busy.value && !remarking)) return
+        if (text == "/aide" || text == "/help") return say(Tools.help())
+        val command = Tools.parseCommand(text)
+        if (text.startsWith("/") && command == null) return say("*penche la tête* Je ne connais pas cette commande. " + Tools.help())
         val earlier = history.toList()
         history += Turn(true, text)
-        ask(earlier, text + "\n\n" + Persona.note(moment()), isRemark = false)
+        ask(earlier, text + "\n\n" + Persona.note(moment()), isRemark = false, command = command)
     }
 
     // ---- Her own remarks.
@@ -217,7 +222,11 @@ class Aska(private val scope: CoroutineScope) {
 
     // ---- Conversation.
 
-    private fun ask(earlier: List<Turn>, message: String, isRemark: Boolean) {
+    /**
+     * One answer of hers. A /command runs its tool first and she explains the result; otherwise
+     * the model may call tools itself, a few rounds at most, before it answers.
+     */
+    private fun ask(earlier: List<Turn>, message: String, isRemark: Boolean, command: Pair<Tools.Tool, Map<String, String>>? = null) {
         replyJob?.cancel()
         remarking = isRemark
         hideJob?.cancel()
@@ -227,25 +236,63 @@ class Aska(private val scope: CoroutineScope) {
             thinking = true
             _bubble.value = "…"
             refreshPose()
+            var toolResult: String? = null
             try {
+                var userMessage = message
+                if (command != null) {
+                    val (tool, args) = command
+                    _bubble.value = "*${tool.doing}…*"
+                    toolResult = Tools.run(tool, args, settings.value.deckLink)
+                    userMessage = "$message\n\n[Résultat de l'outil ${tool.name} :\n$toolResult]\nExplique ce résultat en bref : l'essentiel, puis la vérification suivante s'il y en a une."
+                }
                 val installed = ollama.models().also { _models.value = it }
-                val model = Ollama.pick(settings.value.model, installed) ?: return@launch say(Persona.noModel)
+                val model = Ollama.pick(settings.value.model, installed)
+                    ?: return@launch say(toolResult ?: Persona.noModel)
                 val messages = buildList {
                     add(Ollama.Message("system", Persona.systemPrompt(settings.value.handle)))
                     recent(earlier).forEach { add(Ollama.Message(if (it.fromUser) "user" else "assistant", it.text)) }
-                    add(Ollama.Message("user", message))
-                }
+                    add(Ollama.Message("user", userMessage))
+                }.toMutableList()
                 val buffer = StringBuilder()
-                ollama.chat(model, messages).collect { chunk ->
-                    buffer.append(chunk)
-                    val shown = Persona.visible(buffer.toString())
-                    if (shown.isNotBlank()) {
-                        thinking = false
-                        talking = true
-                        _bubble.value = shown
+                var round = 0
+                while (true) {
+                    val tools = if (command == null && !isRemark && !noTools && round < TOOL_ROUNDS) Tools.definitions() else null
+                    val calls = mutableListOf<Ollama.Call>()
+                    buffer.clear()
+                    try {
+                        ollama.chat(model, messages, tools).collect { event ->
+                            when (event) {
+                                is Ollama.Event.Tool -> calls += event.call
+                                is Ollama.Event.Text -> {
+                                    buffer.append(event.text)
+                                    val shown = Persona.visible(buffer.toString())
+                                    if (shown.isNotBlank()) {
+                                        thinking = false
+                                        talking = true
+                                        _bubble.value = shown
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Ollama.NoTools) {
+                        // This model has no tool calling: she answers with what she knows.
+                        noTools = true
+                        continue
                     }
+                    if (calls.isEmpty()) break
+                    messages += Ollama.Message("assistant", buffer.toString(), calls = calls)
+                    for (call in calls) {
+                        val tool = Tools.byName(call.name)
+                        thinking = true
+                        talking = false
+                        _bubble.value = "*${tool?.doing ?: "cherche"}…*"
+                        refreshPose()
+                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), settings.value.deckLink)
+                        messages += Ollama.Message("tool", result, toolName = call.name)
+                    }
+                    round++
                 }
-                val answer = Persona.visible(buffer.toString()).trim().ifEmpty { "*hausse les épaules* …" }
+                val answer = Persona.visible(buffer.toString()).trim().ifEmpty { toolResult ?: "*hausse les épaules* …" }
                 _bubble.value = answer
                 history += Turn(false, answer)
                 val kept = history.toList()
@@ -253,9 +300,10 @@ class Aska(private val scope: CoroutineScope) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Ollama.Unreachable) {
-                say(Persona.noKernel)
+                // Without her core, a /command still gives its raw result.
+                say(toolResult ?: Persona.noKernel)
             } catch (e: Exception) {
-                say("*grimace* Mon noyau a buggé : ${e.message?.take(140) ?: e.javaClass.simpleName}")
+                say(toolResult ?: "*grimace* Mon noyau a buggé : ${e.message?.take(140) ?: e.javaClass.simpleName}")
             } finally {
                 // A newer question took over: its own ending will tidy up.
                 if (turn == asks) {
@@ -418,5 +466,7 @@ class Aska(private val scope: CoroutineScope) {
         const val WEATHER_EVERY_MS = 30 * 60_000L
         const val DECK_EVERY_MS = 60_000L
         const val CONTEXT_CHARS = 6000
+        /** Tool calls before she must answer. */
+        const val TOOL_ROUNDS = 4
     }
 }

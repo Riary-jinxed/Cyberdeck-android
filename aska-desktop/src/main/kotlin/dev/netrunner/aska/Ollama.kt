@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -32,7 +34,18 @@ class Ollama(private val baseUrl: () -> String) {
 
     class Failed(message: String) : Exception(message)
 
-    data class Message(val role: String, val content: String)
+    data class Call(val name: String, val arguments: JsonObject)
+
+    data class Message(val role: String, val content: String, val calls: List<Call> = emptyList(), val toolName: String? = null)
+
+    /** What comes out of a chat: words, or a tool she wants to use. */
+    sealed interface Event {
+        data class Text(val text: String) : Event
+        data class Tool(val call: Call) : Event
+    }
+
+    /** The model cannot use tools: answer without them. */
+    class NoTools(message: String) : Exception(message)
 
     private val http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build()
 
@@ -49,8 +62,8 @@ class Ollama(private val baseUrl: () -> String) {
         parseModels(response.body())
     }
 
-    /** Streams the answer of [model], piece by piece. */
-    fun chat(model: String, messages: List<Message>): Flow<String> = flow {
+    /** Streams the answer of [model], piece by piece, and the tools it calls from [tools]. */
+    fun chat(model: String, messages: List<Message>, tools: JsonArray? = null): Flow<Event> = flow {
         val body = buildJsonObject {
             put("model", model)
             put("stream", true)
@@ -58,11 +71,21 @@ class Ollama(private val baseUrl: () -> String) {
             put("keep_alive", "10m")
             putJsonObject("options") {
                 put("temperature", 0.8)
-                put("num_ctx", 4096)
+                put("num_ctx", 8192)
             }
             putJsonArray("messages") {
-                messages.forEach { m -> addJsonObject { put("role", m.role); put("content", m.content) } }
+                messages.forEach { m ->
+                    addJsonObject {
+                        put("role", m.role)
+                        put("content", m.content)
+                        m.toolName?.let { put("tool_name", it) }
+                        if (m.calls.isNotEmpty()) putJsonArray("tool_calls") {
+                            m.calls.forEach { c -> addJsonObject { putJsonObject("function") { put("name", c.name); put("arguments", c.arguments) } } }
+                        }
+                    }
+                }
             }
+            if (tools != null) put("tools", tools)
         }.toString()
         val request = HttpRequest.newBuilder(uri("/api/chat"))
             .header("Content-Type", "application/json")
@@ -75,13 +98,16 @@ class Ollama(private val baseUrl: () -> String) {
         }
         response.body().use { lines ->
             if (response.statusCode() != 200) {
-                throw Failed(lines.toList().joinToString(" ").let { errorOf(it) ?: "Ollama a répondu ${response.statusCode()}" })
+                val error = lines.toList().joinToString(" ").let { errorOf(it) ?: "Ollama a répondu ${response.statusCode()}" }
+                if (tools != null && error.contains("tools", ignoreCase = true)) throw NoTools(error)
+                throw Failed(error)
             }
             for (line in lines.iterator()) {
                 currentCoroutineContext().ensureActive()
                 val chunk = parseChunk(line) ?: continue
                 chunk.error?.let { throw Failed(it) }
-                if (chunk.text.isNotEmpty()) emit(chunk.text)
+                if (chunk.text.isNotEmpty()) emit(Event.Text(chunk.text))
+                chunk.calls.forEach { emit(Event.Tool(it)) }
                 if (chunk.done) break
             }
         }
@@ -110,7 +136,7 @@ class Ollama(private val baseUrl: () -> String) {
         if (response.statusCode() != 200) throw Failed("Ollama a répondu ${response.statusCode()}")
     }.flowOn(Dispatchers.IO)
 
-    data class Chunk(val text: String, val done: Boolean, val error: String? = null)
+    data class Chunk(val text: String, val done: Boolean, val error: String? = null, val calls: List<Call> = emptyList())
 
     data class Progress(val status: String, val completed: Long, val total: Long, val error: String? = null) {
         val fraction: Float? get() = if (total > 0) (completed.toFloat() / total).coerceIn(0f, 1f) else null
@@ -130,9 +156,23 @@ class Ollama(private val baseUrl: () -> String) {
             if (line.isBlank()) return null
             val o = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
             o.error()?.let { return Chunk("", true, it) }
-            val text = o["message"]?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull.orEmpty()
+            val message = o["message"]?.jsonObject
+            val text = message?.get("content")?.jsonPrimitive?.contentOrNull.orEmpty()
             val done = o["done"]?.jsonPrimitive?.contentOrNull == "true"
-            return Chunk(text, done)
+            val calls = runCatching {
+                message?.get("tool_calls")?.jsonArray?.mapNotNull { c ->
+                    val f = c.jsonObject["function"]?.jsonObject ?: return@mapNotNull null
+                    val name = f["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    // Arguments come as an object, or as a JSON string from some models.
+                    val args = when (val a = f["arguments"]) {
+                        is JsonObject -> a
+                        is JsonPrimitive -> runCatching { json.parseToJsonElement(a.content).jsonObject }.getOrDefault(JsonObject(emptyMap()))
+                        else -> JsonObject(emptyMap())
+                    }
+                    Call(name, args)
+                }
+            }.getOrNull().orEmpty()
+            return Chunk(text, done, calls = calls)
         }
 
         /** One line of a pull: {"status":"pulling 4c27…","total":4300000000,"completed":120000000}. */

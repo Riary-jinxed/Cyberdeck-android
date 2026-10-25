@@ -270,7 +270,7 @@ private fun Bubble(aska: Aska, text: String?, chatOpen: Boolean, input: FocusReq
                     },
                 decorationBox = { field ->
                     Box {
-                        if (draft.isEmpty()) T(if (busy) "Elle réfléchit…" else "Écris-lui… (Entrée pour envoyer)", Cp.Dim, 14.sp)
+                        if (draft.isEmpty()) T(if (busy) "Elle réfléchit…" else "Écris-lui… (/aide pour ses outils)", Cp.Dim, 14.sp)
                         field()
                     }
                 },
