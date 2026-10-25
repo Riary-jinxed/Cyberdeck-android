@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.1.2"
+val appVersion = "0.1.3"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -16,6 +16,8 @@ java {
 
 kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+    // The bridge to Netrunner OS's own apps (OsApps.kt), shared with them as source.
+    sourceSets["main"].kotlin.srcDir("../os-bridge/src/main/kotlin")
 }
 
 dependencies {

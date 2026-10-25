@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import java.io.File
 import java.time.LocalDateTime
 
@@ -98,6 +99,8 @@ class Aska(private val scope: CoroutineScope) {
     private var noTools = false
     /** A change of the kit she prepared, waiting for « oui ». */
     @Volatile private var pendingEdit: Tools.Edit? = null
+    /** An action in a Netrunner OS app (trash a photo…) waiting for « oui ». */
+    @Volatile private var pendingApp: OsApps.Pending? = null
     private var hideJob: Job? = null
     /** The last time she spoke, asked or not: her remarks keep their distance. */
     private var lastSpoke = System.currentTimeMillis()
@@ -335,6 +338,15 @@ class Aska(private val scope: CoroutineScope) {
             if (answer in NO) return say("*range son carnet* D'accord, je ne touche à rien.")
             // Anything else: the edit is dropped and the conversation goes on.
         }
+        pendingApp?.let { action ->
+            pendingApp = null
+            val answer = DeckLink.normalize(text).trim(' ', '!', '.')
+            if (answer in YES) {
+                history += Turn(true, text)
+                return applyApp(action)
+            }
+            if (answer in NO) return say("*retire sa griffe* D'accord, je n'y touche pas.")
+        }
         val command = Tools.parseCommand(text)
         if (text.startsWith("/") && command == null) return say("*penche la tête* Je ne connais pas cette commande. " + Tools.help())
         val earlier = history.toList()
@@ -356,6 +368,15 @@ class Aska(private val scope: CoroutineScope) {
                 pendingEdit = edit
                 say("*grimace* $error")
             }
+        }
+    }
+
+    /** Runs a confirmed action in a Netrunner OS app. */
+    private fun applyApp(action: OsApps.Pending) {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { dev.netrunner.bridge.Bridge.run(action.socket, action.tool, action.args) }
+            say("*tapote l'écran* $result")
+            history += Turn(false, "Fait dans l'appli : ${action.summary}. $result")
         }
     }
 
@@ -420,15 +441,17 @@ class Aska(private val scope: CoroutineScope) {
                 val installed = ollama.models().also { _models.value = it }
                 val model = Ollama.pick(settings.value.model, installed)
                     ?: return@launch say(toolResult ?: Persona.noModel)
+                // What the runner has open in Netrunner OS's own apps, and what she can do there.
+                val apps = withContext(Dispatchers.IO) { OsApps.open() }
                 val messages = buildList {
-                    add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Studio.GUIDE, Memory.prompt(settings.value.handle)).joinToString("\n\n")))
+                    add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Studio.GUIDE, Memory.prompt(settings.value.handle), OsApps.prompt(apps)).joinToString("\n\n")))
                     recent(earlier).forEach { add(Ollama.Message(if (it.fromUser) "user" else "assistant", it.text)) }
                     add(Ollama.Message("user", userMessage, images = takeAttached()))
                 }.toMutableList()
                 val buffer = StringBuilder()
                 var round = 0
                 while (true) {
-                    val tools = if (command == null && !isRemark && !noTools && round < TOOL_ROUNDS) Tools.definitions() else null
+                    val tools = if (command == null && !isRemark && !noTools && round < TOOL_ROUNDS) JsonArray(Tools.definitions() + OsApps.definitions(apps)) else null
                     val calls = mutableListOf<Ollama.Call>()
                     buffer.clear()
                     try {
@@ -455,11 +478,16 @@ class Aska(private val scope: CoroutineScope) {
                     messages += Ollama.Message("assistant", buffer.toString(), calls = calls)
                     for (call in calls) {
                         val tool = Tools.byName(call.name)
+                        val appAction = if (tool == null) OsApps.find(apps, call.name) else null
                         thinking = true
                         talking = false
-                        _bubble.value = "*${tool?.doing ?: "cherche"}…*"
+                        _bubble.value = "*${tool?.doing ?: appAction?.let { "agit dans ${it.app.title}" } ?: "cherche"}…*"
                         refreshPose()
-                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), host)
+                        val result = when {
+                            tool != null -> Tools.run(tool, Tools.args(call.arguments), host)
+                            appAction != null -> withContext(Dispatchers.IO) { OsApps.run(appAction, Tools.args(call.arguments)) { pendingApp = it } }
+                            else -> "Outil inconnu : ${call.name}"
+                        }
                         messages += Ollama.Message("tool", result, toolName = call.name)
                     }
                     // A picture can't ride on a tool's answer: it comes as the runner's.
