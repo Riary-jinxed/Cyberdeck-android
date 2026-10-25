@@ -35,6 +35,8 @@ dependencies {
     implementation("uk.co.caprica:vlcj:4.8.3")
     // PDF reads and draws its pages with PDFBox (as Deck Link writes its reports).
     implementation("org.apache.pdfbox:pdfbox:3.0.5")
+    // Texte reads and writes Word files with Apache POI (OpenDocument is written by hand).
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
     testImplementation(kotlin("test"))
 }
 

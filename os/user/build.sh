@@ -47,7 +47,7 @@ lb config \
 { lb build 2>&1; echo $? > "$WORK/lb.status"; } | tee "$OUT/build.log"
 [ "$(cat "$WORK/lb.status")" = 0 ] || { echo "lb build a échoué"; exit 1; }
 # Everything the User edition promises must be in the image.
-for f in usr/bin/libreoffice usr/bin/firefox-esr usr/bin/netrunner-video usr/bin/netrunner-photos usr/bin/kdenlive usr/bin/netrunner-pdf \
+for f in usr/bin/libreoffice usr/bin/firefox-esr usr/bin/netrunner-video usr/bin/netrunner-photos usr/bin/kdenlive usr/bin/netrunner-pdf usr/bin/netrunner-texte \
     usr/bin/calamares usr/bin/startxfce4 usr/lib/deck-probe/deck-probe.py usr/bin/deck-probe-inscrire; do
     [ -e "chroot/$f" ] || { echo "manque dans l'image : /$f"; exit 1; }
 done

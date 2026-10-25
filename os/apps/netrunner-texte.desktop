@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Texte
+GenericName=Traitement de texte
+Comment=Écrire et mettre en forme des documents Word (.docx) et OpenDocument (.odt)
+Exec=netrunner-texte %f
+Icon=netrunner-texte
+Terminal=false
+Categories=Office;WordProcessor;
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;text/plain;text/markdown;
+Keywords=word;document;lettre;traitement de texte;docx;odt;
