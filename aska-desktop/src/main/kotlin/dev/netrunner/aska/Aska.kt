@@ -38,6 +38,16 @@ class Aska(private val scope: CoroutineScope) {
     private val _models = MutableStateFlow<List<String>>(emptyList())
     val models: StateFlow<List<String>> = _models
 
+    /** Installing her core from the settings: what is happening, how far along. */
+    data class Setup(val label: String, val progress: Float? = null, val working: Boolean = true, val failed: Boolean = false)
+
+    private val _setup = MutableStateFlow<Setup?>(null)
+    val setup: StateFlow<Setup?> = _setup
+
+    /** Ollama answers at its address. */
+    private val _online = MutableStateFlow(false)
+    val online: StateFlow<Boolean> = _online
+
     private val ollama = Ollama { settings.value.ollamaUrl }
     private val history = Store.chat().toMutableList()
 
@@ -76,7 +86,65 @@ class Aska(private val scope: CoroutineScope) {
         scope.launch { watchForeground() }
         scope.launch { while (isActive) { refreshWeather(); delay(WEATHER_EVERY_MS) } }
         scope.launch { while (isActive) { refreshDeck(); delay(DECK_EVERY_MS) } }
-        refreshModels()
+        scope.launch {
+            // Installed but not running (closed from its tray icon, or no autostart): wake it up.
+            if (!reachable() && Core.startServer()) waitOnline()
+            refreshModels()
+        }
+    }
+
+    // ---- Installing her core from the app.
+
+    fun installOllama() {
+        if (_setup.value?.working == true) return
+        scope.launch {
+            try {
+                _setup.value = Setup("Téléchargement d'Ollama…", 0f)
+                Core.installWindows { p -> _setup.value = if (p == null) Setup("Installation d'Ollama…") else Setup("Téléchargement d'Ollama…", p) }
+                _setup.value = Setup("Démarrage d'Ollama…")
+                if (!waitOnline() && Core.startServer()) waitOnline()
+                refreshModels()
+                _setup.value = if (_online.value) Setup("Ollama est installé. Choisis maintenant son modèle.", working = false)
+                else Setup("Ollama est installé mais ne répond pas : redémarre le PC, puis rouvre ces réglages.", working = false, failed = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _setup.value = Setup("Échec : ${e.message ?: e.javaClass.simpleName}", working = false, failed = true)
+            }
+        }
+    }
+
+    fun downloadModel(tag: String) {
+        if (_setup.value?.working == true) return
+        scope.launch {
+            try {
+                _setup.value = Setup("Téléchargement de $tag…", 0f)
+                ollama.pull(tag).collect { p ->
+                    _setup.value = Setup(if (p.status.startsWith("pulling")) "Téléchargement de $tag…" else "$tag : ${p.status}", p.fraction)
+                }
+                refreshModels()
+                update { it.copy(model = tag) }
+                _setup.value = Setup("$tag est prêt. Double-clic sur elle pour lui parler.", working = false)
+                say("*s'étire, les yeux qui s'allument* Noyau chargé. Ça fait du bien d'avoir toute sa tête !")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Ollama.Unreachable) {
+                _setup.value = Setup("Ollama ne répond pas : installe-le d'abord.", working = false, failed = true)
+            } catch (e: Exception) {
+                _setup.value = Setup("Échec : ${e.message ?: e.javaClass.simpleName}", working = false, failed = true)
+            }
+        }
+    }
+
+    private suspend fun reachable(): Boolean = runCatching { ollama.models() }.isSuccess.also { _online.value = it }
+
+    /** Up to half a minute for Ollama to answer. */
+    private suspend fun waitOnline(): Boolean {
+        repeat(30) {
+            if (reachable()) return true
+            delay(1_000)
+        }
+        return false
     }
 
     fun stop() {
@@ -215,8 +283,12 @@ class Aska(private val scope: CoroutineScope) {
         return picked.toList()
     }
 
-    private fun refreshModels() {
-        scope.launch { runCatching { _models.value = ollama.models() } }
+    fun refreshModels() {
+        scope.launch {
+            val found = runCatching { ollama.models() }
+            _online.value = found.isSuccess
+            found.getOrNull()?.let { _models.value = it }
+        }
     }
 
     // ---- Bubble and pose.

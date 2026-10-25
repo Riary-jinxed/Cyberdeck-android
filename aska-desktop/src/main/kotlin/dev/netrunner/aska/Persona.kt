@@ -68,8 +68,8 @@ object Persona {
 
     // ---- Lines that need no model.
 
-    val noKernel = "*tapote son front* Mon noyau ne répond pas… Lance Ollama (ollama.com), puis réessaie."
-    val noModel = "*fouille dans ses poches* Il me manque un modèle. Dans un terminal : ollama pull gemma4, et je reviens."
+    val noKernel = "*tapote son front* Mon noyau ne répond pas… Clic droit sur moi, partie NOYAU : je peux l'installer d'ici."
+    val noModel = "*fouille dans ses poches* Il me manque un modèle. Clic droit sur moi, partie NOYAU, et choisis-en un."
 
     val pokes = listOf(
         "*sursaute* Hé ! Ça chatouille.",

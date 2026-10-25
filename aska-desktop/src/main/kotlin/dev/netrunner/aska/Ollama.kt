@@ -87,7 +87,34 @@ class Ollama(private val baseUrl: () -> String) {
         }
     }.flowOn(Dispatchers.IO)
 
+    /** Downloads [model] into Ollama, reporting its progress. */
+    fun pull(model: String): Flow<Progress> = flow {
+        val body = buildJsonObject { put("model", model); put("stream", true) }.toString()
+        val request = HttpRequest.newBuilder(uri("/api/pull"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build()
+        val response = try {
+            http.send(request, HttpResponse.BodyHandlers.ofLines())
+        } catch (e: Exception) {
+            throw Unreachable(e)
+        }
+        response.body().use { lines ->
+            for (line in lines.iterator()) {
+                currentCoroutineContext().ensureActive()
+                val p = parseProgress(line) ?: continue
+                p.error?.let { throw Failed(it) }
+                emit(p)
+            }
+        }
+        if (response.statusCode() != 200) throw Failed("Ollama a répondu ${response.statusCode()}")
+    }.flowOn(Dispatchers.IO)
+
     data class Chunk(val text: String, val done: Boolean, val error: String? = null)
+
+    data class Progress(val status: String, val completed: Long, val total: Long, val error: String? = null) {
+        val fraction: Float? get() = if (total > 0) (completed.toFloat() / total).coerceIn(0f, 1f) else null
+    }
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -106,6 +133,15 @@ class Ollama(private val baseUrl: () -> String) {
             val text = o["message"]?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull.orEmpty()
             val done = o["done"]?.jsonPrimitive?.contentOrNull == "true"
             return Chunk(text, done)
+        }
+
+        /** One line of a pull: {"status":"pulling 4c27…","total":4300000000,"completed":120000000}. */
+        fun parseProgress(line: String): Progress? {
+            if (line.isBlank()) return null
+            val o = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
+            o.error()?.let { return Progress("", 0, 0, it) }
+            fun l(key: String) = o[key]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            return Progress(o["status"]?.jsonPrimitive?.contentOrNull.orEmpty(), l("completed"), l("total"))
         }
 
         private fun JsonObject.error() = this["error"]?.jsonPrimitive?.contentOrNull

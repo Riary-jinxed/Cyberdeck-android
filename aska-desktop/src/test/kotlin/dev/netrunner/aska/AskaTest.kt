@@ -21,6 +21,21 @@ class AskaTest {
     }
 
     @Test
+    fun readsPullProgress() {
+        val p = Ollama.parseProgress("""{"status":"pulling 4c27e0f5","digest":"sha256:4c27","total":4000,"completed":1000}""")
+        assertEquals(0.25f, p?.fraction)
+        assertNull(Ollama.parseProgress("""{"status":"success"}""")?.fraction)
+        assertEquals("pull model manifest: file does not exist", Ollama.parseProgress("""{"error":"pull model manifest: file does not exist"}""")?.error)
+    }
+
+    @Test
+    fun coreChoicesFitTheDisk() {
+        assertTrue(Core.choices.all { it.tag.startsWith("gemma4:") && it.bytes > 0 })
+        assertEquals("4,3 Go", Core.gigabytes(4_300_000_000))
+        assertTrue(Core.freeSpace(File("/inexistant/dossier/profond")) > 0)
+    }
+
+    @Test
     fun picksAModel() {
         val installed = Ollama.parseModels("""{"models":[{"name":"llama3.2:3b"},{"name":"gemma4:latest"}]}""")
         assertEquals(listOf("llama3.2:3b", "gemma4:latest"), installed)

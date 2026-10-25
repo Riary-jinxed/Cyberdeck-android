@@ -3,6 +3,7 @@ package dev.netrunner.aska
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -16,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,12 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
     val settings by aska.settings.collectAsState()
-    val models by aska.models.collectAsState()
     var handle by remember { mutableStateOf(settings.handle) }
     var city by remember { mutableStateOf(settings.city) }
     var ollama by remember { mutableStateOf(settings.ollamaUrl) }
@@ -59,18 +61,7 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
             Field("Ta ville (pour sa tenue météo, vide pour aucune)", city) { city = it }
 
             Section("NOYAU (OLLAMA)")
-            Field("Adresse d'Ollama", ollama) { ollama = it }
-            T(
-                if (models.isEmpty()) "Aucun modèle trouvé. Installe Ollama (ollama.com), puis dans un terminal : ollama pull gemma4"
-                else "Modèle :",
-                Cp.Dim, 14.sp,
-            )
-            if (models.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Auto", settings.model.isBlank()) { aska.update { it.copy(model = "") } }
-                    models.forEach { m -> Chip(m, settings.model == m) { aska.update { it.copy(model = m) } } }
-                }
-            }
+            CoreSection(aska)
 
             Section("COMPORTEMENT")
             T("Remarques spontanées", Cp.Dim, 14.sp)
@@ -111,6 +102,81 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
                 }
                 Button("EFFACER SA MÉMOIRE", Cp.Dim) { aska.clearMemory() }
                 Button("QUITTER", Cp.Red, onQuit)
+            }
+        }
+    }
+}
+
+/** Ollama and her model, installed from here, with what they take on the disk. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoreSection(aska: Aska) {
+    val settings by aska.settings.collectAsState()
+    val models by aska.models.collectAsState()
+    val online by aska.online.collectAsState()
+    val setup by aska.setup.collectAsState()
+    val busy = setup?.working == true
+    val free = remember(setup, models) { Core.freeSpace(Core.modelsDir()) }
+    // Follows an install made outside (a terminal on Linux) while the settings stay open.
+    LaunchedEffect(Unit) {
+        while (true) {
+            aska.refreshModels()
+            delay(5_000)
+        }
+    }
+
+    T(
+        when {
+            online && models.isNotEmpty() -> "Ollama tourne, ${models.size} modèle(s) installé(s)."
+            online -> "Ollama tourne, mais aucun modèle n'est installé."
+            Core.binary() != null -> "Ollama est installé mais ne répond pas. Lance-le depuis le menu Démarrer."
+            else -> "Ollama n'est pas installé."
+        },
+        Cp.Text, 14.sp,
+    )
+    T("Espace libre sur le disque des modèles : ${Core.gigabytes(free)}", Cp.Dim, 13.sp)
+
+    if (!online && Core.binary() == null) {
+        if (isWindows) {
+            T("Ollama prend au moins ${Core.gigabytes(Core.OLLAMA_BYTES)} sur le disque, plus le modèle choisi ensuite.", Cp.Dim, 13.sp)
+            if (!busy) Button("INSTALLER OLLAMA", Cp.Pink) { aska.installOllama() }
+        } else {
+            T("Dans un terminal (le mot de passe administrateur est demandé) :", Cp.Dim, 13.sp)
+            T(Core.LINUX_COMMAND, Cp.Cyan, 13.sp, MonoFont)
+        }
+    }
+
+    if (online) {
+        T("Modèles Gemma 4 à télécharger :", Cp.Dim, 14.sp)
+        Core.choices.forEach { c ->
+            val installed = models.any { it == c.tag }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    T("${c.label} · ${Core.gigabytes(c.bytes)}", Cp.Text, 15.sp)
+                    T(c.note, Cp.Dim, 13.sp)
+                }
+                when {
+                    installed -> T("INSTALLÉ", Cp.Cyan, 12.sp, TitleFont)
+                    busy -> {}
+                    c.bytes > free -> T("PAS ASSEZ DE PLACE", Cp.Red, 12.sp, TitleFont)
+                    else -> Button("TÉLÉCHARGER", Cp.Pink) { aska.downloadModel(c.tag) }
+                }
+            }
+        }
+        if (models.isNotEmpty()) {
+            T("Modèle utilisé :", Cp.Dim, 14.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("Auto", settings.model.isBlank()) { aska.update { it.copy(model = "") } }
+                models.forEach { m -> Chip(m, settings.model == m) { aska.update { it.copy(model = m) } } }
+            }
+        }
+    }
+
+    setup?.let { s ->
+        T(s.label + (s.progress?.let { " ${(it * 100).toInt()} %" } ?: ""), if (s.failed) Cp.Red else Cp.Yellow, 14.sp)
+        s.progress?.let { p ->
+            Box(Modifier.fillMaxWidth().height(6.dp).background(Cp.Panel)) {
+                Box(Modifier.fillMaxWidth(p).height(6.dp).background(Cp.Pink))
             }
         }
     }
