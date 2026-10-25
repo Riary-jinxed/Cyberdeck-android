@@ -93,9 +93,8 @@ class SheetBridge(private val state: SheetState) : Bridge.App {
             "tableur_undo" -> { state.undo(); "Annulé." }
             "tableur_save" -> {
                 val p = args["path"]?.takeIf { it.isNotBlank() }?.let(::path)
-                val target = p ?: state.file?.takeIf { it.extension.lowercase() in SheetFiles.Writable }
-                    ?: return@ui "Le classeur n'a pas encore de fichier (ou c'est un .xls) : donne un chemin (.xlsx, .ods…)."
-                val f = if (target.extension.lowercase() in SheetFiles.Writable) target else File(target.path + ".xlsx")
+                val target = p ?: state.file ?: return@ui "Le classeur n'a pas encore de fichier : donne un chemin (.xlsx, .ods…)."
+                val f = SheetFiles.target(target)
                 if (state.saveTo(f)) "Enregistré : ${f.path}" else state.message
             }
             "tableur_open" -> {

@@ -301,7 +301,7 @@ class SheetState {
         dialog.isVisible = true
         val name = dialog.file ?: return null
         val f = File(dialog.directory, name)
-        return if (f.extension.lowercase() in SheetFiles.Writable) f else File(f.path + ".xlsx")
+        return SheetFiles.target(f)
     }
 
     fun chooseOpen() {

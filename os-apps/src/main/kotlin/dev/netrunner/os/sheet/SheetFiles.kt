@@ -23,6 +23,13 @@ object SheetFiles {
     val Extensions = listOf("xlsx", "xls", "ods", "csv")
     val Writable = listOf("xlsx", "ods", "csv")
 
+    /** Where a file is saved: as it is, or as .xlsx when its kind cannot be written. */
+    fun target(f: File): File = when (f.extension.lowercase()) {
+        in Writable -> f
+        in Extensions -> File(f.parentFile, f.nameWithoutExtension + ".xlsx")
+        else -> File(f.path + ".xlsx")
+    }
+
     class Loaded(val book: Book, val lost: Set<String>)
 
     fun read(file: File): Loaded = when (file.extension.lowercase()) {

@@ -98,7 +98,7 @@ class TextBridge(private val state: TextState) : Bridge.App {
             "texte_save" -> {
                 val p = args["path"]?.takeIf { it.isNotBlank() }?.let(::path)
                 val target = p ?: state.file ?: return@ui "Le document n'a pas encore de fichier : donne un chemin (.docx, .odt…)."
-                val f = if (target.extension.lowercase() in DocFiles.Extensions) target else File(target.path + ".docx")
+                val f = DocFiles.target(target)
                 if (state.saveTo(f)) "Enregistré : ${f.path}" else state.message
             }
             "texte_open" -> {

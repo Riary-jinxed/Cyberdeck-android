@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-// Netrunner OS's own apps (Photos, then Vidéo, PDF, Fichiers): one jar, one entry point per app
+// Netrunner OS's own apps (Photos, Vidéo, PDF, Texte, Tableur, Présentation…): one jar, one entry point per app
 // (Main.kt), run by the system Java of the OS. os/apps/build-deb.sh packages it.
 val appVersion = "0.1.0"
 
@@ -37,6 +37,8 @@ dependencies {
     implementation("org.apache.pdfbox:pdfbox:3.0.5")
     // Texte reads and writes Word files with Apache POI (OpenDocument is written by hand).
     implementation("org.apache.poi:poi-ooxml:5.5.1")
+    // Old Word and PowerPoint files (.doc, .ppt): POI's scratchpad, read only.
+    implementation("org.apache.poi:poi-scratchpad:5.5.1")
     testImplementation(kotlin("test"))
 }
 

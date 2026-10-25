@@ -3,6 +3,7 @@ package dev.netrunner.os
 import dev.netrunner.os.pdf.pdf
 import dev.netrunner.os.photos.photos
 import dev.netrunner.os.sheet.tableur
+import dev.netrunner.os.slides.presentation
 import dev.netrunner.os.text.texte
 import dev.netrunner.os.video.video
 import kotlin.system.exitProcess
@@ -16,8 +17,9 @@ fun main(args: Array<String>) {
         "pdf" -> pdf(rest)
         "texte" -> texte(rest)
         "tableur" -> tableur(rest)
+        "presentation" -> presentation(rest)
         else -> {
-            System.err.println("usage : netrunner-apps <photos|video|pdf|texte|tableur> [fichiers…]")
+            System.err.println("usage : netrunner-apps <photos|video|pdf|texte|tableur|presentation> [fichiers…]")
             exitProcess(2)
         }
     }

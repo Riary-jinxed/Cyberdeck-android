@@ -33,16 +33,7 @@ fonts-liberation2
 fonts-crosextra-carlito
 fonts-crosextra-caladea
 
-# Office: Texte and Tableur are home-made (netrunner-apps); LibreOffice stays for presentations
-# until Présentation is ready, and for old .doc files
-libreoffice-writer
-libreoffice-impress
-libreoffice-gtk3
-libreoffice-l10n-fr
-libreoffice-help-fr
-hunspell-fr
-hyphen-fr
-mythes-fr
+# Office: Texte, Tableur and Présentation are home-made (netrunner-apps, built by os/apps)
 
 # Internet
 firefox-esr

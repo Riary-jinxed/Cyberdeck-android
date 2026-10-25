@@ -254,7 +254,7 @@ class TextState {
 
     /** Saves to [file], or asks where; true once saved. */
     fun save(asNew: Boolean = false): Boolean {
-        val target = file?.takeIf { !asNew && it.extension.lowercase() in DocFiles.Extensions } ?: chooseSave() ?: return false
+        val target = file?.takeIf { !asNew && it.extension.lowercase() in DocFiles.Writable } ?: chooseSave() ?: return false
         return saveTo(target)
     }
 
@@ -278,7 +278,7 @@ class TextState {
         dialog.isVisible = true
         val name = dialog.file ?: return null
         val f = File(dialog.directory, name)
-        return if (f.extension.lowercase() in DocFiles.Extensions) f else File(f.path + ".docx")
+        return DocFiles.target(f)
     }
 
     fun chooseOpen() {

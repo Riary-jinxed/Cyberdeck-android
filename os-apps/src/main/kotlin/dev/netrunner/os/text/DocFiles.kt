@@ -3,6 +3,7 @@ package dev.netrunner.os.text
 import dev.netrunner.os.text.Doc.Align
 import dev.netrunner.os.text.Doc.Kind
 import dev.netrunner.os.text.Doc.Style
+import org.apache.poi.hwpf.HWPFDocument
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment
 import org.apache.poi.xwpf.usermodel.UnderlinePatterns
 import org.apache.poi.xwpf.usermodel.XWPFAbstractNum
@@ -33,10 +34,20 @@ import javax.xml.parsers.DocumentBuilderFactory
 object DocFiles {
     class Loaded(val doc: Doc, val lost: List<String> = emptyList())
 
-    val Extensions = setOf("docx", "odt", "txt", "md")
+    /** What Texte opens; it saves in [Writable] (an old .doc is saved again as .docx). */
+    val Extensions = setOf("docx", "doc", "odt", "txt", "md")
+    val Writable = setOf("docx", "odt", "txt", "md")
+
+    /** Where a file is saved: as it is, or as .docx when its kind cannot be written. */
+    fun target(f: File): File = when (f.extension.lowercase()) {
+        in Writable -> f
+        in Extensions -> File(f.parentFile, f.nameWithoutExtension + ".docx")
+        else -> File(f.path + ".docx")
+    }
 
     fun read(file: File): Loaded = when (file.extension.lowercase()) {
         "docx" -> readDocx(file)
+        "doc" -> readDoc(file)
         "odt" -> readOdt(file)
         "md" -> Loaded(Markdown.parse(file.readText()))
         else -> Loaded(Doc.of(file.readText().replace("\r\n", "\n").replace('\r', '\n')))
@@ -135,6 +146,37 @@ object DocFiles {
                             }
                         }
                     }
+                }
+            }
+        }
+        return Loaded(b.doc(), lost.toList())
+    }
+
+    /** Word 97-2003: text, headings, lists, alignments and styles of the characters. */
+    private fun readDoc(file: File): Loaded {
+        val lost = mutableSetOf<String>()
+        val b = Builder()
+        file.inputStream().use { HWPFDocument(it) }.use { doc ->
+            val range = doc.range
+            for (i in 0 until range.numParagraphs()) {
+                val p = range.getParagraph(i)
+                if (p.isInTable) lost += "tableaux (gardés en texte)"
+                var kind = kindOfStyle(null, doc.styleSheet.getStyleDescription(p.styleIndex.toInt())?.name)
+                if (p.isInList && kind == Kind.Normal) kind = Kind.Bullet
+                val align = when (p.justification) { 1 -> Align.Center; 2 -> Align.End; 3 -> Align.Justify; else -> Align.Start }
+                b.paragraph(Doc.Para(kind, align))
+                for (k in 0 until p.numCharacterRuns()) {
+                    val r = p.getCharacterRun(k)
+                    // Field marks, cell marks and picture anchors are control characters.
+                    val text = r.text().replace('\t', ' ').filter { it >= ' ' }
+                    if (r.text().contains('\u0001')) lost += "images"
+                    val styles = buildSet {
+                        if (r.isBold) add(Style.Bold)
+                        if (r.isItalic) add(Style.Italic)
+                        if (r.underlineCode != 0) add(Style.Underline)
+                        if (r.isStrikeThrough || r.isDoubleStrikeThrough) add(Style.Strike)
+                    }
+                    b.run(text, styles)
                 }
             }
         }
