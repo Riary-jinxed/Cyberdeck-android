@@ -61,6 +61,12 @@ class Aska(private val scope: CoroutineScope) {
     private val _music = MutableStateFlow<String?>(null)
     val music: StateFlow<String?> = _music
 
+    /** The latest pictures made together in ComfyUI, for the viewer; null closes it. */
+    private val _pictures = MutableStateFlow<List<Studio.Picture>?>(null)
+    val pictures: StateFlow<List<Studio.Picture>?> = _pictures
+
+    fun closePictures() { _pictures.value = null }
+
     private val ollama = Ollama { settings.value.ollamaUrl }
     private val history = Store.chat().toMutableList()
 
@@ -115,6 +121,19 @@ class Aska(private val scope: CoroutineScope) {
         override val deckLink get() = settings.value.deckLink
         override fun propose(edit: Tools.Edit) { pendingEdit = edit }
         override fun song() = _music.value
+        override suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?): String {
+            comfyOwn = true
+            try {
+                val pictures = Studio.generate(settings.value.comfyUrl, kind, prompt, listOf(Studio.NEGATIVE, negative).filter { it.isNotBlank() }.joinToString(", "), seed)
+                _pictures.value = pictures
+                pictures.firstOrNull()?.let { p -> withContext(Dispatchers.IO) { javax.imageio.ImageIO.read(p.file) }?.let { attached += Screen.encode(it) } }
+                return "Image prête (workflow ${pictures.first().workflow}, seed ${pictures.first().seed}) : ${pictures.joinToString(", ") { it.file.absolutePath }}. Elle s'affiche pour ${settings.value.handle} et elle est jointe : regarde-la."
+            } catch (e: java.io.IOException) {
+                return "ComfyUI ne répond pas à ${settings.value.comfyUrl} : il faut le lancer d'abord."
+            } finally {
+                comfyOwn = false
+            }
+        }
         override fun pomodoro(action: String, minutes: Int?): String = when (action) {
             "stop", "arrete", "arrête", "fin" -> if (focus == null) "Aucun pomodoro en cours." else {
                 val done = focus!!.rounds
@@ -246,6 +265,8 @@ class Aska(private val scope: CoroutineScope) {
         // A remark of hers gives way to the runner; an answer they are waiting for does not.
         if (text.isEmpty() || (_busy.value && !remarking)) return
         if (text == "/aide" || text == "/help") return say(Tools.help())
+        // « /image un chibi qui mange un macaron »: she writes the prompt herself.
+        if (text.startsWith("/image")) return send("Génère cette image avec ComfyUI (outil generate_image) : " + text.removePrefix("/image").trim().ifEmpty { "un chibi de toi qui fait coucou" })
         pendingEdit?.let { edit ->
             pendingEdit = null
             val answer = DeckLink.normalize(text).trim(' ', '!', '.')
@@ -342,7 +363,7 @@ class Aska(private val scope: CoroutineScope) {
                 val model = Ollama.pick(settings.value.model, installed)
                     ?: return@launch say(toolResult ?: Persona.noModel)
                 val messages = buildList {
-                    add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Memory.prompt(settings.value.handle)).joinToString("\n\n")))
+                    add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Studio.GUIDE, Memory.prompt(settings.value.handle)).joinToString("\n\n")))
                     recent(earlier).forEach { add(Ollama.Message(if (it.fromUser) "user" else "assistant", it.text)) }
                     add(Ollama.Message("user", userMessage, images = takeAttached()))
                 }.toMutableList()

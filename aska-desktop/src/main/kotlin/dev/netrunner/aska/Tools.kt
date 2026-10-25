@@ -81,6 +81,17 @@ object Tools {
         Tool("forget", "oublie", "Oublie ce qu'elle avait retenu à propos de quelque chose (« tout » pour tout).", listOf(Param("what", "les mots du souvenir à oublier")), "gomme une page"),
         Tool("memories", "memoire", "Tout ce qu'elle a retenu durablement sur l'utilisateur.", doing = "relit son carnet"),
         Tool("now_playing", "musique", "La musique qui passe sur le PC en ce moment (Spotify, YouTube Music, Deezer…).", doing = "tend l'oreille"),
+        Tool(
+            "generate_image", "dessine",
+            "Génère une image avec le ComfyUI local (Anima et les LoRA d'As//ka) à partir d'un prompt en anglais que tu écris selon les règles de génération. L'image s'affiche pour l'utilisateur, et tu la vois.",
+            listOf(
+                Param("prompt", "le prompt positif, en tags anglais"),
+                Param("kind", "chibi, portrait, ou autre pour un sujet qui n'est pas toi"),
+                Param("negative", "à éviter en plus du négatif de base", required = false),
+                Param("seed", "le seed de l'image à retoucher ; vide pour une nouvelle", "integer", required = false),
+            ),
+            "dessine dans ComfyUI",
+        ),
         Tool("steam_games", "steam", "La bibliothèque Steam : jeux joués récemment, temps de jeu total et des deux dernières semaines.", doing = "feuillette Steam"),
     )
 
@@ -175,6 +186,7 @@ object Tools {
         fun propose(edit: Edit)
         fun pomodoro(action: String, minutes: Int?): String
         fun song(): String?
+        suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?): String
     }
 
     /** Runs [tool] and answers in text, errors included: the model reads them too. */
@@ -225,6 +237,7 @@ object Tools {
                 "memories" -> Memory.text()
                 "now_playing" -> host.song()?.let { "En ce moment : $it" } ?: "Aucune musique repérée (Spotify, foobar2000, MusicBee, AIMP, ou un onglet YouTube Music, Deezer, SoundCloud)."
                 "steam_games" -> Steam.text()
+                "generate_image" -> host.generate(need("prompt") ?: return@runCatching "Quel prompt ?", need("kind") ?: "chibi", need("negative").orEmpty(), need("seed")?.toLongOrNull())
                 "deck_use_stock" -> {
                     val used = need("quantity")?.toLongOrNull()?.takeIf { it > 0 } ?: return@runCatching "Quelle quantité a été utilisée ?"
                     val item = need("item") ?: return@runCatching "Quel consommable ?"

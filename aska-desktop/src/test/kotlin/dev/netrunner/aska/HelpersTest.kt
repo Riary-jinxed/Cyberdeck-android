@@ -153,4 +153,19 @@ class HelpersTest {
         assertEquals(1536, back.width)
         assertEquals(864, back.height)
     }
+
+    @Test
+    fun fillsComfyWorkflows() {
+        val marked = """{"6": {"class_type": "CLIPTextEncode", "inputs": {"text": "POSITIVE_PROMPT", "clip": ["4", 0]}},
+            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "NEGATIVE_PROMPT"}},
+            "3": {"class_type": "KSampler", "inputs": {"seed": "SEED", "positive": ["6", 0], "negative": ["7", 0]}}}"""
+        val a = Studio.fill(marked, "ashka_chibi, 1girl", "red eyes", 42)
+        assertTrue(a.toString().contains("\"text\":\"ashka_chibi, 1girl\""))
+        assertTrue(a.toString().contains("\"seed\":42"))
+        val plain = marked.replace("POSITIVE_PROMPT", "old").replace("NEGATIVE_PROMPT", "bad").replace("\"SEED\"", "1")
+        val b = Studio.fill(plain, "new prompt", "worse", 7).toString()
+        assertTrue(b.contains("\"text\":\"new prompt\""))
+        assertTrue(b.contains("\"text\":\"worse\""))
+        assertTrue(b.contains("\"seed\":7"))
+    }
 }

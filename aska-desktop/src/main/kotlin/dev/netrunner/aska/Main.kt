@@ -52,5 +52,7 @@ fun main() {
 
         Companion(aska, shown, onSettings = { settingsOpen = true })
         if (settingsOpen) SettingsWindow(aska, onClose = { settingsOpen = false }, onQuit = ::quit)
+        val pictures by aska.pictures.collectAsState()
+        pictures?.takeIf { it.isNotEmpty() }?.let { StudioWindow(aska, it, onClose = aska::closePictures) }
     }
 }
