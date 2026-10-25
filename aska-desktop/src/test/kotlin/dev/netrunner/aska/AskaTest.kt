@@ -115,12 +115,7 @@ class AskaTest {
     }
 
     @Test
-    fun handsTakeTurnsOnTheKeyboard() {
-        (1L..200L).forEach { n ->
-            val (row, col) = bongoKey(n)
-            assertTrue(row in 0..2, "rang $row")
-            if (n % 2L == 0L) assertTrue(col in 0..4, "touche $col à gauche") else assertTrue(col in 5..9, "touche $col à droite")
-        }
-        assertTrue((1L..40L).map { bongoKey(it) }.toSet().size > 10, "les touches varient")
+    fun keyboardDrawingsArePackaged() {
+        listOf("bongo_idle", "bongo_left", "bongo_right").forEach { assertTrue(javaClass.getResource("/sprites/$it.png") != null, it) }
     }
 }

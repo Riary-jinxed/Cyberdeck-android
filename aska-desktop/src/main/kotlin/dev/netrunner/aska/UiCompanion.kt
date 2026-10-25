@@ -1,12 +1,10 @@
 package dev.netrunner.aska
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -31,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -154,80 +151,83 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
         initialValue = 1f, targetValue = 1.025f,
         animationSpec = infiniteRepeatable(tween(2400), RepeatMode.Reverse),
     )
-    // She bounces on every key, tilting left then right, like Bongo Cat.
-    val bounce = remember { Animatable(1f) }
-    var tilt by remember { mutableFloatStateOf(0f) }
+    // Bongo Cat: while the runner types she sits at her keyboard, and on every key one of her
+    // hands slaps it, left then right (three drawings that differ only by the hands).
+    val bongo = remember { BONGO.associateWith { sprite(it) } }
     val taps by Activity.taps.collectAsState()
     // The count comes back from her last session: only new presses make her play.
     val typedFrom = remember { taps }
+    var hand by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(taps) {
         if (!keyboard || taps == typedFrom) return@LaunchedEffect
-        tilt = if (tilt > 0f) -2.5f else 2.5f
-        bounce.snapTo(0.93f)
-        bounce.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 700f))
-        tilt = 0f
+        hand = if (taps % 2L == 0L) "bongo_left" else "bongo_right"
+        delay(KEY_DOWN_MS)
+        hand = null
     }
     val typing by produceState(false, taps) {
         value = taps > typedFrom
         delay(3_000)
         value = false
     }
+    // In the middle of a conversation, her talking and thinking poses come first.
+    val atKeyboard = keyboard && typing && pose != Pose.Talking && pose != Pose.Thinking
 
     var pendingClick by remember { mutableStateOf<Job?>(null) }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(contentAlignment = Alignment.BottomCenter) {
-            Crossfade(pose, animationSpec = tween(250)) { p ->
+        Box(
+            contentAlignment = Alignment.BottomCenter,
+            modifier = Modifier.height(height.dp).pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    if (currentEvent.buttons.isSecondaryPressed) {
+                        onSettings()
+                        return@awaitEachGesture
+                    }
+                    val startMouse = MouseInfo.getPointerInfo().location
+                    val startX = window.x
+                    val startY = window.y
+                    var dragged = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val p2 = MouseInfo.getPointerInfo().location
+                        val dx = p2.x - startMouse.x
+                        val dy = p2.y - startMouse.y
+                        if (!dragged && abs(dx) + abs(dy) > 4) dragged = true
+                        if (dragged) {
+                            window.setLocation(startX + dx, startY + dy)
+                            change.consume()
+                        }
+                    }
+                    if (dragged) {
+                        onMoved(window.x, window.y + window.height)
+                    } else if (pendingClick?.isActive == true) {
+                        // Double click: she listens.
+                        pendingClick?.cancel()
+                        aska.openChat()
+                    } else {
+                        pendingClick = scope.launch {
+                            delay(DOUBLE_CLICK_MS)
+                            aska.poke()
+                        }
+                    }
+                }
+            },
+        ) {
+            Crossfade(if (atKeyboard) null else pose, animationSpec = tween(200)) { p ->
                 Image(
-                    sprites.getValue(p), contentDescription = "As//ka",
+                    if (p == null) bongo.getValue(hand ?: "bongo_idle") else sprites.getValue(p), contentDescription = "As//ka",
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.BottomCenter,
                     modifier = Modifier.height(height.dp).graphicsLayer {
                         transformOrigin = TransformOrigin(0.5f, 1f)
-                        scaleY = breath * bounce.value
-                        scaleX = 2f - bounce.value
-                        rotationZ = tilt
-                    }.pointerInput(Unit) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            if (currentEvent.buttons.isSecondaryPressed) {
-                                onSettings()
-                                return@awaitEachGesture
-                            }
-                            val startMouse = MouseInfo.getPointerInfo().location
-                            val startX = window.x
-                            val startY = window.y
-                            var dragged = false
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
-                                val p2 = MouseInfo.getPointerInfo().location
-                                val dx = p2.x - startMouse.x
-                                val dy = p2.y - startMouse.y
-                                if (!dragged && abs(dx) + abs(dy) > 4) dragged = true
-                                if (dragged) {
-                                    window.setLocation(startX + dx, startY + dy)
-                                    change.consume()
-                                }
-                            }
-                            if (dragged) {
-                                onMoved(window.x, window.y + window.height)
-                            } else if (pendingClick?.isActive == true) {
-                                // Double click: she listens.
-                                pendingClick?.cancel()
-                                aska.openChat()
-                            } else {
-                                pendingClick = scope.launch {
-                                    delay(DOUBLE_CLICK_MS)
-                                    aska.poke()
-                                }
-                            }
-                        }
+                        // At the keyboard she stays still, so only her hands move.
+                        scaleY = if (p == null) 1f else breath
                     },
                 )
             }
-            BongoKeyboard(taps, keyboard && typing, (height * 0.8f).dp)
         }
         Box(Modifier.height(FOOTER.dp)) {
             if (keyboard && typing) T("⌨ $taps", Cp.Pink, 12.sp, MonoFont)
@@ -296,4 +296,7 @@ private const val BUBBLE_WIDTH = 320f
 private const val SPRITE_HEIGHT = 220f
 private const val BUBBLE_HEIGHT = 260
 private const val FOOTER = 18
+private val BONGO = listOf("bongo_idle", "bongo_left", "bongo_right")
+/** How long a hand stays on the key. */
+private const val KEY_DOWN_MS = 110L
 private const val DOUBLE_CLICK_MS = 300L
