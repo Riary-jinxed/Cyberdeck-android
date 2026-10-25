@@ -34,10 +34,22 @@ object Activity {
     private val _summons = MutableStateFlow(0L)
     val summons: StateFlow<Long> = _summons
 
+    /** True while Ctrl+Alt+Espace is held: she listens (push to talk). */
+    private val _talk = MutableStateFlow(false)
+    val talk: StateFlow<Boolean> = _talk
+
     @Volatile var lastInput: Long = System.currentTimeMillis()
         private set
     @Volatile var lastKey: Long = 0L
         private set
+    /** Last time the mouse moved or clicked: her hand goes to her mouse. */
+    @Volatile var lastMouse: Long = 0L
+        private set
+
+    @Volatile private var lastKeyEvent = 0L
+
+    /** Keys held down: the auto-repeat of a long press counts once. */
+    private val held = java.util.Collections.synchronizedSet(HashSet<Int>())
 
     /** False when the system refused the hook (Wayland without XWayland, for instance). */
     var hooked = false
@@ -64,22 +76,36 @@ object Activity {
         override fun nativeKeyPressed(e: NativeKeyEvent) {
             val now = System.currentTimeMillis()
             lastInput = now
+            // A release missed (a lock screen, a focus change) must not keep a key silent forever.
+            if (now - lastKeyEvent > 3_000) held.clear()
+            lastKeyEvent = now
+            if (!held.add(e.rawCode)) return
             lastKey = now
             _taps.update { it + 1 }
             val mods = e.modifiers
             if (e.keyCode == NativeKeyEvent.VC_A && mods and NativeInputEvent.CTRL_MASK != 0 && mods and NativeInputEvent.ALT_MASK != 0) {
                 _summons.update { it + 1 }
             }
+            if (e.keyCode == NativeKeyEvent.VC_SPACE && mods and NativeInputEvent.CTRL_MASK != 0 && mods and NativeInputEvent.ALT_MASK != 0) _talk.value = true
+        }
+
+        override fun nativeKeyReleased(e: NativeKeyEvent) {
+            held.remove(e.rawCode)
+            if (e.keyCode == NativeKeyEvent.VC_SPACE && _talk.value) _talk.value = false
         }
     }
 
     private val mouse = object : NativeMouseInputListener {
         override fun nativeMouseMoved(e: NativeMouseEvent) {
             lastInput = System.currentTimeMillis()
+            lastMouse = lastInput
         }
+
+        override fun nativeMouseDragged(e: NativeMouseEvent) = nativeMouseMoved(e)
 
         override fun nativeMousePressed(e: NativeMouseEvent) {
             lastInput = System.currentTimeMillis()
+            lastMouse = lastInput
         }
     }
 
@@ -89,7 +115,7 @@ object Activity {
 }
 
 /** The window in front: its title and program. */
-data class Foreground(val title: String, val process: String, val fullscreen: Boolean) {
+data class Foreground(val title: String, val process: String, val fullscreen: Boolean, val path: String = "") {
     /** As she reads it: « Elden Ring » (eldenring). */
     fun label(): String = when {
         title.isBlank() -> process
@@ -103,6 +129,34 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
 
         fun isShell(process: String) = process.lowercase() in SHELL
 
+        /** Game folders of the usual stores. */
+        private val GAME_DIRS = listOf("steamapps", "epic games", "riot games", "gog galaxy", "ubisoft game launcher", "ea games", "battle.net", "xboxgames", "heroic", "lutris")
+
+        /** A game in front: Warframe, or a program installed by a game store. */
+        fun isGame(f: Foreground): Boolean = Warframe.isRunning(f.process) ||
+            f.path.replace('\\', '/').lowercase().let { p -> GAME_DIRS.any { p.contains("/$it/") } }
+
+        /** Players, and streaming apps or sites. */
+        private val PLAYERS = setOf(
+            "vlc", "mpc-hc", "mpc-hc64", "mpc-be", "mpc-be64", "potplayer", "potplayermini", "potplayermini64", "mpv", "kodi", "plex",
+            "wmplayer", "video.ui", "netflix", "totem", "celluloid", "smplayer", "jellyfin", "jellyfinmediaplayer", "stremio",
+        )
+        private val BROWSERS = setOf("chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "chromium", "firefox-esr", "librewolf", "zen")
+        private val SITES = listOf(
+            "youtube", "netflix", "twitch", "prime video", "disney+", "crunchyroll", "adn", "canal+", "molotov", "arte",
+            "france.tv", "paramount+", "apple tv", "max", "dailymotion", "vimeo", "plex", "jellyfin", "anime",
+        )
+
+        /** True when the window in front plays something to watch: a video player, or a streaming site in a browser. */
+        fun watching(f: Foreground?): Boolean {
+            f ?: return false
+            val process = f.process.lowercase().removeSuffix(".exe")
+            if (process in PLAYERS) return true
+            if (process !in BROWSERS) return false
+            val title = f.title.lowercase()
+            return SITES.any { site -> Regex("(^|[^a-z])" + Regex.escape(site) + "([^a-z]|$)").containsMatchIn(title) }
+        }
+
         fun read(): Foreground? = runCatching { if (isWindows) windows() else linux() }.getOrNull()
 
         private fun windows(): Foreground? {
@@ -113,8 +167,8 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
             user32.GetWindowText(hwnd, buffer, buffer.size)
             val pid = IntByReference()
             user32.GetWindowThreadProcessId(hwnd, pid)
-            val process = ProcessHandle.of(pid.value.toLong()).flatMap { it.info().command() }
-                .map { File(it).name.substringBeforeLast('.') }.orElse("")
+            val path = ProcessHandle.of(pid.value.toLong()).flatMap { it.info().command() }.orElse("")
+            val process = File(path).name.substringBeforeLast('.')
             val rect = WinDef.RECT()
             user32.GetWindowRect(hwnd, rect)
             val monitor = WinUser.MONITORINFO()
@@ -123,7 +177,7 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
             // A game in full screen covers its whole monitor, taskbar included; a maximized window does not.
             val fullscreen = !isShell(process) && rect.left <= screen.left && rect.top <= screen.top &&
                 rect.right >= screen.right && rect.bottom >= screen.bottom
-            return Foreground(String(buffer, 0, length), process, fullscreen)
+            return Foreground(String(buffer, 0, length), process, fullscreen, path)
         }
 
         /** X11 (and XWayland) through xdotool, else xprop. */
@@ -136,9 +190,9 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
                 ?: ""
             val pid = run("xdotool", "getwindowpid", id)?.toLongOrNull()
                 ?: run("xprop", "-id", id, "_NET_WM_PID")?.substringAfter("= ", "")?.trim()?.toLongOrNull()
-            val process = pid?.let { p -> ProcessHandle.of(p).flatMap { it.info().command() }.map { File(it).name }.orElse("") }.orEmpty()
+            val path = pid?.let { p -> ProcessHandle.of(p).flatMap { it.info().command() }.orElse("") }.orEmpty()
             val state = run("xprop", "-id", id, "_NET_WM_STATE").orEmpty()
-            return Foreground(title, process, state.contains("_NET_WM_STATE_FULLSCREEN"))
+            return Foreground(title, File(path).name, state.contains("_NET_WM_STATE_FULLSCREEN"), path)
         }
 
         private fun run(vararg command: String): String? = runCatching {

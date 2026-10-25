@@ -68,9 +68,9 @@ class NetTest {
         val (ping, args) = Tools.parseCommand("/ping 192.168.1.1")!!
         assertEquals("ping", ping.name)
         assertEquals(mapOf("host" to "192.168.1.1"), args)
-        assertEquals(mapOf("host" to "srv", "port" to "443"), Tools.parseCommand("/port srv 443")!!.second)
-        assertEquals(mapOf("query" to "Dupont accès"), Tools.parseCommand("/kit Dupont accès")!!.second)
-        assertEquals(emptyMap<String, String>(), Tools.parseCommand("/scan")!!.second)
+        assertEquals(mapOf("host" to "srv", "port" to "443"), Tools.parseCommand("/port srv 443")!!.args)
+        assertEquals(mapOf("query" to "Dupont accès"), Tools.parseCommand("/kit Dupont accès")!!.args)
+        assertEquals(emptyMap<String, String>(), Tools.parseCommand("/scan")!!.args)
         assertNull(Tools.parseCommand("/inconnu"))
         assertNull(Tools.parseCommand("salut"))
         assertEquals(Tools.all.size, Tools.definitions().size)
@@ -115,7 +115,7 @@ class NetTest {
         assertEquals("12", DeckLink.items(home, "stock").first { it.id == "s1" }.s("qty"))
         var proposed: Tools.Edit? = null
         val text = kotlinx.coroutines.runBlocking {
-            Tools.run(Tools.byName("deck_use_stock")!!, mapOf("quantity" to "3", "item" to "rj45"), home.path) { proposed = it }
+            Tools.run(Tools.byName("deck_use_stock")!!, mapOf("quantity" to "3", "item" to "rj45"), host(home.path) { proposed = it })
         }
         assertTrue(text.contains("PAS encore enregistré"), text)
         assertEquals(Tools.Edit("stock", "s1", mapOf("qty" to "9"), "Connecteurs RJ45 : 12 pcs → 9 pcs (−3)"), proposed)
@@ -125,9 +125,18 @@ class NetTest {
         // Unknown field: nothing prepared.
         proposed = null
         kotlinx.coroutines.runBlocking {
-            Tools.run(Tools.byName("deck_update")!!, mapOf("kind" to "stock", "item" to "colliers", "field" to "couleur", "value" to "rouge"), home.path) { proposed = it }
+            Tools.run(Tools.byName("deck_update")!!, mapOf("kind" to "stock", "item" to "colliers", "field" to "couleur", "value" to "rouge"), host(home.path) { proposed = it })
         }
         assertNull(proposed)
         home.deleteRecursively()
+    }
+
+    private fun host(deck: String, onEdit: (Tools.Edit) -> Unit) = object : Tools.Host {
+        override val deckLink = deck
+        override fun propose(edit: Tools.Edit) = onEdit(edit)
+        override fun attach(image: String) {}
+        override fun pomodoro(action: String, minutes: Int?) = ""
+        override fun song(): String? = null
+        override suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?) = ""
     }
 }

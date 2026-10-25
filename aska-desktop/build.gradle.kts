@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.1.1"
+val appVersion = "0.1.2"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -38,7 +38,7 @@ compose.desktop {
             packageVersion = appVersion
             description = "As//ka, la compagne du deck, sur le bureau"
             vendor = "Netrunner"
-            modules("java.net.http")
+            modules("java.net.http", "java.management", "jdk.management")
             windows {
                 perUserInstall = true
                 // Its folder can be chosen by hand; Deck Link installs it next to itself (Apps.kt).
