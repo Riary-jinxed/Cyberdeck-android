@@ -33,9 +33,9 @@ fonts-liberation2
 fonts-crosextra-carlito
 fonts-crosextra-caladea
 
-# Office (equivalents of Word, Excel, PowerPoint)
+# Office: Texte and Tableur are home-made (netrunner-apps); LibreOffice stays for presentations
+# until Présentation is ready, and for old .doc files
 libreoffice-writer
-libreoffice-calc
 libreoffice-impress
 libreoffice-gtk3
 libreoffice-l10n-fr

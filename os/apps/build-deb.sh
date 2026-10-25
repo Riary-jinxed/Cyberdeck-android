@@ -7,7 +7,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 JAR=${1:?jar}
 OUT=${2:-.}
 VERSION=$(grep -o 'val appVersion = "[^"]*"' "$HERE/../../os-apps/build.gradle.kts" | cut -d'"' -f2)
-APPS="photos video pdf texte"
+APPS="photos video pdf texte tableur"
 ROOT=$(mktemp -d)
 trap 'rm -rf "$ROOT"' EXIT
 chmod 755 "$ROOT"
@@ -36,7 +36,8 @@ Priority: optional
 Description: Applis de Netrunner OS
  Les applis maison de Netrunner OS, reliees a As//ka par son pont :
  Photos (galerie, visionneuse, diaporama), Video (lecteur sur libVLC), PDF (lecteur),
- Texte (traitement de texte, Word et OpenDocument).
+ Texte (traitement de texte, Word et OpenDocument), Tableur (classeurs Excel,
+ OpenDocument et CSV).
 CONTROL
 mkdir -p "$OUT"
 dpkg-deb --root-owner-group --build "$ROOT" "$OUT/netrunner-apps_${VERSION}_amd64.deb"
