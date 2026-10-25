@@ -54,7 +54,7 @@ import java.io.File
 // ---------------------------------------------------------------------------------- shared bits
 
 @Composable
-private fun Button(label: String, color: Color = Cp.Yellow, filled: Boolean = false, onClick: () -> Unit) {
+internal fun Button(label: String, color: Color = Cp.Yellow, filled: Boolean = false, onClick: () -> Unit) {
     T(
         label, if (filled) Cp.Background else color, 14.sp, weight = FontWeight.Bold,
         modifier = Modifier
@@ -65,7 +65,7 @@ private fun Button(label: String, color: Color = Cp.Yellow, filled: Boolean = fa
 }
 
 @Composable
-private fun Section(title: String) = T(title, Cp.Yellow, 13.sp, weight = FontWeight.Bold)
+internal fun Section(title: String) = T(title, Cp.Yellow, 13.sp, weight = FontWeight.Bold)
 
 @Composable
 private fun SearchField(value: String, onChange: (String) -> Unit, hint: String) {

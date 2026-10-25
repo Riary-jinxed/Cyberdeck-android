@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.compose") version "1.10.3"
 }
 
-val appVersion = "0.1.0"
+val appVersion = "0.2.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -19,6 +19,15 @@ kotlin {
     sourceSets["main"].kotlin.srcDir("../sync-core/src/main/kotlin")
     sourceSets["test"].kotlin.srcDir("../sync-core/src/test/kotlin")
 }
+
+// The version the app shows and compares with its releases (Apps.kt).
+val versionResource = tasks.register("versionResource") {
+    val out = layout.buildDirectory.dir("generated/version")
+    inputs.property("version", appVersion)
+    outputs.dir(out)
+    doLast { out.get().file("decklink-version.txt").asFile.writeText(appVersion) }
+}
+sourceSets["main"].resources.srcDir(versionResource)
 
 dependencies {
     implementation(compose.desktop.currentOs)

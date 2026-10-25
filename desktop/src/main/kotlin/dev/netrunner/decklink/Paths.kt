@@ -12,7 +12,7 @@ import java.util.Properties
  */
 object Paths {
     /** The install folder, from the launcher jpackage writes; null when run from Gradle. */
-    private val installDir: File? = System.getProperty("jpackage.app-path")?.let { File(it).absoluteFile.parentFile }
+    val installDir: File? = System.getProperty("jpackage.app-path")?.let { File(it).absoluteFile.parentFile }
         ?.let { if (it.name == "bin") it.parentFile else it }
 
     val home: File = run {

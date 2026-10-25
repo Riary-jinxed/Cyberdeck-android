@@ -40,6 +40,7 @@ class LinkState {
     private val server = SyncServer(Paths.sync, { code }, outbox = outbox, onEvent = ::onEvent)
     private val responder = Discovery.Responder(name = { pcName })
     private var stopFleet: () -> Unit = {}
+    private var stopAska: () -> Unit = {}
 
     init {
         try {
@@ -57,6 +58,8 @@ class LinkState {
             } catch (e: Exception) {
                 fleetError = "Port ${Fleet.PORT} indisponible pour les agents Deck Probe : ${e.message}"
             }
+            // Without it As//ka only reads the kit: nothing else depends on it.
+            runCatching { stopAska = AskaLink.serve(::askaEdit, ::note) }
         }
     }
 
@@ -66,6 +69,11 @@ class LinkState {
     fun edit(kind: String, id: String, fields: Map<String, Any>) {
         outbox.put(kind, id, fields.mapValues { (_, v) -> if (v is Number) JsonPrimitive(v) else JsonPrimitive(v.toString()) })
         reload()
+    }
+
+    /** An edit from As//ka, on her server's thread: applied on the screens' side. */
+    private fun askaEdit(kind: String, id: String, fields: Map<String, Any>) {
+        javax.swing.SwingUtilities.invokeAndWait { edit(kind, id, fields) }
     }
 
     fun remove(kind: String, id: String) {
@@ -114,6 +122,7 @@ class LinkState {
         server.stop()
         responder.stop()
         stopFleet()
+        stopAska()
     }
 
     private fun onEvent(e: SyncServer.Event) {
