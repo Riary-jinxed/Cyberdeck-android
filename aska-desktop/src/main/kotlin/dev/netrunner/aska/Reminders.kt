@@ -99,11 +99,13 @@ object Reminders {
             return at
         }
         if (tomorrow) return null
-        // A duration: 20, 20 min, 1 h 30, 1h30min, 90s, 2 heures.
-        val m = Regex("^(?:(\\d+)\\s*(?:h|heures?)\\s*)?(?:(\\d+)\\s*(?:m|mn|min|mins|minutes?)?\\s*)?(?:(\\d+)\\s*(?:s|sec|secondes?))?$").find(text) ?: return null
-        val (h, min, s) = m.destructured
-        if (h.isEmpty() && min.isEmpty() && s.isEmpty()) return null
-        val seconds = (h.toLongOrNull() ?: 0) * 3600 + (min.toLongOrNull() ?: 0) * 60 + (s.toLongOrNull() ?: 0)
+        // A duration: 20, 20 min, 1 h 30, 1h30min, 90s, 2 heures. A bare number is minutes.
+        text.toLongOrNull()?.let { return if (it in 1..366L * 24 * 60) now.plusMinutes(it) else null }
+        Regex("^(\\d+)\\s*(?:secondes?|sec|s)$").find(text)?.let { return now.plusSeconds(it.groupValues[1].toLong().coerceAtLeast(1)) }
+        val m = Regex("^(?:(\\d+)\\s*(?:h|heures?)\\s*)?(?:(\\d+)\\s*(?:minutes?|mins?|mn|m)?\\s*)?$").find(text) ?: return null
+        val (h, min) = m.destructured
+        if (h.isEmpty() && min.isEmpty()) return null
+        val seconds = (h.toLongOrNull() ?: 0) * 3600 + (min.toLongOrNull() ?: 0) * 60
         if (seconds <= 0 || seconds > 366L * 24 * 3600) return null
         return now.plusSeconds(seconds)
     }
