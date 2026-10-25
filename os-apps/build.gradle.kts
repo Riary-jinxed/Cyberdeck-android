@@ -30,8 +30,11 @@ sourceSets["main"].resources.srcDir(files(layout.buildDirectory.dir("generated/f
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
     // Vidéo decodes with libVLC (the system's libvlc5), through its Java binding.
     implementation("uk.co.caprica:vlcj:4.8.3")
+    // PDF reads and draws its pages with PDFBox (as Deck Link writes its reports).
+    implementation("org.apache.pdfbox:pdfbox:3.0.5")
     testImplementation(kotlin("test"))
 }
 

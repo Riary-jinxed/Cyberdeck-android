@@ -1,5 +1,6 @@
 package dev.netrunner.os
 
+import dev.netrunner.os.pdf.pdf
 import dev.netrunner.os.photos.photos
 import dev.netrunner.os.video.video
 import kotlin.system.exitProcess
@@ -10,8 +11,9 @@ fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         "photos" -> photos(rest)
         "video" -> video(rest)
+        "pdf" -> pdf(rest)
         else -> {
-            System.err.println("usage : netrunner-apps <photos|video> [fichiers…]")
+            System.err.println("usage : netrunner-apps <photos|video|pdf> [fichiers…]")
             exitProcess(2)
         }
     }

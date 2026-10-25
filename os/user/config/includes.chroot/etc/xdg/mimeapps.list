@@ -1,5 +1,5 @@
 [Default Applications]
-application/pdf=org.gnome.Evince.desktop
+application/pdf=netrunner-pdf.desktop
 image/jpeg=netrunner-photos.desktop
 image/png=netrunner-photos.desktop
 image/gif=netrunner-photos.desktop

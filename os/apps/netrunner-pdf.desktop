@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PDF
+GenericName=Lecteur PDF
+Comment=Lire un PDF, zoomer, chercher un mot
+Exec=netrunner-pdf %f
+Icon=netrunner-pdf
+Terminal=false
+Categories=Office;Viewer;
+MimeType=application/pdf;
+Keywords=pdf;document;lire;

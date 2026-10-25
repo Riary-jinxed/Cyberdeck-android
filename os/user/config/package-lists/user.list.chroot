@@ -52,9 +52,6 @@ firefox-esr-l10n-fr
 kdenlive
 breeze-icon-theme
 
-# PDF reader
-evince
-
 # French everywhere
 locales
 console-setup
