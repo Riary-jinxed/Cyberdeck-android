@@ -14,7 +14,7 @@ import kotlinx.serialization.json.putJsonObject
 
 /**
  * Her tools: the network toolbox and Deck Link's kit, offered to the model (Ollama's tool
- * calling) and to the runner as /commands. All of them only read.
+ * calling) and to the runner as /commands. All of them only read, except the kit edits, which wait for « oui ».
  */
 object Tools {
 
@@ -46,6 +46,11 @@ object Tools {
                 Param("field", "le champ à changer"), Param("value", "la nouvelle valeur"),
             ),
             "prépare la modification",
+        ),
+        Tool(
+            "warframe_status", "wf",
+            "L'état du monde de Warframe en ce moment : cycles (Plaines d'Eidolon jour ou nuit, Vallée Orbis, Désert de Cambion, Zariman) avec le temps restant, Baro Ki'Teer et son stock, sortie, chasse à l'archonte, fissures du Néant, défis Nightwave, récompense Steel Path.",
+            doing = "consulte Warframe",
         ),
         Tool("deck_fleet", "parc", "Le parc de PC remonté par Deck Probe : nom, modèle, n° de série, OS, CPU, RAM, disques, IP, MAC.", doing = "ouvre la fiche du parc"),
     )
@@ -133,6 +138,7 @@ object Tools {
                 "diagnose_internet" -> Net.diagnose()
                 "deck_search" -> need("query")?.let { DeckLink.search(deckLink, it) } ?: "Que faut-il chercher dans le kit ?"
                 "deck_fleet" -> DeckLink.fleet(deckLink)
+                "warframe_status" -> Warframe.world()?.text() ?: "L'API Warframe (warframestat.us) ne répond pas pour l'instant."
                 "deck_use_stock" -> {
                     val used = need("quantity")?.toLongOrNull()?.takeIf { it > 0 } ?: return@runCatching "Quelle quantité a été utilisée ?"
                     val item = need("item") ?: return@runCatching "Quel consommable ?"

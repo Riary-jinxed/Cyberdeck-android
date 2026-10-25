@@ -68,6 +68,7 @@ import java.awt.MouseInfo
 import java.awt.Window.Type
 import androidx.compose.ui.awt.ComposeWindow
 import kotlin.math.abs
+import kotlin.random.Random
 import kotlin.math.roundToInt
 
 /** Her window: transparent, borderless, above everything, out of the taskbar. */
@@ -151,9 +152,11 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
         initialValue = 1f, targetValue = 1.025f,
         animationSpec = infiniteRepeatable(tween(2400), RepeatMode.Reverse),
     )
-    // Bongo Cat: while the runner types she sits at her keyboard, and on every key one of her
-    // hands slaps it, left then right (three drawings that differ only by the hands).
-    val bongo = remember { BONGO.associateWith { sprite(it) } }
+    // At her desk (Bongo Cat): she sits at her keyboard, slaps a key with one hand then the other
+    // as the runner types, takes her mouse when the runner's mouse moves, blinks, watches videos
+    // with the runner and dozes off on her arms. Drawings that differ only where she moves.
+    val desk = remember { DESK.associateWith { spriteOrNull(it) } }
+    val watching by aska.watching.collectAsState()
     val taps by Activity.taps.collectAsState()
     // The count comes back from her last session: only new presses make her play.
     val typedFrom = remember { taps }
@@ -169,8 +172,35 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
         delay(3_000)
         value = false
     }
-    // In the middle of a conversation, her talking and thinking poses come first.
-    val atKeyboard = keyboard && typing && pose != Pose.Talking && pose != Pose.Thinking
+    // Her mouse follows the runner's for a moment after it stops.
+    val mousing by produceState(false, keyboard) {
+        while (keyboard) {
+            val now = System.currentTimeMillis()
+            value = now - Activity.lastMouse < MOUSE_HOLD_MS && Activity.lastMouse > Activity.lastKey
+            delay(120)
+        }
+        value = false
+    }
+    val blinking by produceState(false, keyboard) {
+        while (keyboard) {
+            delay(Random.nextLong(2_500, 6_000))
+            value = true
+            delay(150)
+            value = false
+        }
+    }
+    // Her face-to-face poses (talking, thinking, a reaction) come first; otherwise she stays at her desk.
+    val atDesk = keyboard && pose !in FACE_POSES
+    val deskFrame = when {
+        !atDesk -> null
+        pose == Pose.Sleep -> "bongo_sleep"
+        hand != null -> hand
+        typing -> "bongo_idle"
+        mousing -> "bongo_mouse"
+        watching -> "bongo_watch"
+        blinking -> "bongo_blink"
+        else -> "bongo_idle"
+    }?.let { name -> name.takeIf { desk[it] != null } ?: if (name == "bongo_sleep") null else "bongo_idle" }
 
     var pendingClick by remember { mutableStateOf<Job?>(null) }
 
@@ -216,15 +246,16 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
                 }
             },
         ) {
-            Crossfade(if (atKeyboard) null else pose, animationSpec = tween(200)) { p ->
+            // Frames of the desk swap at once (only a hand or the eyes change); the rest cross-fades.
+            Crossfade(if (deskFrame != null) "desk" else pose, animationSpec = tween(200)) { p ->
                 Image(
-                    if (p == null) bongo.getValue(hand ?: "bongo_idle") else sprites.getValue(p), contentDescription = "As//ka",
+                    if (p == "desk") desk[deskFrame ?: "bongo_idle"]!! else sprites.getValue(p as Pose), contentDescription = "As//ka",
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.BottomCenter,
                     modifier = Modifier.height(height.dp).graphicsLayer {
                         transformOrigin = TransformOrigin(0.5f, 1f)
                         // At the keyboard she stays still, so only her hands move.
-                        scaleY = if (p == null) 1f else breath
+                        scaleY = if (p == "desk") 1f else breath
                     },
                 )
             }
@@ -296,7 +327,13 @@ private const val BUBBLE_WIDTH = 320f
 private const val SPRITE_HEIGHT = 220f
 private const val BUBBLE_HEIGHT = 260
 private const val FOOTER = 18
-private val BONGO = listOf("bongo_idle", "bongo_left", "bongo_right")
+private val DESK = listOf("bongo_idle", "bongo_left", "bongo_right", "bongo_mouse", "bongo_blink", "bongo_watch", "bongo_sleep")
+/** Poses she shows face to face, even at her desk. */
+private val FACE_POSES = setOf(
+    Pose.Talking, Pose.Thinking, Pose.Happy, Pose.Shy, Pose.Mischievous, Pose.Gourmand, Pose.Wake, Pose.LowBattery, Pose.Charging,
+)
+/** How long her hand stays on her mouse after the runner's stops. */
+private const val MOUSE_HOLD_MS = 1_500L
 /** How long a hand stays on the key. */
 private const val KEY_DOWN_MS = 110L
 private const val DOUBLE_CLICK_MS = 300L

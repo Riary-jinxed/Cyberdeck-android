@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.LocalDateTime
 
 /**
@@ -47,6 +48,10 @@ class Aska(private val scope: CoroutineScope) {
     /** Ollama answers at its address. */
     private val _online = MutableStateFlow(false)
     val online: StateFlow<Boolean> = _online
+
+    /** The window in front plays a video or a stream: she watches with the runner. */
+    private val _watching = MutableStateFlow(false)
+    val watching: StateFlow<Boolean> = _watching
 
     private val ollama = Ollama { settings.value.ollamaUrl }
     private val history = Store.chat().toMutableList()
@@ -97,6 +102,7 @@ class Aska(private val scope: CoroutineScope) {
         }
         scope.launch { tick() }
         scope.launch { watchForeground() }
+        scope.launch { watchWarframe() }
         scope.launch { while (isActive) { refreshWeather(); delay(WEATHER_EVERY_MS) } }
         scope.launch { while (isActive) { refreshDeck(); delay(DECK_EVERY_MS) } }
         scope.launch {
@@ -424,7 +430,7 @@ class Aska(private val scope: CoroutineScope) {
             val now = System.currentTimeMillis()
             val idle = Activity.idleMillis(now)
             if (Activity.hooked) {
-                if (!asleep && idle > SLEEP_AFTER_MS && !_chatOpen.value && !_busy.value) {
+                if (!asleep && idle > SLEEP_AFTER_MS && !_chatOpen.value && !_busy.value && !_watching.value) {
                     asleep = true
                     hide()
                 } else if (asleep && idle < 2_000) {
@@ -460,6 +466,7 @@ class Aska(private val scope: CoroutineScope) {
         while (true) {
             val f = withContext(Dispatchers.IO) { Foreground.read() }
             foreground = f
+            _watching.value = Foreground.watching(f)
             val process = f?.process?.takeUnless { Foreground.isShell(it) || it.isBlank() }
             val now = System.currentTimeMillis()
             if (process != candidate) {
@@ -473,6 +480,42 @@ class Aska(private val scope: CoroutineScope) {
                 }
             }
             delay(FOREGROUND_EVERY_MS)
+        }
+    }
+
+    /**
+     * While Warframe runs: a word on the state of the world when the game starts, then a nudge
+     * before the night falls on the Plains (Eidolons) and when Baro Ki'Teer lands.
+     */
+    private suspend fun watchWarframe() {
+        var playing = false
+        var lastFetch = 0L
+        var baroWasHere: Boolean? = null
+        val nightsAnnounced = mutableSetOf<java.time.Instant>()
+        while (true) {
+            val running = withContext(Dispatchers.IO) {
+                runCatching { ProcessHandle.allProcesses().anyMatch { p -> Warframe.isRunning(p.info().command().map { File(it).name }.orElse(null)) } }.getOrDefault(false)
+            }
+            val now = System.currentTimeMillis()
+            if (running && (!playing || now - lastFetch > WARFRAME_EVERY_MS)) {
+                val world = Warframe.world()
+                lastFetch = now
+                if (world != null) {
+                    if (!playing && settings.value.chatter != Chatter.Quiet) {
+                        remark("${settings.value.handle} vient de lancer Warframe. État du monde en ce moment :\n${world.text()}\nDonne-lui l'info la plus utile maintenant (un cycle qui change bientôt, Baro, la sortie)")
+                    }
+                    world.cetus?.takeIf { it.state == "jour" }?.let { day ->
+                        val left = java.time.Duration.between(java.time.Instant.now(), day.ends).toMinutes()
+                        if (left in 0..NIGHT_WARNING_MINUTES && nightsAnnounced.add(day.ends)) {
+                            say("*pointe le ciel* La nuit tombe sur les Plaines d'Eidolon dans $left min : prépare-toi pour les Eidolons !")
+                        }
+                    }
+                    if (baroWasHere == false && world.baroActive) say("*sautille* Baro Ki'Teer vient d'arriver ! ${world.baro.orEmpty()}")
+                    baroWasHere = world.baroActive
+                }
+            }
+            playing = running
+            delay(if (running) 60_000L else 120_000L)
         }
     }
 
@@ -496,6 +539,8 @@ class Aska(private val scope: CoroutineScope) {
 
     private companion object {
         const val TICK_MS = 250L
+        const val WARFRAME_EVERY_MS = 3 * 60_000L
+        const val NIGHT_WARNING_MINUTES = 5L
         /** Every 30 s. */
         const val BATTERY_TICKS = 120L
         const val SLEEP_AFTER_MS = 10 * 60_000L

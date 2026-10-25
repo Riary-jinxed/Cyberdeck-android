@@ -38,6 +38,14 @@ object Activity {
         private set
     @Volatile var lastKey: Long = 0L
         private set
+    /** Last time the mouse moved or clicked: her hand goes to her mouse. */
+    @Volatile var lastMouse: Long = 0L
+        private set
+
+    @Volatile private var lastKeyEvent = 0L
+
+    /** Keys held down: the auto-repeat of a long press counts once. */
+    private val held = java.util.Collections.synchronizedSet(HashSet<Int>())
 
     /** False when the system refused the hook (Wayland without XWayland, for instance). */
     var hooked = false
@@ -64,6 +72,10 @@ object Activity {
         override fun nativeKeyPressed(e: NativeKeyEvent) {
             val now = System.currentTimeMillis()
             lastInput = now
+            // A release missed (a lock screen, a focus change) must not keep a key silent forever.
+            if (now - lastKeyEvent > 3_000) held.clear()
+            lastKeyEvent = now
+            if (!held.add(e.rawCode)) return
             lastKey = now
             _taps.update { it + 1 }
             val mods = e.modifiers
@@ -71,15 +83,23 @@ object Activity {
                 _summons.update { it + 1 }
             }
         }
+
+        override fun nativeKeyReleased(e: NativeKeyEvent) {
+            held.remove(e.rawCode)
+        }
     }
 
     private val mouse = object : NativeMouseInputListener {
         override fun nativeMouseMoved(e: NativeMouseEvent) {
             lastInput = System.currentTimeMillis()
+            lastMouse = lastInput
         }
+
+        override fun nativeMouseDragged(e: NativeMouseEvent) = nativeMouseMoved(e)
 
         override fun nativeMousePressed(e: NativeMouseEvent) {
             lastInput = System.currentTimeMillis()
+            lastMouse = lastInput
         }
     }
 
@@ -102,6 +122,27 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
         private val SHELL = setOf("explorer", "searchhost", "shellexperiencehost", "startmenuexperiencehost", "lockapp", "aska", "java", "javaw")
 
         fun isShell(process: String) = process.lowercase() in SHELL
+
+        /** Players, and streaming apps or sites. */
+        private val PLAYERS = setOf(
+            "vlc", "mpc-hc", "mpc-hc64", "mpc-be", "mpc-be64", "potplayer", "potplayermini", "potplayermini64", "mpv", "kodi", "plex",
+            "wmplayer", "video.ui", "netflix", "totem", "celluloid", "smplayer", "jellyfin", "jellyfinmediaplayer", "stremio",
+        )
+        private val BROWSERS = setOf("chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "chromium", "firefox-esr", "librewolf", "zen")
+        private val SITES = listOf(
+            "youtube", "netflix", "twitch", "prime video", "disney+", "crunchyroll", "adn", "canal+", "molotov", "arte",
+            "france.tv", "paramount+", "apple tv", "max", "dailymotion", "vimeo", "plex", "jellyfin", "anime",
+        )
+
+        /** True when the window in front plays something to watch: a video player, or a streaming site in a browser. */
+        fun watching(f: Foreground?): Boolean {
+            f ?: return false
+            val process = f.process.lowercase().removeSuffix(".exe")
+            if (process in PLAYERS) return true
+            if (process !in BROWSERS) return false
+            val title = f.title.lowercase()
+            return SITES.any { site -> Regex("(^|[^a-z])" + Regex.escape(site) + "([^a-z]|$)").containsMatchIn(title) }
+        }
 
         fun read(): Foreground? = runCatching { if (isWindows) windows() else linux() }.getOrNull()
 

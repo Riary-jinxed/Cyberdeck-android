@@ -58,5 +58,8 @@ fun T(
 }
 
 /** One of her sprites (src/main/resources/sprites). */
+/** A sprite that may not be packaged yet. */
+fun spriteOrNull(name: String): ImageBitmap? = if (Cp::class.java.getResource("/sprites/$name.png") == null) null else sprite(name)
+
 fun sprite(name: String): ImageBitmap =
     Image.makeFromEncoded(Cp::class.java.getResourceAsStream("/sprites/$name.png")!!.use { it.readBytes() }).toComposeImageBitmap()
