@@ -60,7 +60,7 @@ jobs:
           name: ${{ matrix.name }}
           path: ${{ matrix.out }}
 
-  # Tagged "aska-desktop-v…" and never marked latest: the launcher's updater reads the latest
+  # Tagged "askapc-v…" (the id Deck Link's APPLIS screen knows it by) and never marked latest: the launcher's updater reads the latest
   # release, and its deck-app list skips releases without an APK.
   release:
     needs: package
@@ -76,12 +76,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(grep -oP 'val appVersion = "\K[^"]+' aska-desktop/build.gradle.kts)
-          if gh release view "aska-desktop-v$VERSION" >/dev/null 2>&1; then
-            echo "aska-desktop-v$VERSION already released"
+          if gh release view "askapc-v$VERSION" >/dev/null 2>&1; then
+            echo "askapc-v$VERSION already released"
             exit 0
           fi
           cp dist/aska-windows/*.msi "aska-$VERSION.msi"
           cp dist/aska-linux/*.deb "aska-$VERSION.deb"
-          gh release create "aska-desktop-v$VERSION" "aska-$VERSION.msi" "aska-$VERSION.deb" \
-            --title "As//ka (PC) v$VERSION" --latest=false \
+          gh release create "askapc-v$VERSION" "aska-$VERSION.msi" "aska-$VERSION.deb" \
+            --title "As//ka PC v$VERSION" --latest=false \
             --notes "$(git log -1 --pretty=%B | head -n 1)"

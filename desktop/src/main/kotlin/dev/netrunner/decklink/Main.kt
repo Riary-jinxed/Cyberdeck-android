@@ -33,7 +33,7 @@ import androidx.compose.ui.window.rememberWindowState
 import java.awt.SystemTray
 
 private enum class Screen(val label: String) {
-    Link("LIAISON"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"), Fleet("PARC"),
+    Link("LIAISON"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"), Fleet("PARC"), Apps("APPLIS"),
 }
 
 /** A small yellow cut-corner badge, for the window and the notification area. */
@@ -59,6 +59,7 @@ fun main() = application {
         state.stop()
         exitApplication()
     }
+    val apps = remember { AppsState(::quit) }
     if (tray) {
         Tray(icon = icon, tooltip = "Deck Link", onAction = { visible = true }) {
             Item("Ouvrir Deck Link", onClick = { visible = true })
@@ -72,12 +73,12 @@ fun main() = application {
         icon = icon,
         state = rememberWindowState(width = 1180.dp, height = 780.dp),
     ) {
-        App(state)
+        App(state, apps)
     }
 }
 
 @Composable
-private fun App(state: LinkState) {
+private fun App(state: LinkState, apps: AppsState) {
     var screen by remember { mutableStateOf(Screen.Link) }
     Column(Modifier.fillMaxSize().background(Cp.Background).scanlines().padding(18.dp)) {
         Row(Modifier.fillMaxWidth()) {
@@ -107,6 +108,9 @@ private fun App(state: LinkState) {
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                if (apps.updates > 0) {
+                    T("${apps.updates} mise(s) à jour d'appli", Cp.Yellow, 11.sp, MonoFont, FontWeight.Normal, Modifier.clickable { screen = Screen.Apps })
+                }
                 val waiting = state.outbox.count
                 T(
                     if (waiting == 0) "tout est à jour avec le téléphone" else "$waiting modif(s) en attente du téléphone",
@@ -123,6 +127,7 @@ private fun App(state: LinkState) {
                     Screen.Clients -> ClientsScreen(state)
                     Screen.Cables -> CablesScreen(state)
                     Screen.Fleet -> FleetScreen(state)
+                    Screen.Apps -> AppsScreen(apps)
                 }
             }
         }
