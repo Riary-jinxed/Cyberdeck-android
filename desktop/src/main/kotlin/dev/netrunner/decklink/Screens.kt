@@ -607,7 +607,7 @@ fun FleetScreen(state: LinkState) {
             }
         }
         T(
-            "Le pack (dossier « deploiement ») contient l'agent, install.cmd à lancer en administrateur ou en script de démarrage GPO, et un LISEZMOI. " +
+            "Le pack (dossier « deploiement ») contient l'agent, install.cmd à lancer en administrateur ou en script de démarrage GPO, install-linux.sh pour les PC Linux (Netrunner OS : « Inscrire ce PC à l'inventaire » avec deck-probe.json), et un LISEZMOI. " +
                 "Ouvre le port TCP ${Fleet.PORT} du pare-feu de ce PC pour les agents. " +
                 "« Ajouter ce PC » lit les infos de ce PC sans agent ; sa fiche est ensuite remise à jour à chaque lancement de Deck Link.",
             Cp.Dim, 12.sp, MonoFont, FontWeight.Normal,

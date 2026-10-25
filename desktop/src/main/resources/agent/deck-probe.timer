@@ -1,0 +1,11 @@
+[Unit]
+Description=Deck Probe : inventaire au démarrage et chaque jour à 12:00
+
+[Timer]
+OnBootSec=3min
+OnCalendar=*-*-* 12:00:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

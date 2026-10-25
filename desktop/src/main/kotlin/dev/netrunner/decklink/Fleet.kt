@@ -202,6 +202,13 @@ object Fleet {
         return id to fields.mapValues { JsonPrimitive(it.value) }
     }
 
+    /** The agents (Windows and Linux), their install / uninstall scripts and the instructions. */
+    val PackFiles = listOf(
+        "deck-probe.ps1", "install.cmd", "uninstall.cmd",
+        "deck-probe.py", "deck-probe.service", "deck-probe.timer", "install-linux.sh", "uninstall-linux.sh",
+        "LISEZMOI.txt",
+    )
+
     /**
      * Writes the deployment pack into [Paths.deployment]: the agent, its config (this PC's
      * name and addresses, the fleet key), install / uninstall scripts and the instructions.
@@ -209,10 +216,7 @@ object Fleet {
     fun writePack(pcName: String, addresses: List<String>, key: String): File {
         val dir = Paths.deployment.apply { mkdirs() }
         fun resource(name: String) = Fleet::class.java.getResourceAsStream("/agent/$name")!!.use { it.readBytes() }
-        File(dir, "deck-probe.ps1").writeBytes(resource("deck-probe.ps1"))
-        File(dir, "install.cmd").writeBytes(resource("install.cmd"))
-        File(dir, "uninstall.cmd").writeBytes(resource("uninstall.cmd"))
-        File(dir, "LISEZMOI.txt").writeBytes(resource("LISEZMOI.txt"))
+        for (name in PackFiles) File(dir, name).writeBytes(resource(name))
         val servers = (listOf(pcName) + addresses).distinct()
         val config = JsonObject(
             mapOf(

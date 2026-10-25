@@ -1,0 +1,9 @@
+[Unit]
+Description=Deck Probe : inventaire de ce PC pour Deck Link
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/deck-probe/deck-probe.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/lib/deck-probe/deck-probe.py

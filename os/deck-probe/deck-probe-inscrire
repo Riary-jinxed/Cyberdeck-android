@@ -1,0 +1,17 @@
+#!/bin/sh
+# Netrunner OS: "Inscrire ce PC à l'inventaire". Picks deck-probe.json from the pack Deck Link
+# prepares (PARC › Préparer le déploiement, usually brought on a USB stick), copies it as root
+# and sends a first inventory.
+TITLE="Inscrire ce PC à l'inventaire"
+FILE=$(zenity --file-selection --title="$TITLE : choisis deck-probe.json (dossier « deploiement » de Deck Link)" \
+    --file-filter="Config Deck Probe | deck-probe.json" --file-filter="Tous les fichiers | *") || exit 0
+if ! python3 -c 'import json,sys; c=json.load(open(sys.argv[1],encoding="utf-8-sig")); bytes.fromhex(c["key"]); assert len(c["key"])==64 and c["servers"]' "$FILE" 2>/dev/null; then
+    zenity --error --title="$TITLE" --text="Ce fichier n'est pas une config Deck Probe.\nPrends deck-probe.json dans le dossier « deploiement » préparé par Deck Link (PARC › Préparer le déploiement)."
+    exit 1
+fi
+OUT=$(pkexec /usr/lib/deck-probe/inscrire-root "$FILE" 2>&1)
+case $? in
+    0) zenity --info --title="$TITLE" --text="Ce PC est inscrit : son inventaire part au démarrage et chaque jour à 12:00.\n\n$OUT" ;;
+    126|127) exit 0 ;; # authentication cancelled
+    *) zenity --warning --title="$TITLE" --text="Config installée, mais le premier envoi a échoué : Deck Link doit être ouvert sur son PC, joignable sur le réseau, port TCP 47322 ouvert.\nUn nouvel essai aura lieu au prochain démarrage.\n\n$OUT" ;;
+esac

@@ -1,5 +1,6 @@
 package dev.netrunner.decklink
 
+import dev.netrunner.sync.AgentAuth
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.nio.file.Files
@@ -41,6 +42,27 @@ class FleetTest {
         val tmp = Files.createTempDirectory("dl").toFile()
         val e = Fleet.toEquipment(r, KitData.load(tmp))!!
         assertEquals("\"PC-PC-COMPTA-01\"", e.second["code"].toString())
+    }
+    /** The Linux agent's report reads like the Windows one, and its signature passes AgentAuth. */
+    @Test fun linuxAgentReportParsesAndVerifies() {
+        if (System.getProperty("os.name").startsWith("Windows") || runCatching { ProcessBuilder("python3", "--version").start().waitFor() }.getOrNull() != 0) return
+        val agent = File.createTempFile("deck-probe", ".py")
+        agent.writeBytes(Fleet::class.java.getResourceAsStream("/agent/deck-probe.py")!!.use { it.readBytes() })
+        fun python(vararg args: String): String {
+            val p = ProcessBuilder("python3", agent.path, *args).redirectErrorStream(true).start()
+            return p.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8).also { assertEquals(0, p.waitFor(), it) }
+        }
+        val report = Fleet.parse(python("--print").trim())!!
+        assertTrue(report.hostname.isNotBlank() && report.ramGB > 0 && report.software.isNotEmpty(), report.toString())
+        val key = AgentAuth.newKey()
+        val body = """{"probe":1,"hostname":"PC-É"}"""
+        val time = System.currentTimeMillis()
+        val code = "import importlib.util as u,sys; s=u.spec_from_file_location('a',sys.argv[1]); m=u.module_from_spec(s); s.loader.exec_module(m); " +
+            "print(m.sign(sys.argv[2], int(sys.argv[3]), sys.argv[4].encode()))"
+        val p = ProcessBuilder("python3", "-c", code, agent.path, key, time.toString(), body).start()
+        val signature = p.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8).trim()
+        assertTrue(AgentAuth(AgentAuth.keyBytes(key)!!).verify(time, body.toByteArray(Charsets.UTF_8), signature), signature)
+        agent.delete()
     }
     @Test fun deleteOverlayHidesItem() {
         val tmp = Files.createTempDirectory("dl").toFile()

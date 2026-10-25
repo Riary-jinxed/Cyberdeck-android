@@ -1,0 +1,82 @@
+# Netrunner OS, édition User : ce qu'un utilisateur lambda a sous la main.
+
+# Live session and installer (Calamares, removed from the installed system by its own config)
+live-boot
+live-config
+live-config-systemd
+calamares
+calamares-settings-debian
+
+# Desktop: XFCE, sound, network, Bluetooth, printing
+xfce4
+xfce4-goodies
+lightdm
+lightdm-gtk-greeter
+lightdm-gtk-greeter-settings
+network-manager-gnome
+pipewire-audio
+wireplumber
+pavucontrol
+blueman
+cups
+system-config-printer
+printer-driver-gutenprint
+hplip
+gvfs-backends
+file-roller
+xdg-user-dirs
+xdg-utils
+fonts-noto
+fonts-noto-color-emoji
+fonts-dejavu
+fonts-liberation2
+fonts-crosextra-carlito
+fonts-crosextra-caladea
+
+# Office (equivalents of Word, Excel, PowerPoint)
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-gtk3
+libreoffice-l10n-fr
+libreoffice-help-fr
+hunspell-fr
+hyphen-fr
+mythes-fr
+
+# Internet
+firefox-esr
+firefox-esr-l10n-fr
+
+# Video and photo viewers
+vlc
+ristretto
+
+# Video editor
+kdenlive
+breeze-icon-theme
+
+# PDF reader
+evince
+
+# French everywhere
+locales
+console-setup
+keyboard-configuration
+task-french
+
+# Hardware support (Wi-Fi cards, CPU fixes)
+firmware-linux
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+intel-microcode
+amd64-microcode
+
+# Security updates on their own, inventory agent needs, As//ka installer
+unattended-upgrades
+python3
+iproute2
+zenity
+pkexec

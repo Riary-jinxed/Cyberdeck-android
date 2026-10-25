@@ -1,0 +1,8 @@
+#!/bin/sh
+# Root half of deck-probe-inscrire (run through pkexec): installs the config, sends a report.
+set -e
+[ -f "$1" ] || exit 2
+install -d -m 700 /etc/deck-probe
+install -m 600 "$1" /etc/deck-probe/deck-probe.json
+systemctl enable deck-probe.timer >/dev/null 2>&1 || true
+exec python3 /usr/lib/deck-probe/deck-probe.py
