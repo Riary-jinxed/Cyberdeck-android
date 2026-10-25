@@ -1,0 +1,73 @@
+name: Build As//ka (PC)
+
+on:
+  push:
+    branches: [main]
+    paths: ["aska-desktop/**", ".github/workflows/aska-desktop.yml"]
+  pull_request:
+    paths: ["aska-desktop/**", ".github/workflows/aska-desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Tests, then the Windows installer and the Linux package.
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            task: packageMsi
+            out: aska-desktop/build/compose/binaries/main/msi/*.msi
+            name: aska-windows
+          - os: ubuntu-latest
+            task: packageDeb
+            out: aska-desktop/build/compose/binaries/main/deb/*.deb
+            name: aska-linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests
+        run: ./gradlew --no-daemon -p aska-desktop test
+      - name: Package
+        run: ./gradlew --no-daemon -p aska-desktop ${{ matrix.task }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.out }}
+
+  # Tagged "aska-desktop-v…" and never marked latest: the launcher's updater reads the latest
+  # release, and its deck-app list skips releases without an APK.
+  release:
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -oP 'val appVersion = "\K[^"]+' aska-desktop/build.gradle.kts)
+          if gh release view "aska-desktop-v$VERSION" >/dev/null 2>&1; then
+            echo "aska-desktop-v$VERSION already released"
+            exit 0
+          fi
+          cp dist/aska-windows/*.msi "aska-$VERSION.msi"
+          cp dist/aska-linux/*.deb "aska-$VERSION.deb"
+          gh release create "aska-desktop-v$VERSION" "aska-$VERSION.msi" "aska-$VERSION.deb" \
+            --title "As//ka (PC) v$VERSION" --latest=false \
+            --notes "$(git log -1 --pretty=%B | head -n 1)"
