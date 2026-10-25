@@ -35,9 +35,7 @@ fonts-crosextra-caladea
 
 # Office: Texte, Tableur and Présentation are home-made (netrunner-apps, built by os/apps)
 
-# Internet
-firefox-esr
-firefox-esr-l10n-fr
+# Internet: Web is home-made too (netrunner-apps, on the Chromium engine)
 
 # Video editor
 kdenlive

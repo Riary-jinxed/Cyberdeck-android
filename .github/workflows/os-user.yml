@@ -44,13 +44,20 @@ jobs:
         run: ./gradlew --no-daemon -p os-apps test
       - name: Jar
         run: ./gradlew --no-daemon -p os-apps packageUberJarForCurrentOS
+      # Web's Chromium engine, fetched once here and shipped in the package.
+      - name: Web engine
+        run: |
+          java -jar os-apps/build/compose/jars/*.jar web --installer "$RUNNER_TEMP/jcef"
+          test -f "$RUNNER_TEMP/jcef/install.lock"
+          mkdir -p ~/.local/share/netrunner && ln -sfn "$RUNNER_TEMP/jcef" ~/.local/share/netrunner/jcef
+          du -sh "$RUNNER_TEMP/jcef"
       # Each app must stay up on a (virtual) screen, without an exception.
       - name: Launch check
         run: |
           sudo apt-get install -y xvfb libvlc5 vlc-plugin-base >/dev/null
           JAR=$(ls os-apps/build/compose/jars/*.jar)
           mkdir -p "$RUNNER_TEMP/media" && cp os/apps/netrunner-photos.svg "$RUNNER_TEMP/media/"
-          for app in photos video pdf texte tableur presentation; do
+          for app in photos video pdf texte tableur presentation web; do
             set +e
             SKIKO_RENDER_API=SOFTWARE timeout 30 xvfb-run -a java -jar "$JAR" "$app" "$RUNNER_TEMP/media" > "launch-$app.log" 2>&1
             code=$?
@@ -59,7 +66,7 @@ jobs:
             if [ $code -ne 124 ] || grep -qE "Exception in thread|Error was captured" "launch-$app.log"; then echo "$app stopped at launch ($code)"; exit 1; fi
           done
       - name: Package
-        run: sh os/apps/build-deb.sh os-apps/build/compose/jars/*.jar dist
+        run: JCEF_DIR="$RUNNER_TEMP/jcef" sh os/apps/build-deb.sh os-apps/build/compose/jars/*.jar dist
       - uses: actions/upload-artifact@v4
         with:
           name: netrunner-apps-deb

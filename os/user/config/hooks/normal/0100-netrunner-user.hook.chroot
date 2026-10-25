@@ -24,3 +24,6 @@ if [ -f /opt/netrunner/extras/aska.deb ]; then
 else
     rm -f /usr/share/applications/netrunner-aska.desktop /usr/bin/netrunner-installer-aska
 fi
+
+# Web is the browser everywhere (links from other apps, x-www-browser).
+update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/netrunner-web 250

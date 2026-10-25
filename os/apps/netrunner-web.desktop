@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Web
+GenericName=Navigateur web
+Comment=Aller sur Internet : onglets, favoris, historique, téléchargements
+Exec=netrunner-web %u
+Icon=netrunner-web
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Keywords=internet;navigateur;web;site;recherche;

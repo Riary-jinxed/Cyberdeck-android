@@ -39,6 +39,9 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.5.1")
     // Old Word and PowerPoint files (.doc, .ppt): POI's scratchpad, read only.
     implementation("org.apache.poi:poi-scratchpad:5.5.1")
+    // Web draws pages with Chromium, through JCEF; its native part is installed beside the jar
+    // (os/apps/build-deb.sh), not in it.
+    implementation("me.friwi:jcefmaven:146.0.10")
     testImplementation(kotlin("test"))
 }
 
