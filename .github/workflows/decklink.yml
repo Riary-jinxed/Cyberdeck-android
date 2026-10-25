@@ -1,0 +1,73 @@
+name: Build Deck Link (PC)
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", "sync-core/**", ".github/workflows/decklink.yml"]
+  pull_request:
+    paths: ["desktop/**", "sync-core/**", ".github/workflows/decklink.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Sync protocol tests (shared with the launcher) and the Windows installer / Linux package.
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            task: packageMsi
+            out: desktop/build/compose/binaries/main/msi/*.msi
+            name: deck-link-windows
+          - os: ubuntu-latest
+            task: packageDeb
+            out: desktop/build/compose/binaries/main/deb/*.deb
+            name: deck-link-linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests
+        run: ./gradlew --no-daemon -p desktop test
+      - name: Package
+        run: ./gradlew --no-daemon -p desktop ${{ matrix.task }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.out }}
+
+  # Tagged "decklink-v…" and never marked latest: the launcher's updater reads the latest
+  # release, and its deck-app list skips releases without an APK.
+  release:
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -oP 'val appVersion = "\K[^"]+' desktop/build.gradle.kts)
+          if gh release view "decklink-v$VERSION" >/dev/null 2>&1; then
+            echo "decklink-v$VERSION already released"
+            exit 0
+          fi
+          cp dist/deck-link-windows/*.msi "deck-link-$VERSION.msi"
+          cp dist/deck-link-linux/*.deb "deck-link-$VERSION.deb"
+          gh release create "decklink-v$VERSION" "deck-link-$VERSION.msi" "deck-link-$VERSION.deb" \
+            --title "Deck Link (PC) v$VERSION" --latest=false \
+            --notes "$(git log -1 --pretty=%B | head -n 1)"

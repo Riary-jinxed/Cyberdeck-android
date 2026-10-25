@@ -87,6 +87,10 @@ fun KitScreen(onClose: () -> Unit) {
         dev.netrunner.launcher.kit.Stock.load(app)
         dev.netrunner.launcher.kit.Coverage.load(app)
     }
+    // Leaving the kit sends what changed to the paired PC (Deck Link), if any.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { dev.netrunner.launcher.kit.PcLink.autoSync(context) }
+    }
     var tab by remember { mutableStateOf(if (Logbook.focusId != null) KitTab.Logbook else KitTab.Inventory) }
     var logOpen by remember { mutableStateOf<String?>(null) }
     var logPart by remember { mutableStateOf(LogParts[0]) }
