@@ -3,9 +3,9 @@ name: Build Netrunner OS (User)
 on:
   push:
     branches: [main]
-    paths: ["os/**", "desktop/src/main/resources/agent/**", ".github/workflows/os-user.yml"]
+    paths: ["os/**", "os-apps/**", "os-bridge/**", "desktop/src/main/resources/agent/**", "desktop/src/main/resources/font/**", ".github/workflows/os-user.yml"]
   pull_request:
-    paths: ["os/**", "desktop/src/main/resources/agent/**", ".github/workflows/os-user.yml"]
+    paths: ["os/**", "os-apps/**", "os-bridge/**", "desktop/src/main/resources/agent/**", "desktop/src/main/resources/font/**", ".github/workflows/os-user.yml"]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check
         run: |
-          shellcheck os/deck-probe/build-deb.sh os/deck-probe/deck-probe-inscrire os/deck-probe/inscrire-root \
+          shellcheck os/apps/build-deb.sh os/deck-probe/build-deb.sh os/deck-probe/deck-probe-inscrire os/deck-probe/inscrire-root \
             os/user/build.sh os/user/config/hooks/normal/*.hook.chroot os/user/config/includes.chroot/usr/bin/* \
             desktop/src/main/resources/agent/*.sh
           python3 desktop/src/main/resources/agent/deck-probe.py --print | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["hostname"] and r["ramGB"] > 0 and r["software"], r'
@@ -30,8 +30,40 @@ jobs:
           name: deck-probe-deb
           path: dist/*.deb
 
+  # Netrunner OS's own apps (os-apps): tests, the jar, then its package.
+  apps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests
+        run: ./gradlew --no-daemon -p os-apps test
+      - name: Jar
+        run: ./gradlew --no-daemon -p os-apps packageUberJarForCurrentOS
+      # Each app must stay up on a (virtual) screen, without an exception.
+      - name: Launch check
+        run: |
+          sudo apt-get install -y xvfb >/dev/null
+          JAR=$(ls os-apps/build/compose/jars/*.jar)
+          mkdir -p "$RUNNER_TEMP/pics" && cp os/apps/netrunner-photos.svg "$RUNNER_TEMP/pics/"
+          set +e
+          SKIKO_RENDER_API=SOFTWARE timeout 30 xvfb-run -a java -jar "$JAR" photos "$RUNNER_TEMP/pics" > launch.log 2>&1
+          code=$?
+          cat launch.log
+          if [ $code -ne 124 ] || grep -qE "Exception in thread|Error was captured" launch.log; then echo "Photos stopped at launch ($code)"; exit 1; fi
+      - name: Package
+        run: sh os/apps/build-deb.sh os-apps/build/compose/jars/*.jar dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netrunner-apps-deb
+          path: dist/*.deb
+
   iso:
-    needs: deck-probe
+    needs: [deck-probe, apps]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -46,6 +78,10 @@ jobs:
         with:
           name: deck-probe-deb
           path: pkgs
+      - uses: actions/download-artifact@v4
+        with:
+          name: netrunner-apps-deb
+          path: pkgs
       # As//ka, in option on the image: the newest askapc-v… release, if there is one.
       - name: As//ka package
         env:
@@ -53,16 +89,16 @@ jobs:
         run: |
           TAG=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("askapc-v"))][0].tagName')
           if [ -n "$TAG" ] && gh release download "$TAG" --pattern 'aska-*.deb' --dir aska; then
-            mv aska/*.deb pkgs/aska.deb
+            mkdir -p extras && mv aska/*.deb extras/aska.deb
             echo "As//ka $TAG"
           else
             echo "::warning::pas de release As//ka : image sans As//ka"
           fi
       - name: Build
         run: |
-          ASKA=; [ -f pkgs/aska.deb ] && ASKA=/src/pkgs/aska.deb
-          docker run --rm --privileged -v "$PWD:/src" debian:trixie \
-            sh -c "/src/os/user/build.sh /src/out /src/pkgs/deck-probe_*_all.deb $ASKA"
+          ASKA=; [ -f extras/aska.deb ] && ASKA=/src/extras/aska.deb
+          docker run --rm --privileged -e ASKA_DEB="$ASKA" -v "$PWD:/src" debian:trixie \
+            sh -c '/src/os/user/build.sh /src/out /src/pkgs/*.deb' 
           sudo chown -R "$(id -u)" out
       - uses: actions/upload-artifact@v4
         with:

@@ -48,9 +48,8 @@ mythes-fr
 firefox-esr
 firefox-esr-l10n-fr
 
-# Video and photo viewers
+# Video player (photos: Netrunner Photos, in netrunner-apps)
 vlc
-ristretto
 
 # Video editor
 kdenlive

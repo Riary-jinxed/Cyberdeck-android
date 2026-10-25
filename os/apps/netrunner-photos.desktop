@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Photos
+GenericName=Visionneuse de photos
+Comment=Voir les photos d'un dossier, en grand, en diaporama
+Exec=netrunner-photos %f
+Icon=netrunner-photos
+Terminal=false
+Categories=Graphics;Viewer;Photography;
+MimeType=image/jpeg;image/png;image/webp;image/gif;image/bmp;
+Keywords=image;photo;galerie;diaporama;

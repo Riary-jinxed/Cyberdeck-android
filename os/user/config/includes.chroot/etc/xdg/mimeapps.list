@@ -1,12 +1,12 @@
 [Default Applications]
 application/pdf=org.gnome.Evince.desktop
-image/jpeg=org.xfce.ristretto.desktop
-image/png=org.xfce.ristretto.desktop
-image/gif=org.xfce.ristretto.desktop
-image/webp=org.xfce.ristretto.desktop
-image/heif=org.xfce.ristretto.desktop
-image/bmp=org.xfce.ristretto.desktop
-image/tiff=org.xfce.ristretto.desktop
+image/jpeg=netrunner-photos.desktop
+image/png=netrunner-photos.desktop
+image/gif=netrunner-photos.desktop
+image/webp=netrunner-photos.desktop
+image/heif=netrunner-photos.desktop
+image/bmp=netrunner-photos.desktop
+image/tiff=netrunner-photos.desktop
 video/mp4=vlc.desktop
 video/x-matroska=vlc.desktop
 video/webm=vlc.desktop
