@@ -34,6 +34,10 @@ object Activity {
     private val _summons = MutableStateFlow(0L)
     val summons: StateFlow<Long> = _summons
 
+    /** True while Ctrl+Alt+Espace is held: she listens (push to talk). */
+    private val _talk = MutableStateFlow(false)
+    val talk: StateFlow<Boolean> = _talk
+
     @Volatile var lastInput: Long = System.currentTimeMillis()
         private set
     @Volatile var lastKey: Long = 0L
@@ -82,10 +86,12 @@ object Activity {
             if (e.keyCode == NativeKeyEvent.VC_A && mods and NativeInputEvent.CTRL_MASK != 0 && mods and NativeInputEvent.ALT_MASK != 0) {
                 _summons.update { it + 1 }
             }
+            if (e.keyCode == NativeKeyEvent.VC_SPACE && mods and NativeInputEvent.CTRL_MASK != 0 && mods and NativeInputEvent.ALT_MASK != 0) _talk.value = true
         }
 
         override fun nativeKeyReleased(e: NativeKeyEvent) {
             held.remove(e.rawCode)
+            if (e.keyCode == NativeKeyEvent.VC_SPACE && _talk.value) _talk.value = false
         }
     }
 

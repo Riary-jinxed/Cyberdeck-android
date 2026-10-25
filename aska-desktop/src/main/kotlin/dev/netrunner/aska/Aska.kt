@@ -46,6 +46,9 @@ class Aska(private val scope: CoroutineScope) {
     val setup: StateFlow<Setup?> = _setup
 
     /** Ollama answers at its address. */
+    private val _voiceSetup = MutableStateFlow<Setup?>(null)
+    val voiceSetup: StateFlow<Setup?> = _voiceSetup
+
     private val _online = MutableStateFlow(false)
     val online: StateFlow<Boolean> = _online
 
@@ -168,12 +171,66 @@ class Aska(private val scope: CoroutineScope) {
         scope.launch { watchWindows() }
         scope.launch { watchComfy() }
         scope.launch { watchFolders() }
+        scope.launch { listenToRunner() }
         scope.launch { while (isActive) { refreshWeather(); delay(WEATHER_EVERY_MS) } }
         scope.launch { while (isActive) { refreshDeck(); delay(DECK_EVERY_MS) } }
         scope.launch {
             // Installed but not running (closed from its tray icon, or no autostart): wake it up.
             if (!reachable() && Core.startServer()) waitOnline()
             refreshModels()
+        }
+    }
+
+    // ---- Her voice and her ears.
+
+    private var speakJob: Job? = null
+
+    /** Reads [text] aloud when her voice is on (not in game mode). */
+    private fun speak(text: String) {
+        val s = settings.value
+        if (!s.voice || s.game || !Voice.canSpeak || text.length < 2 || text == "…") return
+        speakJob?.cancel()
+        speakJob = scope.launch { runCatching { Voice.speak(text) } }
+    }
+
+    fun installVoice(ears: Boolean) {
+        if (_voiceSetup.value?.working == true) return
+        scope.launch {
+            try {
+                if (ears) Voice.installListening { label, p -> _voiceSetup.value = Setup(label, p) }
+                else Voice.installSpeech { label, p -> _voiceSetup.value = Setup(label, p) }
+                _voiceSetup.value = Setup(if (ears) "Ses oreilles sont prêtes : maintiens Ctrl+Alt+Espace pour lui parler." else "Sa voix est prête.", working = false)
+                update { if (ears) it.copy(listen = true) else it.copy(voice = true) }
+                if (!ears) speak("*s'éclaircit la gorge* Test, test… Tu m'entends ? C'est bizarre d'avoir une voix !")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _voiceSetup.value = Setup("Échec : ${e.message ?: e.javaClass.simpleName}", working = false, failed = true)
+            }
+        }
+    }
+
+    /** Push to talk: she listens while the keys are held, then answers what she heard. */
+    private suspend fun listenToRunner() {
+        var listening = false
+        Activity.talk.collect { held ->
+            if (held) {
+                if (!settings.value.listen || !Voice.canListen) return@collect
+                Voice.stop()
+                listening = Voice.startListening()
+                if (listening) {
+                    asleep = false
+                    react(Pose.Shy, 30_000)
+                    _bubble.value = "*tend l'oreille…*"
+                    hideJob?.cancel()
+                } else say("*tapote son oreille* Je ne trouve aucun micro sur ce PC.")
+            } else if (listening) {
+                listening = false
+                _bubble.value = "*réfléchit à ce que tu as dit…*"
+                val heard = Voice.stopListening()
+                reaction = null
+                if (heard == null) say("*penche la tête* Je n'ai rien entendu.") else send(heard)
+            }
         }
     }
 
@@ -411,6 +468,7 @@ class Aska(private val scope: CoroutineScope) {
                 }
                 val answer = Persona.visible(buffer.toString()).trim().ifEmpty { toolResult ?: "*hausse les épaules* …" }
                 _bubble.value = answer
+                speak(answer)
                 history += Turn(false, answer)
                 val kept = history.toList()
                 withContext(Dispatchers.IO) { Store.saveChat(kept) }
@@ -466,6 +524,7 @@ class Aska(private val scope: CoroutineScope) {
         lastSpoke = System.currentTimeMillis()
         _bubble.value = text
         hideLater()
+        speak(text)
     }
 
     private fun hide() {

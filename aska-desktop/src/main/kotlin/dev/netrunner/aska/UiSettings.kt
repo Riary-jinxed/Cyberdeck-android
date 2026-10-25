@@ -96,6 +96,9 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
             Field("Adresse de ComfyUI (elle annonce la fin des rendus)", comfy) { comfy = it }
             T("Rappels : « rappelle-moi dans 20 min de… » ou /rappel 18:30 texte. Concentration : /pomodoro. Mémoire : « retiens que… ». Texte copié : /traduis, /resume.", Cp.Dim, 13.sp)
 
+            Section("VOIX")
+            VoiceSection(aska)
+
             Section("DECK LINK")
             Field("Dossier de Deck Link (vide : recherche automatique)", deck) { deck = it }
             T(
@@ -104,7 +107,7 @@ fun SettingsWindow(aska: Aska, onClose: () -> Unit, onQuit: () -> Unit) {
             )
 
             Section("RACCOURCIS")
-            T("Ctrl+Alt+A : lui parler, même en jeu.  Double-clic : lui parler.  Clic : l'embêter.  Clic droit : ces réglages.  Glisser : la déplacer.", Cp.Text, 14.sp)
+            T("Ctrl+Alt+A : lui parler, même en jeu.  Ctrl+Alt+Espace maintenu : lui parler au micro.  Double-clic : lui parler.  Clic : l'embêter.  Clic droit : ces réglages.  Glisser : la déplacer.", Cp.Text, 14.sp)
             if (!Activity.hooked) T("Le clavier global n'est pas accessible sur cette session (Wayland ?) : ni rebonds, ni raccourci.", Cp.Yellow, 13.sp)
 
             Spacer(Modifier.height(4.dp))
@@ -239,4 +242,25 @@ private fun Toggle(label: String, on: Boolean, enabled: Boolean = true, onChange
 @Composable
 private fun Button(label: String, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
     T(label, color, 13.sp, TitleFont, modifier = Modifier.hudPanel(color, Cp.Panel, 8.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp))
+}
+
+/** Her voice (Piper, Siwis) and her ears (whisper.cpp), downloaded from here. */
+@Composable
+private fun VoiceSection(aska: Aska) {
+    val settings by aska.settings.collectAsState()
+    val setup by aska.voiceSetup.collectAsState()
+    val busy = setup?.working == true
+    if (Voice.canSpeak) Toggle("Lire ses réponses à voix haute (voix Siwis, hors ligne)", settings.voice) { on -> aska.update { it.copy(voice = on) } }
+    else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(if (busy) "…" else "LUI DONNER UNE VOIX", Cp.Pink) { if (!busy) aska.installVoice(ears = false) }
+        T("Piper et la voix française Siwis, environ 85 Mo.", Cp.Dim, 13.sp)
+    }
+    if (Voice.canListen) Toggle("L'écouter quand je maintiens Ctrl+Alt+Espace (whisper.cpp, hors ligne)", settings.listen) { on -> aska.update { it.copy(listen = on) } }
+    else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Button(if (busy) "…" else "LUI DONNER DES OREILLES", Cp.Pink) { if (!busy) aska.installVoice(ears = true) }
+        T("whisper.cpp et le modèle small, environ 470 Mo." + if (!isWindows) " Sous Linux : whisper-cli dans le PATH." else "", Cp.Dim, 13.sp)
+    }
+    setup?.let { s ->
+        T(s.label + (s.progress?.let { " ${(it * 100).toInt()} %" } ?: ""), if (s.failed) Cp.Red else if (s.working) Cp.Yellow else Cp.Cyan, 13.sp)
+    }
 }

@@ -168,4 +168,11 @@ class HelpersTest {
         assertTrue(b.contains("\"text\":\"worse\""))
         assertTrue(b.contains("\"seed\":7"))
     }
+
+    @Test
+    fun speaksWordsNotGestures() {
+        assertEquals("Coucou ! Tu m'entends ?", Voice.spoken("*agite la queue* Coucou ! *sourit* Tu m'entends ?"))
+        assertEquals("rappelle-moi dans vingt minutes", Voice.cleanTranscript(" [BLANK_AUDIO]\n rappelle-moi dans vingt minutes\n(musique)"))
+        assertNull(Voice.cleanTranscript("[BLANK_AUDIO]"))
+    }
 }

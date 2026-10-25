@@ -48,6 +48,10 @@ data class Settings(
     val downloads: Boolean = true,
     /** Another folder to watch for new files, such as the LoRA training output; empty for none. */
     val watchFolder: String = "",
+    /** She reads her words aloud (Piper, voice Siwis). */
+    val voice: Boolean = false,
+    /** She listens while Ctrl+Alt+Espace is held (whisper.cpp). */
+    val listen: Boolean = false,
     /** The local ComfyUI: she says when its renders end. */
     val comfyUrl: String = "http://127.0.0.1:8188",
 )
