@@ -153,6 +153,7 @@ class Aska(private val scope: CoroutineScope) {
         replyJob?.cancel()
         remarking = isRemark
         hideJob?.cancel()
+        val turn = ++asks
         replyJob = scope.launch {
             _busy.value = true
             thinking = true
