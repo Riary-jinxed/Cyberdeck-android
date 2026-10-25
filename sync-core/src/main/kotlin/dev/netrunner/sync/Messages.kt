@@ -35,6 +35,9 @@ sealed class Message {
     /** PC → phone: the sync is over. */
     data class Ack(val stored: Int, val removed: Int, val skipped: Int) : Message()
 
+    /** PC → phone, in answer to a hello for [SyncServer.BACKUPS]: the dated kit backups the PC keeps. */
+    data class Listing(val files: List<FileEntry>) : Message()
+
     /** Either side: the sync stops, with a reason for the user. */
     data class Error(val reason: String) : Message()
 
@@ -58,6 +61,10 @@ sealed class Message {
                 Done -> o.writeByte(4)
                 is Ack -> { o.writeByte(5); o.writeInt(stored); o.writeInt(removed); o.writeInt(skipped) }
                 is Error -> { o.writeByte(6); o.writeUTF(reason.take(500)) }
+                is Listing -> {
+                    o.writeByte(9); o.writeInt(files.size)
+                    files.forEach { o.writeUTF(it.path); o.writeLong(it.size); o.writeUTF(it.sha256) }
+                }
             }
         }
         return bytes.toByteArray()
@@ -98,6 +105,11 @@ sealed class Message {
                 4 -> Done
                 5 -> Ack(i.readInt(), i.readInt(), i.readInt())
                 6 -> Error(i.readUTF())
+                9 -> {
+                    val n = i.readInt()
+                    if (n !in 0..MAX_FILES) throw IOException("liste trop longue")
+                    Listing(List(n) { FileEntry(i.readUTF(), i.readLong(), i.readUTF()) })
+                }
                 else -> throw IOException("message inconnu ($type)")
             }
         }

@@ -41,6 +41,7 @@ object KitRemote {
 
     private fun JSONObject.str(key: String, fallback: String) = if (has(key)) optString(key) else fallback
     private fun JSONObject.int(key: String, fallback: Int) = if (has(key)) optInt(key, fallback) else fallback
+    private fun JSONObject.long(key: String, fallback: Long) = if (has(key)) optLong(key, fallback) else fallback
 
     private fun applyOne(context: Context, o: JSONObject) {
         val id = o.getString("id")
@@ -58,6 +59,7 @@ object KitRemote {
                         id, item.str("code", old?.code.orEmpty()), item.str("name", old?.name.orEmpty()),
                         item.str("serial", old?.serial.orEmpty()), item.str("location", old?.location.orEmpty()),
                         item.str("state", old?.state ?: KitStore.States[0]), item.str("notes", old?.notes.orEmpty()), 0,
+                        item.long("warranty", old?.warranty ?: 0),
                     ),
                 )
             }

@@ -20,7 +20,8 @@ data class KitData(
     val clients: List<Client> = emptyList(),
     val cables: List<Cable> = emptyList(),
 ) {
-    data class Equipment(val id: String, val code: String, val name: String, val serial: String, val location: String, val state: String, val notes: String, val updated: Long)
+    /** [warranty]: end of the warranty (midnight, local time), 0 when not set. */
+    data class Equipment(val id: String, val code: String, val name: String, val serial: String, val location: String, val state: String, val notes: String, val updated: Long, val warranty: Long = 0)
     data class StockItem(val id: String, val name: String, val unit: String, val qty: Long, val threshold: Long, val location: String, val notes: String, val updated: Long) {
         val low get() = threshold > 0 && qty <= threshold
     }
@@ -59,7 +60,7 @@ data class KitData(
             }
             return KitData(
                 equipment = merged("equipment", kit.list("equipment")).map {
-                    Equipment(it.s("id"), it.s("code"), it.s("name"), it.s("serial"), it.s("location"), it.s("state"), it.s("notes"), it.l("updated"))
+                    Equipment(it.s("id"), it.s("code"), it.s("name"), it.s("serial"), it.s("location"), it.s("state"), it.s("notes"), it.l("updated"), it.l("warranty"))
                 }.sortedBy { it.name.lowercase() },
                 stock = merged("stock", read("kit_stock.json").list("stock")).map {
                     StockItem(it.s("id"), it.s("name"), it.s("unit"), it.l("qty"), it.l("threshold"), it.s("location"), it.s("notes"), it.l("updated"))

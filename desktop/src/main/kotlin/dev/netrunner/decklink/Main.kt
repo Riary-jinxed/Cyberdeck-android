@@ -26,14 +26,18 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import java.awt.SystemTray
 
 private enum class Screen(val label: String) {
-    Link("LIAISON"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"), Fleet("PARC"), Apps("APPLIS"),
+    Link("LIAISON"), Alerts("ALERTES"), Inventory("INVENTAIRE"), Stock("CONSOMMABLES"), Logbook("CARNET"), Clients("CLIENTS"), Cables("CÂBLES"), Fleet("PARC"),
+    Exports("EXPORTS"), Backups("SAUVEGARDES"), Apps("APPLIS"),
 }
 
 /** A small yellow cut-corner badge, for the window and the notification area. */
@@ -60,8 +64,26 @@ fun main() = application {
         exitApplication()
     }
     val apps = remember { AppsState(::quit) }
+    val trayState = rememberTrayState()
+    // New alerts pop up once in the notification area; at launch, one summary.
+    val alerts = remember(state.kit, state.fleet) { state.alerts() }
+    val told = remember { mutableSetOf<String>() }
+    LaunchedEffect(alerts) {
+        val fresh = alerts.filter { it.key !in told }
+        if (tray && fresh.isNotEmpty()) {
+            val one = fresh.singleOrNull()
+            trayState.sendNotification(
+                Notification(
+                    if (one != null) "Deck Link · ${one.subject}" else "Deck Link · ${fresh.size} alertes",
+                    one?.text ?: fresh.take(3).joinToString("\n") { "${it.subject} : ${it.text}" },
+                    if (fresh.any { it.level == Alerts.Level.Urgent }) Notification.Type.Warning else Notification.Type.Info,
+                ),
+            )
+        }
+        told += alerts.map { it.key }
+    }
     if (tray) {
-        Tray(icon = icon, tooltip = "Deck Link", onAction = { visible = true }) {
+        Tray(icon = icon, state = trayState, tooltip = "Deck Link", onAction = { visible = true }) {
             Item("Ouvrir Deck Link", onClick = { visible = true })
             Item("Quitter", onClick = ::quit)
         }
@@ -73,12 +95,12 @@ fun main() = application {
         icon = icon,
         state = rememberWindowState(width = 1180.dp, height = 780.dp),
     ) {
-        App(state, apps)
+        App(state, apps, alerts)
     }
 }
 
 @Composable
-private fun App(state: LinkState, apps: AppsState) {
+private fun App(state: LinkState, apps: AppsState, alerts: List<Alerts.Alert>) {
     var screen by remember { mutableStateOf(Screen.Link) }
     Column(Modifier.fillMaxSize().background(Cp.Background).scanlines().padding(18.dp)) {
         Row(Modifier.fillMaxWidth()) {
@@ -99,8 +121,10 @@ private fun App(state: LinkState, apps: AppsState) {
             Column(Modifier.width(190.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Screen.entries.forEach { s ->
                     val on = s == screen
+                    val urgent = s == Screen.Alerts && alerts.any { it.level == Alerts.Level.Urgent }
                     T(
-                        s.label, if (on) Cp.Background else Cp.Cyan, 14.sp, weight = FontWeight.Bold,
+                        if (s == Screen.Alerts && alerts.isNotEmpty()) "${s.label} (${alerts.size})" else s.label,
+                        if (on) Cp.Background else if (urgent) Cp.Red else Cp.Cyan, 14.sp, weight = FontWeight.Bold,
                         modifier = Modifier.fillMaxWidth()
                             .hudPanel(Cp.Cyan.copy(alpha = 0.7f), if (on) Cp.Cyan else Cp.Panel, 6.dp)
                             .clickable { screen = s }
@@ -123,10 +147,13 @@ private fun App(state: LinkState, apps: AppsState) {
                     Screen.Link -> LinkScreen(state)
                     Screen.Inventory -> InventoryScreen(state)
                     Screen.Stock -> StockScreen(state)
-                    Screen.Logbook -> LogbookScreen(state.kit)
+                    Screen.Logbook -> LogbookScreen(state)
                     Screen.Clients -> ClientsScreen(state)
                     Screen.Cables -> CablesScreen(state)
                     Screen.Fleet -> FleetScreen(state)
+                    Screen.Alerts -> AlertsScreen(alerts)
+                    Screen.Exports -> ExportsScreen(state)
+                    Screen.Backups -> BackupsScreen(state)
                     Screen.Apps -> AppsScreen(apps)
                 }
             }

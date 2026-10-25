@@ -20,7 +20,7 @@ $release = Try-Get { (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows N
 
 $disks = @()
 foreach ($d in @(Try-Get { Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DriveType=3' })) {
-    if ($d) { $disks += [ordered]@{ name = (Text $d.DeviceID); sizeGB = [int64][math]::Round($d.Size / 1GB) } }
+    if ($d) { $disks += [ordered]@{ name = (Text $d.DeviceID); sizeGB = [int64][math]::Round($d.Size / 1GB); freeGB = [int64][math]::Floor($d.FreeSpace / 1GB) } }
 }
 $network = @()
 foreach ($n in @(Try-Get { Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' })) {
@@ -28,6 +28,36 @@ foreach ($n in @(Try-Get { Get-CimInstance -ClassName Win32_NetworkAdapterConfig
         $ipv4 = @($n.IPAddress | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' }) -join ', '
         $network += [ordered]@{ name = (Text $n.Description); mac = (Text $n.MACAddress); ipv4 = $ipv4 }
     }
+}
+
+# Installed software, from the uninstall keys (machine-wide, 32-bit view, and the user's own).
+$software = @()
+$keys = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+)
+foreach ($k in @(Try-Get { Get-ItemProperty -Path $keys -ErrorAction SilentlyContinue })) {
+    if (-not $k -or -not $k.DisplayName) { continue }
+    if ($k.SystemComponent -eq 1 -or $k.ParentKeyName) { continue }
+    $software += [ordered]@{ name = (Text $k.DisplayName); version = (Text $k.DisplayVersion); publisher = (Text $k.Publisher) }
+}
+
+# Windows Update: newest installed update, updates waiting (searched with a time limit), pending restart.
+function UnixMs($date) { if ($date) { [int64]([DateTimeOffset]$date).ToUnixTimeMilliseconds() } else { [int64]0 } }
+$lastHotfix = Try-Get { (Get-HotFix | Where-Object { $_.InstalledOn } | Sort-Object InstalledOn -Descending | Select-Object -First 1).InstalledOn }
+$reboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or
+    (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')
+$pending = -1
+$job = Try-Get {
+    Start-Job -ScriptBlock {
+        $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
+        $searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Software'").Updates.Count
+    }
+}
+if ($job) {
+    if (Wait-Job $job -Timeout 120) { $count = Try-Get { Receive-Job $job }; if ($null -ne $count) { $pending = [int]$count } }
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
 }
 
 $report = [ordered]@{
@@ -44,6 +74,8 @@ $report = [ordered]@{
     ramGB        = if ($cs) { [int64][math]::Round($cs.TotalPhysicalMemory / 1GB) } else { 0 }
     disks        = $disks
     network      = $network
+    software     = $software
+    updates      = [ordered]@{ lastInstalled = (UnixMs $lastHotfix); pending = $pending; rebootRequired = [bool]$reboot }
 }
 
 $json = $report | ConvertTo-Json -Depth 5 -Compress

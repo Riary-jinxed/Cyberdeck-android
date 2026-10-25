@@ -2,8 +2,12 @@
 ==========================================
 
 Deck Probe envoie les infos de chaque PC (nom, fabricant, modèle, numéro de série, OS, processeur,
-mémoire, disques, cartes réseau, domaine, utilisateur connecté) à Deck Link. Deck Link crée ou met
-à jour sa fiche dans l'inventaire du kit, et la fiche arrive sur le téléphone à la synchro suivante.
+mémoire, disques et espace libre, cartes réseau, domaine, utilisateur connecté, logiciels installés,
+état de Windows Update) à Deck Link. Deck Link crée ou met à jour sa fiche dans l'inventaire du kit,
+et la fiche arrive sur le téléphone à la synchro suivante.
+
+Pour mettre à jour un agent déjà installé : prépare à nouveau le pack dans Deck Link et relance
+install.cmd (ou laisse la GPO le refaire au prochain démarrage).
 
 Ce dossier a été préparé par Deck Link : deck-probe.json contient l'adresse de ce PC et la clé du
 parc. Ne le partage pas au-delà des PC à inventorier.

@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.netrunner.sync.Discovery
+import dev.netrunner.sync.FileEntry
 import dev.netrunner.sync.FolderScanner
 import dev.netrunner.sync.NotPairedException
 import dev.netrunner.sync.PairingCode
@@ -130,6 +131,60 @@ object PcLink {
             busyFlag.set(false)
         }
     }
+
+    /**
+     * The dated kit backups Deck Link keeps on the PC, newest first. Blocking. Throws IOException
+     * with a message for the user when the PC cannot be reached or is too old to keep backups.
+     */
+    fun backups(context: Context): List<FileEntry> = try {
+        onPc(context) { address, code, device -> SyncClient.backups(address, code, device) }
+    } catch (e: IOException) {
+        // An older Deck Link only knows the kit folder.
+        if (e.message?.contains("non pris en charge") == true) throw IOException("mets Deck Link à jour sur le PC pour retrouver ses sauvegardes")
+        throw e
+    }
+
+    /**
+     * Downloads the backup [path] from the PC and restores it over the current kit (the launcher
+     * must restart afterwards). Blocking. Throws IOException when the download fails; the kit is
+     * untouched then.
+     */
+    fun restore(context: Context, path: String, onProgress: (Float) -> Unit): KitBackup.Summary {
+        val file = File(context.cacheDir, "pc_restore.zip")
+        try {
+            onPc(context) { address, code, device ->
+                SyncClient.fetchBackup(address, code, device, path, file) { done, total -> if (total > 0) onProgress(done.toFloat() / total) }
+            }
+            return KitBackup.restore(context, android.net.Uri.fromFile(file)) ?: throw IOException("sauvegarde illisible : le kit n'a pas été modifié")
+        } finally {
+            file.delete()
+        }
+    }
+
+    /** Runs [block] against the first address that answers, like [sync]. */
+    private fun <T> onPc(context: Context, block: (InetSocketAddress, PairingCode, String) -> T): T {
+        val p = prefs(context)
+        val code = p.getString("code", null)?.let { PairingCode.parse(it) } ?: throw IOException("aucun PC appairé")
+        val port = p.getInt("port", SyncServer.DEFAULT_PORT)
+        var lastError: IOException? = null
+        for (address in candidates(p.getString("host", null), port)) {
+            try {
+                return block(address, code, device())
+            } catch (e: NotPairedException) {
+                throw IOException(e.message ?: "code refusé")
+            } catch (e: java.net.ConnectException) {
+                lastError = e
+            } catch (e: java.net.SocketTimeoutException) {
+                lastError = e
+            } catch (e: java.net.NoRouteToHostException) {
+                lastError = e
+            }
+            // Any other error means the PC answered and refused: no point trying elsewhere.
+        }
+        throw IOException("PC introuvable : Deck Link est-il ouvert, sur le même Wi-Fi ?", lastError)
+    }
+
+    private fun device() = listOf(Build.MANUFACTURER, Build.MODEL).filter { !it.isNullOrBlank() }.joinToString(" ")
 
     /** USB first (adb reverse makes the PC answer on the phone's own port), then the last address, then a broadcast. */
     private fun candidates(host: String?, port: Int): Sequence<InetSocketAddress> = sequence {
