@@ -38,7 +38,7 @@ compose.desktop {
             packageVersion = appVersion
             description = "As//ka, la compagne du deck, sur le bureau"
             vendor = "Netrunner"
-            modules("java.net.http")
+            modules("java.net.http", "java.management", "jdk.management")
             windows {
                 perUserInstall = true
                 // Its folder can be chosen by hand; Deck Link installs it next to itself (Apps.kt).

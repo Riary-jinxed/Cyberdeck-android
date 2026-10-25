@@ -155,8 +155,15 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
     // At her desk (Bongo Cat): she sits at her keyboard, slaps a key with one hand then the other
     // as the runner types, takes her mouse when the runner's mouse moves, blinks, watches videos
     // with the runner and dozes off on her arms. Drawings that differ only where she moves.
-    val desk = remember { DESK.associateWith { spriteOrNull(it) } }
+    val desk = remember { (DESK + Gesture.entries.map { it.frame }).associateWith { spriteOrNull(it) } }
     val watching by aska.watching.collectAsState()
+    val gesture by aska.gesture.collectAsState()
+    val music by aska.music.collectAsState()
+    // With music, she sways from side to side.
+    val sway by rememberInfiniteTransition().animateFloat(
+        initialValue = -1.5f, targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
+    )
     val taps by Activity.taps.collectAsState()
     // The count comes back from her last session: only new presses make her play.
     val typedFrom = remember { taps }
@@ -194,9 +201,11 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
     val deskFrame = when {
         !atDesk -> null
         pose == Pose.Sleep -> "bongo_sleep"
+        gesture?.lasting == false && desk[gesture!!.frame] != null -> gesture!!.frame
         hand != null -> hand
         typing -> "bongo_idle"
         mousing -> "bongo_mouse"
+        gesture != null && desk[gesture!!.frame] != null -> gesture!!.frame
         watching -> "bongo_watch"
         blinking -> "bongo_blink"
         else -> "bongo_idle"
@@ -256,6 +265,7 @@ private fun Sprite(aska: Aska, keyboard: Boolean, height: Int, onMoved: (Int, In
                         transformOrigin = TransformOrigin(0.5f, 1f)
                         // At the keyboard she stays still, so only her hands move.
                         scaleY = if (p == "desk") 1f else breath
+                        rotationZ = if (p == "desk" && music != null && deskFrame in SWAYING) sway else 0f
                     },
                 )
             }
@@ -327,6 +337,8 @@ private const val BUBBLE_WIDTH = 320f
 private const val SPRITE_HEIGHT = 220f
 private const val BUBBLE_HEIGHT = 260
 private const val FOOTER = 18
+/** The drawings where she sways to the music. */
+private val SWAYING = setOf("bongo_idle", "bongo_blink")
 private val DESK = listOf("bongo_idle", "bongo_left", "bongo_right", "bongo_mouse", "bongo_blink", "bongo_watch", "bongo_sleep")
 /** Poses she shows face to face, even at her desk. */
 private val FACE_POSES = setOf(

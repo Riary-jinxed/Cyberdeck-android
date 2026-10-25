@@ -53,12 +53,27 @@ class Aska(private val scope: CoroutineScope) {
     private val _watching = MutableStateFlow(false)
     val watching: StateFlow<Boolean> = _watching
 
+    /** A small move at her desk (a yawn, a sign…), or a lasting one (focused, gamepad in hand). */
+    private val _gesture = MutableStateFlow<Gesture?>(null)
+    val gesture: StateFlow<Gesture?> = _gesture
+
+    /** Music plays on the PC: she sways along. */
+    private val _music = MutableStateFlow<String?>(null)
+    val music: StateFlow<String?> = _music
+
     private val ollama = Ollama { settings.value.ollamaUrl }
     private val history = Store.chat().toMutableList()
 
     private var thinking = false
     private var talking = false
     private var reaction: Pose? = null
+    private var passing: Gesture? = null
+    private var passingUntil = 0L
+    /** Pomodoro under way; null without one. */
+    @Volatile private var focus: Focus? = null
+    /** A game is running (Warframe, a Steam or Epic game in front). */
+    @Volatile private var playing = false
+    @Volatile private var warframeOn = false
     private var reactionUntil = 0L
     private var asleep = false
 
@@ -89,6 +104,26 @@ class Aska(private val scope: CoroutineScope) {
         if (after.ollamaUrl != before.ollamaUrl) refreshModels()
     }
 
+    /** What her tools need from her. */
+    private val host = object : Tools.Host {
+        override val deckLink get() = settings.value.deckLink
+        override fun propose(edit: Tools.Edit) { pendingEdit = edit }
+        override fun song() = _music.value
+        override fun pomodoro(action: String, minutes: Int?): String = when (action) {
+            "stop", "arrete", "arrête", "fin" -> if (focus == null) "Aucun pomodoro en cours." else {
+                val done = focus!!.rounds
+                focus = null
+                "Pomodoro arrêté après $done session(s)."
+            }
+            "status", "etat", "état" -> focus?.text() ?: "Aucun pomodoro en cours."
+            else -> {
+                val work = (minutes ?: 25).coerceIn(5, 120)
+                focus = Focus(workMinutes = work)
+                "Pomodoro lancé : $work min de concentration, puis 5 min de pause. Je me tais pendant le travail."
+            }
+        }
+    }
+
     fun start() {
         Activity.start()
         Store.recordInstall()
@@ -103,6 +138,10 @@ class Aska(private val scope: CoroutineScope) {
         scope.launch { tick() }
         scope.launch { watchForeground() }
         scope.launch { watchWarframe() }
+        scope.launch { watchHealth() }
+        scope.launch { watchWindows() }
+        scope.launch { watchComfy() }
+        scope.launch { watchFolders() }
         scope.launch { while (isActive) { refreshWeather(); delay(WEATHER_EVERY_MS) } }
         scope.launch { while (isActive) { refreshDeck(); delay(DECK_EVERY_MS) } }
         scope.launch {
@@ -237,7 +276,7 @@ class Aska(private val scope: CoroutineScope) {
 
     // ---- Her own remarks.
 
-    private fun quiet(): Boolean = settings.value.game || foreground?.fullscreen == true || _chatOpen.value || _busy.value || asleep
+    private fun quiet(): Boolean = settings.value.game || foreground?.fullscreen == true || _chatOpen.value || _busy.value || asleep || focus?.working == true
 
     private fun remark(topic: String) {
         lastSpoke = System.currentTimeMillis()
@@ -249,6 +288,8 @@ class Aska(private val scope: CoroutineScope) {
         app = foreground?.takeUnless { Foreground.isShell(it.process) }?.label(),
         weather = weather?.note(),
         battery = battery?.note(),
+        music = _music.value,
+        focus = focus?.text(),
         deck = deck?.note(),
         typing = Activity.typingRecently(),
     )
@@ -271,7 +312,7 @@ class Aska(private val scope: CoroutineScope) {
      * One answer of hers. A /command runs its tool first and she explains the result; otherwise
      * the model may call tools itself, a few rounds at most, before it answers.
      */
-    private fun ask(earlier: List<Turn>, message: String, isRemark: Boolean, command: Pair<Tools.Tool, Map<String, String>>? = null) {
+    private fun ask(earlier: List<Turn>, message: String, isRemark: Boolean, command: Tools.Command? = null) {
         replyJob?.cancel()
         remarking = isRemark
         hideJob?.cancel()
@@ -285,16 +326,16 @@ class Aska(private val scope: CoroutineScope) {
             try {
                 var userMessage = message
                 if (command != null) {
-                    val (tool, args) = command
+                    val tool = command.tool
                     _bubble.value = "*${tool.doing}…*"
-                    toolResult = Tools.run(tool, args, settings.value.deckLink) { pendingEdit = it }
-                    userMessage = "$message\n\n[Résultat de l'outil ${tool.name} :\n$toolResult]\nExplique ce résultat en bref : l'essentiel, puis la vérification suivante s'il y en a une."
+                    toolResult = Tools.run(tool, command.args, host)
+                    userMessage = "$message\n\n[Résultat de l'outil ${tool.name} :\n$toolResult]\n${command.instruction}"
                 }
                 val installed = ollama.models().also { _models.value = it }
                 val model = Ollama.pick(settings.value.model, installed)
                     ?: return@launch say(toolResult ?: Persona.noModel)
                 val messages = buildList {
-                    add(Ollama.Message("system", Persona.systemPrompt(settings.value.handle)))
+                    add(Ollama.Message("system", listOfNotNull(Persona.systemPrompt(settings.value.handle), Memory.prompt(settings.value.handle)).joinToString("\n\n")))
                     recent(earlier).forEach { add(Ollama.Message(if (it.fromUser) "user" else "assistant", it.text)) }
                     add(Ollama.Message("user", userMessage))
                 }.toMutableList()
@@ -332,7 +373,7 @@ class Aska(private val scope: CoroutineScope) {
                         talking = false
                         _bubble.value = "*${tool?.doing ?: "cherche"}…*"
                         refreshPose()
-                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), settings.value.deckLink) { pendingEdit = it }
+                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), host)
                         messages += Ollama.Message("tool", result, toolName = call.name)
                     }
                     round++
@@ -414,9 +455,22 @@ class Aska(private val scope: CoroutineScope) {
         refreshPose()
     }
 
+    /** A passing move at her desk for [millis]. */
+    private fun gesture(g: Gesture, millis: Long = 4_000) {
+        passing = g
+        passingUntil = System.currentTimeMillis() + millis
+        refreshPose()
+    }
+
     private fun refreshPose() {
         val now = System.currentTimeMillis()
         if (reaction != null && now > reactionUntil) reaction = null
+        if (passing != null && now > passingUntil) passing = null
+        _gesture.value = passing ?: when {
+            focus?.working == true -> Gesture.Focus
+            playing -> Gesture.Gamepad
+            else -> null
+        }
         _pose.value = Pose.pick(thinking, talking, reaction, asleep, battery, LocalDateTime.now().hour, weather?.pose)
     }
 
@@ -449,6 +503,18 @@ class Aska(private val scope: CoroutineScope) {
                     wasLow = b.low
                 }
             }
+            if (ticks % 4 == 0L) {
+                remind(now)
+                focus?.step(now)?.let { line ->
+                    gesture(if (focus?.working == true) Gesture.Focus else Gesture.Stretch, 6_000)
+                    say("*fait tinter un petit minuteur* $line")
+                }
+            }
+            if (ticks % BATTERY_TICKS == 0L) {
+                if (idle > BREAK_RESET_MS) activeSince = now
+                greet(now, idle)
+                nudgeBreak(now, idle)
+            }
             val every = settings.value.chatter.everyMinutes * 60_000L
             if (every > 0 && now - lastSpoke > every && !quiet() && _bubble.value == null) {
                 if (Math.random() < 0.3) say(Persona.pick(Persona.idle)) else remark(topic())
@@ -456,6 +522,166 @@ class Aska(private val scope: CoroutineScope) {
             refreshPose()
             ticks++
             delay(TICK_MS)
+        }
+    }
+
+    // ---- Her desktop helpers.
+
+    /** Since when the runner has been at the PC without a real pause. */
+    private var activeSince = System.currentTimeMillis()
+    private var lastBreak = 0L
+    private var lastYawn = 0L
+
+    /** Reminders whose time has come: always said, even in game mode, and they wake her up. */
+    private fun remind(now: Long) {
+        val due = Reminders.due(now)
+        if (due.isEmpty()) return
+        if (asleep) asleep = false
+        gesture(Gesture.Sign, 8_000)
+        runCatching { java.awt.Toolkit.getDefaultToolkit().beep() }
+        say("*agite une petite cloche* " + due.joinToString(" ") { "Rappel : ${it.text}." })
+        history += Turn(false, "Rappel donné à ${settings.value.handle} : " + due.joinToString(" ; ") { it.text })
+    }
+
+    /** Hello with the day's summary on the first activity of the morning; good night late in the evening. */
+    private fun greet(now: Long, idle: Long) {
+        val s = settings.value
+        if (!s.greetings || s.game || idle > 60_000 || _busy.value || _chatOpen.value) return
+        val time = LocalDateTime.now()
+        val day = time.toLocalDate()
+        val done = Store.greeted()
+        val kind = when (time.hour) {
+            in 5..11 -> "morning"
+            in 22..23, in 0..2 -> "evening"
+            else -> return
+        }
+        // After midnight, the evening still belongs to the day before.
+        val owner = if (time.hour < 5) day.minusDays(1) else day
+        if ("$owner $kind" in done) return
+        Store.saveGreeted(kind, owner)
+        lastSpoke = now
+        if (kind == "morning") {
+            val today = Reminders.all().filter { Reminders.label(it.at).startsWith("à ") }
+            val facts = listOfNotNull(
+                weather?.let { "météo : ${it.note()}" },
+                today.takeIf { it.isNotEmpty() }?.let { r -> "rappels du jour : " + r.joinToString(" ; ") { "${Reminders.label(it.at)} ${it.text}" } },
+                deck?.takeIf { it.low.isNotEmpty() }?.let { "consommables bas dans le kit : " + it.low.take(4).joinToString(", ") },
+            )
+            gesture(Gesture.Stretch, 5_000)
+            ask(history.toList(), Persona.greeting(s.handle, morning = true, facts) + "\n\n" + Persona.note(moment()), isRemark = true)
+        } else {
+            gesture(Gesture.Yawn, 5_000)
+            lastYawn = now
+            ask(history.toList(), Persona.greeting(s.handle, morning = false, emptyList()) + "\n\n" + Persona.note(moment()), isRemark = true)
+        }
+    }
+
+    /** Two hours at the PC (or in a game) without a pause: a nudge to stretch and drink, then once an hour. */
+    private fun nudgeBreak(now: Long, idle: Long) {
+        val s = settings.value
+        val hour = LocalDateTime.now().hour
+        if (idle < 60_000 && (hour >= 23 || hour < 5) && now - lastYawn > YAWN_EVERY_MS) {
+            lastYawn = now
+            gesture(Gesture.Yawn, 4_000)
+        }
+        if (!s.breaks || idle > 60_000 || now - activeSince < BREAK_AFTER_MS || now - lastBreak < BREAK_AGAIN_MS) return
+        // In full screen she stays quiet: the nudge waits for the next look.
+        if (_busy.value || _chatOpen.value || focus != null || foreground?.fullscreen == true) return
+        lastBreak = now
+        gesture(Gesture.Stretch, 6_000)
+        val hours = (now - activeSince) / 3_600_000
+        say(
+            if (playing) "*s'étire en levant les bras* Ça fait ${hours} h que tu joues sans pause : une minute pour boire un verre d'eau et t'étirer ?"
+            else "*s'étire en baillant* ${hours} h d'écran d'affilée ! Lève-toi deux minutes, bois un peu d'eau, et repose tes yeux.",
+        )
+    }
+
+    /** The PC running hot, out of memory or of disk: she says it once, then again after a while if it lasts. */
+    private suspend fun watchHealth() {
+        val told = HashMap<String, Long>()
+        while (true) {
+            delay(HEALTH_EVERY_MS)
+            if (!settings.value.health) continue
+            val h = withContext(Dispatchers.IO) { runCatching { Health.read() }.getOrNull() } ?: continue
+            val now = System.currentTimeMillis()
+            val fresh = h.alerts().filter { a -> now - (told[a.substringBefore('|')] ?: 0L) > HEALTH_AGAIN_MS }
+            if (fresh.isEmpty()) continue
+            fresh.forEach { told[it.substringBefore('|')] = now }
+            gesture(Gesture.Worried, 6_000)
+            if (!settings.value.game && foreground?.fullscreen != true || fresh.any { it.startsWith("gpu") || it.startsWith("cpu") }) {
+                say("*fronce les sourcils* " + fresh.joinToString(". ") { it.substringAfter('|') } + ".")
+            }
+        }
+    }
+
+    /** The windows' titles: the music playing, and unread messages that apps show as « (3) ». */
+    private suspend fun watchWindows() {
+        val unreadBefore = HashMap<String, Int>()
+        var lastSongRemark = 0L
+        var primed = false
+        while (true) {
+            val s = settings.value
+            val windows = withContext(Dispatchers.IO) { OpenWindows.list() }
+            val song = if (!s.music) null else withContext(Dispatchers.IO) { OpenWindows.song(windows)?.title ?: if (!isWindows) OpenWindows.linuxSong()?.title else null }
+            val now = System.currentTimeMillis()
+            if (song != _music.value) {
+                _music.value = song
+                val gap = when (s.chatter) { Chatter.Quiet -> Long.MAX_VALUE; Chatter.Normal -> 40 * 60_000L; Chatter.Chatty -> 8 * 60_000L }
+                if (song != null && primed && !quiet() && now - lastSongRemark > gap && now - lastSpoke > APP_REMARK_GAP_MS && _bubble.value == null) {
+                    lastSongRemark = now
+                    remark("la musique qui vient de commencer sur le PC : $song")
+                }
+            }
+            if (s.messages) {
+                val unread = OpenWindows.unread(windows)
+                val news = unread.filter { (app, n) -> primed && n > (unreadBefore[app] ?: 0) }
+                unreadBefore.clear()
+                unreadBefore.putAll(unread)
+                if (news.isNotEmpty()) {
+                    gesture(Gesture.Sign, 6_000)
+                    if (!s.game && foreground?.fullscreen != true && !_busy.value && !_chatOpen.value && focus?.working != true) {
+                        say("*brandit un petit panneau* Nouveau message sur " + news.entries.joinToString(" et ") { (app, n) -> "$app ($n non lu${if (n > 1) "s" else ""})" } + ".")
+                    }
+                }
+            }
+            primed = true
+            delay(WINDOWS_EVERY_MS)
+        }
+    }
+
+    /** ComfyUI's queue: when it empties, the render is done. */
+    private suspend fun watchComfy() {
+        var before = 0
+        while (true) {
+            val queue = Comfy.queue(settings.value.comfyUrl)
+            if (queue != null) {
+                if (before > 0 && queue == 0 && !comfyOwn) {
+                    gesture(Gesture.Happy, 5_000)
+                    if (!settings.value.game && foreground?.fullscreen != true && !_busy.value) say("*applaudit* Ton rendu ComfyUI est fini !")
+                }
+                before = queue
+            }
+            delay(if (queue == null) 60_000L else 5_000L)
+        }
+    }
+
+    /** Set while she generates in ComfyUI herself: she shows that result rather than announcing it. */
+    @Volatile var comfyOwn = false
+
+    /** New files in Downloads and in the watched folder (a LoRA training's output, for instance). */
+    private suspend fun watchFolders() {
+        val watch = FolderWatch()
+        while (true) {
+            val s = settings.value
+            val folders = listOfNotNull(FolderWatch.downloads.takeIf { s.downloads }, s.watchFolder.takeIf { it.isNotBlank() }?.let { File(it) })
+            val done = withContext(Dispatchers.IO) { runCatching { watch.check(folders) }.getOrDefault(emptyList()) }
+            if (done.isNotEmpty()) {
+                gesture(Gesture.Happy, 4_000)
+                if (!s.game && foreground?.fullscreen != true && !_busy.value && !_chatOpen.value && focus?.working != true) {
+                    say("*lève le pouce* " + done.take(3).joinToString(" ") { FolderWatch.describe(it) })
+                }
+            }
+            delay(FOLDERS_EVERY_MS)
         }
     }
 
@@ -467,6 +693,7 @@ class Aska(private val scope: CoroutineScope) {
             val f = withContext(Dispatchers.IO) { Foreground.read() }
             foreground = f
             _watching.value = Foreground.watching(f)
+            playing = warframeOn || f?.let { Foreground.isGame(it) } == true
             val process = f?.process?.takeUnless { Foreground.isShell(it) || it.isBlank() }
             val now = System.currentTimeMillis()
             if (process != candidate) {
@@ -515,6 +742,7 @@ class Aska(private val scope: CoroutineScope) {
                 }
             }
             playing = running
+            warframeOn = running
             delay(if (running) 60_000L else 120_000L)
         }
     }
@@ -539,6 +767,15 @@ class Aska(private val scope: CoroutineScope) {
 
     private companion object {
         const val TICK_MS = 250L
+        const val BREAK_AFTER_MS = 2 * 3_600_000L
+        const val BREAK_AGAIN_MS = 3_600_000L
+        /** A pause of this long counts as a break. */
+        const val BREAK_RESET_MS = 5 * 60_000L
+        const val YAWN_EVERY_MS = 45 * 60_000L
+        const val HEALTH_EVERY_MS = 60_000L
+        const val HEALTH_AGAIN_MS = 30 * 60_000L
+        const val WINDOWS_EVERY_MS = 5_000L
+        const val FOLDERS_EVERY_MS = 15_000L
         const val WARFRAME_EVERY_MS = 3 * 60_000L
         const val NIGHT_WARNING_MINUTES = 5L
         /** Every 30 s. */

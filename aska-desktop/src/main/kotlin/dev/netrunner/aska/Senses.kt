@@ -109,7 +109,7 @@ object Activity {
 }
 
 /** The window in front: its title and program. */
-data class Foreground(val title: String, val process: String, val fullscreen: Boolean) {
+data class Foreground(val title: String, val process: String, val fullscreen: Boolean, val path: String = "") {
     /** As she reads it: « Elden Ring » (eldenring). */
     fun label(): String = when {
         title.isBlank() -> process
@@ -122,6 +122,13 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
         private val SHELL = setOf("explorer", "searchhost", "shellexperiencehost", "startmenuexperiencehost", "lockapp", "aska", "java", "javaw")
 
         fun isShell(process: String) = process.lowercase() in SHELL
+
+        /** Game folders of the usual stores. */
+        private val GAME_DIRS = listOf("steamapps", "epic games", "riot games", "gog galaxy", "ubisoft game launcher", "ea games", "battle.net", "xboxgames", "heroic", "lutris")
+
+        /** A game in front: Warframe, or a program installed by a game store. */
+        fun isGame(f: Foreground): Boolean = Warframe.isRunning(f.process) ||
+            f.path.replace('\\', '/').lowercase().let { p -> GAME_DIRS.any { p.contains("/$it/") } }
 
         /** Players, and streaming apps or sites. */
         private val PLAYERS = setOf(
@@ -154,8 +161,8 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
             user32.GetWindowText(hwnd, buffer, buffer.size)
             val pid = IntByReference()
             user32.GetWindowThreadProcessId(hwnd, pid)
-            val process = ProcessHandle.of(pid.value.toLong()).flatMap { it.info().command() }
-                .map { File(it).name.substringBeforeLast('.') }.orElse("")
+            val path = ProcessHandle.of(pid.value.toLong()).flatMap { it.info().command() }.orElse("")
+            val process = File(path).name.substringBeforeLast('.')
             val rect = WinDef.RECT()
             user32.GetWindowRect(hwnd, rect)
             val monitor = WinUser.MONITORINFO()
@@ -164,7 +171,7 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
             // A game in full screen covers its whole monitor, taskbar included; a maximized window does not.
             val fullscreen = !isShell(process) && rect.left <= screen.left && rect.top <= screen.top &&
                 rect.right >= screen.right && rect.bottom >= screen.bottom
-            return Foreground(String(buffer, 0, length), process, fullscreen)
+            return Foreground(String(buffer, 0, length), process, fullscreen, path)
         }
 
         /** X11 (and XWayland) through xdotool, else xprop. */
@@ -177,9 +184,9 @@ data class Foreground(val title: String, val process: String, val fullscreen: Bo
                 ?: ""
             val pid = run("xdotool", "getwindowpid", id)?.toLongOrNull()
                 ?: run("xprop", "-id", id, "_NET_WM_PID")?.substringAfter("= ", "")?.trim()?.toLongOrNull()
-            val process = pid?.let { p -> ProcessHandle.of(p).flatMap { it.info().command() }.map { File(it).name }.orElse("") }.orEmpty()
+            val path = pid?.let { p -> ProcessHandle.of(p).flatMap { it.info().command() }.orElse("") }.orEmpty()
             val state = run("xprop", "-id", id, "_NET_WM_STATE").orEmpty()
-            return Foreground(title, process, state.contains("_NET_WM_STATE_FULLSCREEN"))
+            return Foreground(title, File(path).name, state.contains("_NET_WM_STATE_FULLSCREEN"), path)
         }
 
         private fun run(vararg command: String): String? = runCatching {

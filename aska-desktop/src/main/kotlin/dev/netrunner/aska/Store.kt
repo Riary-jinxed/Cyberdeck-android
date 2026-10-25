@@ -34,6 +34,22 @@ data class Settings(
     val autostart: Boolean = false,
     /** Game mode: smaller, and she keeps her remarks for herself. */
     val game: Boolean = false,
+    /** Hello in the morning (with the day's summary), good night late in the evening. */
+    val greetings: Boolean = true,
+    /** A nudge to stretch and drink after a long stretch at the PC, or of play. */
+    val breaks: Boolean = true,
+    /** She hums along to the music that plays (window titles only). */
+    val music: Boolean = true,
+    /** She signals unread messages that apps show in their window title (Discord, Telegram…). */
+    val messages: Boolean = true,
+    /** She says when the PC runs hot, out of memory or out of disk. */
+    val health: Boolean = true,
+    /** She says when a download ends (Downloads folder). */
+    val downloads: Boolean = true,
+    /** Another folder to watch for new files, such as the LoRA training output; empty for none. */
+    val watchFolder: String = "",
+    /** The local ComfyUI: she says when its renders end. */
+    val comfyUrl: String = "http://127.0.0.1:8188",
 )
 
 @Serializable
@@ -64,6 +80,15 @@ object Store {
 
     fun saveChat(turns: List<Turn>) {
         runCatching { chatFile.writeText(json.encodeToString(turns.takeLast(KEPT_TURNS))) }
+    }
+
+    private val greetedFile get() = File(dir, "greeted.txt")
+
+    /** The last morning and evening greetings, « 2026-10-25 morning ». */
+    fun greeted(): Set<String> = runCatching { greetedFile.readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+
+    fun saveGreeted(kind: String, day: java.time.LocalDate) {
+        runCatching { greetedFile.writeText((greeted().filterNot { it.endsWith(" $kind") } + "$day $kind").joinToString("\n")) }
     }
 
     private val tapsFile get() = File(dir, "taps.txt")

@@ -13,8 +13,10 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * Her tools: the network toolbox and Deck Link's kit, offered to the model (Ollama's tool
- * calling) and to the runner as /commands. All of them only read, except the kit edits, which wait for « oui ».
+ * Her tools: the network toolbox, Deck Link's kit and her desktop helpers (reminders, pomodoro,
+ * the PC's health, the launcher, the clipboard, her long-term memory, Steam), offered to the model
+ * (Ollama's tool calling) and to the runner as /commands. The network tools only read; the kit
+ * edits wait for « oui ».
  */
 object Tools {
 
@@ -53,7 +55,42 @@ object Tools {
             doing = "consulte Warframe",
         ),
         Tool("deck_fleet", "parc", "Le parc de PC remonté par Deck Probe : nom, modèle, n° de série, OS, CPU, RAM, disques, IP, MAC.", doing = "ouvre la fiche du parc"),
+        Tool(
+            "set_reminder", "rappel",
+            "Programme un rappel ou un minuteur : elle le dira à l'heure dite, même après un redémarrage d'As//ka.",
+            listOf(Param("when", "quand : « 20 min », « 1h30 », « 18:30 », « demain 9h »"), Param("text", "ce qu'il faut rappeler", required = false)),
+            "note le rappel",
+        ),
+        Tool("list_reminders", "rappels", "Les rappels et minuteurs en attente.", doing = "relit ses rappels"),
+        Tool("cancel_reminder", "annule", "Annule un rappel, par son numéro ou des mots de son texte (« tout » pour tous).", listOf(Param("which", "numéro ou mots du rappel")), "raye un rappel"),
+        Tool(
+            "pomodoro", "pomodoro",
+            "Mode concentration (pomodoro) : 25 min de travail puis 5 min de pause, quatre fois, puis une grande pause. Elle se tait pendant le travail.",
+            listOf(Param("action", "start, stop ou status"), Param("minutes", "durée du travail, 25 par défaut", "integer", required = false)),
+            "règle le minuteur",
+        ),
+        Tool("pc_health", "sante", "La santé du PC maintenant : charge du processeur, mémoire, disques, carte graphique (température, charge, VRAM), température du processeur si disponible.", doing = "prend le pouls du PC"),
+        Tool("launch_app", "lance", "Ouvre un programme ou un jeu du menu Démarrer par son nom (Steam, Discord, ComfyUI, Warframe…).", listOf(Param("name", "le nom du programme")), "ouvre le programme"),
+        Tool("read_clipboard", "presse", "Le texte copié dans le presse-papiers, pour le traduire, le résumer ou l'expliquer.", doing = "jette un œil au presse-papiers"),
+        Tool("remember", "retiens", "Retient durablement un fait sur l'utilisateur (goûts, jeux, projets, dates) quand il le demande ou que c'est clairement utile pour plus tard.", listOf(Param("fact", "le fait, en une phrase courte")), "le note dans son carnet"),
+        Tool("forget", "oublie", "Oublie ce qu'elle avait retenu à propos de quelque chose (« tout » pour tout).", listOf(Param("what", "les mots du souvenir à oublier")), "gomme une page"),
+        Tool("memories", "memoire", "Tout ce qu'elle a retenu durablement sur l'utilisateur.", doing = "relit son carnet"),
+        Tool("now_playing", "musique", "La musique qui passe sur le PC en ce moment (Spotify, YouTube Music, Deezer…).", doing = "tend l'oreille"),
+        Tool("steam_games", "steam", "La bibliothèque Steam : jeux joués récemment, temps de jeu total et des deux dernières semaines.", doing = "feuillette Steam"),
     )
+
+    /** /commands that run a tool with a set instruction for her answer. */
+    data class Alias(val command: String, val tool: String, val instruction: String)
+
+    val aliases = listOf(
+        Alias("traduis", "read_clipboard", "Traduis ce texte fidèlement en français (ou en anglais s'il est déjà en français), puis une phrase à toi au plus."),
+        Alias("resume", "read_clipboard", "Résume ce texte en quelques points courts : l'essentiel d'abord."),
+    )
+
+    /** A /command: the tool, its arguments, and what she does with the result. */
+    data class Command(val tool: Tool, val args: Map<String, String>, val instruction: String = EXPLAIN)
+
+    const val EXPLAIN = "Explique ce résultat en bref : l'essentiel, puis la vérification suivante s'il y en a une."
 
     fun definitions(): JsonArray = buildJsonArray {
         all.forEach { t ->
@@ -77,24 +114,31 @@ object Tools {
     fun byName(name: String) = all.firstOrNull { it.name == name }
 
     /** "/ping 192.168.1.1" → the ping tool and its arguments; null when it is not a command. */
-    fun parseCommand(input: String): Pair<Tool, Map<String, String>>? {
+    fun parseCommand(input: String): Command? {
         val text = input.trim()
         if (!text.startsWith("/")) return null
         val words = text.drop(1).split(Regex("\\s+")).filter { it.isNotBlank() }
-        val tool = all.firstOrNull { it.command == words.firstOrNull()?.lowercase() } ?: return null
+        val word = DeckLink.normalize(words.firstOrNull().orEmpty())
+        aliases.firstOrNull { it.command == word }?.let { a -> return Command(byName(a.tool)!!, emptyMap(), a.instruction) }
+        val tool = all.firstOrNull { it.command == word } ?: return null
         val rest = words.drop(1)
+        val line = rest.joinToString(" ")
         val args = when {
             tool.params.isEmpty() -> emptyMap()
-            tool.name == "deck_search" -> mapOf("query" to rest.joinToString(" "))
+            tool.name == "set_reminder" -> Reminders.split(line)?.let { (_, what) -> mapOf("when" to line.removeSuffix(what).trim(), "text" to what) } ?: mapOf("when" to line)
+            tool.name in setOf("deck_search", "launch_app", "remember", "forget", "cancel_reminder") -> mapOf(tool.params.first().name to line)
+            tool.name == "pomodoro" -> rest.firstOrNull()?.toIntOrNull()?.let { mapOf("action" to "start", "minutes" to it.toString()) }
+                ?: mapOf("action" to (rest.firstOrNull()?.lowercase() ?: "start"))
             tool.name == "deck_use_stock" -> mapOf("quantity" to rest.firstOrNull().orEmpty(), "item" to rest.drop(1).joinToString(" "))
             tool.name == "deck_update" -> mapOf("kind" to rest.getOrElse(0) { "" }, "item" to rest.getOrElse(1) { "" }, "field" to rest.getOrElse(2) { "" }, "value" to rest.drop(3).joinToString(" "))
             else -> tool.params.zip(rest).associate { (p, v) -> p.name to v }
         }
-        return tool to args
+        return Command(tool, args)
     }
 
     /** "/aide": what she can do from the keyboard. */
-    fun help(): String = "Commandes : " + all.joinToString(" · ") { t -> "/" + t.command + t.params.joinToString("") { " <${it.name}>" } }
+    fun help(): String = "Commandes : " + all.joinToString(" · ") { t -> "/" + t.command + t.params.joinToString("") { " <${it.name}>" } } +
+        " · /traduis et /resume (le texte copié)"
 
     fun args(o: JsonObject): Map<String, String> = o.mapValues { (_, v) -> runCatching { v.jsonPrimitive.contentOrNull }.getOrNull().orEmpty() }
 
@@ -118,8 +162,18 @@ object Tools {
             "Prêt, mais PAS encore enregistré : $summary. Demande à l'utilisateur de confirmer par « oui » (ou « non » pour annuler)."
     }
 
+    /** What the tools need from her. */
+    interface Host {
+        val deckLink: String
+        fun propose(edit: Edit)
+        fun pomodoro(action: String, minutes: Int?): String
+        fun song(): String?
+    }
+
     /** Runs [tool] and answers in text, errors included: the model reads them too. */
-    suspend fun run(tool: Tool, args: Map<String, String>, deckLink: String, propose: (Edit) -> Unit = {}): String = withContext(Dispatchers.IO) {
+    suspend fun run(tool: Tool, args: Map<String, String>, host: Host): String = withContext(Dispatchers.IO) {
+        val deckLink = host.deckLink
+        val propose = host::propose
         fun need(name: String) = args[name]?.trim()?.takeIf { it.isNotEmpty() }
         runCatching {
             when (tool.name) {
@@ -139,6 +193,28 @@ object Tools {
                 "deck_search" -> need("query")?.let { DeckLink.search(deckLink, it) } ?: "Que faut-il chercher dans le kit ?"
                 "deck_fleet" -> DeckLink.fleet(deckLink)
                 "warframe_status" -> Warframe.world()?.text() ?: "L'API Warframe (warframestat.us) ne répond pas pour l'instant."
+                "set_reminder" -> {
+                    val spoken = need("when") ?: return@runCatching "Quand faut-il le rappeler ?"
+                    val (at, rest) = Reminders.parseWhen(spoken)?.let { it to "" } ?: Reminders.split(spoken)
+                        ?: return@runCatching "Je ne comprends pas « $spoken » comme une heure ou une durée (exemples : 20 min, 1h30, 18:30, demain 9h)."
+                    val r = Reminders.add(at, need("text") ?: rest)
+                    "Rappel n°${r.id} programmé ${Reminders.label(r.at)} : ${r.text}."
+                }
+                "list_reminders" -> Reminders.text()
+                "cancel_reminder" -> {
+                    val gone = Reminders.cancel(need("which") ?: return@runCatching "Quel rappel faut-il annuler ?")
+                    if (gone.isEmpty()) "Aucun rappel ne correspond." else "Annulé : " + gone.joinToString(" ; ") { it.text }
+                }
+                "pomodoro" -> host.pomodoro(need("action")?.lowercase() ?: "start", need("minutes")?.toIntOrNull())
+                "pc_health" -> Health.read().text()
+                "launch_app" -> need("name")?.let { Launcher.launch(it) } ?: "Quel programme faut-il ouvrir ?"
+                "read_clipboard" -> clipboard()?.let { "Texte copié :\n" + it.take(CLIPBOARD_CHARS) + if (it.length > CLIPBOARD_CHARS) "\n[… coupé]" else "" }
+                    ?: "Le presse-papiers ne contient pas de texte."
+                "remember" -> need("fact")?.let { Memory.remember(it) } ?: "Que faut-il retenir ?"
+                "forget" -> Memory.forget(need("what").orEmpty())
+                "memories" -> Memory.text()
+                "now_playing" -> host.song()?.let { "En ce moment : $it" } ?: "Aucune musique repérée (Spotify, foobar2000, MusicBee, AIMP, ou un onglet YouTube Music, Deezer, SoundCloud)."
+                "steam_games" -> Steam.text()
                 "deck_use_stock" -> {
                     val used = need("quantity")?.toLongOrNull()?.takeIf { it > 0 } ?: return@runCatching "Quelle quantité a été utilisée ?"
                     val item = need("item") ?: return@runCatching "Quel consommable ?"
@@ -167,4 +243,10 @@ object Tools {
             }
         }.getOrElse { "L'outil ${tool.name} a échoué : ${it.message ?: it.javaClass.simpleName}" }
     }
+
+    private fun clipboard(): String? = runCatching {
+        java.awt.Toolkit.getDefaultToolkit().systemClipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+    }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+
+    private const val CLIPBOARD_CHARS = 6000
 }
