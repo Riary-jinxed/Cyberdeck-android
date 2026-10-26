@@ -153,8 +153,11 @@ object Apps {
 
     /** Downloads [app]'s installer, checks its SHA-256 when GitHub gives one, reports 0 to 1. */
     fun download(app: App, onProgress: (Float) -> Unit): File {
-        val dir = File(System.getProperty("java.io.tmpdir"), "decklink-apps").apply { mkdirs() }
-        dir.listFiles()?.forEach { it.delete() }
+        // A folder of our own (mode 700 on Linux): in the shared /tmp, another user could otherwise
+        // swap the package between the check below and its install as root.
+        File(System.getProperty("java.io.tmpdir")).listFiles { f -> f.isDirectory && f.name.startsWith(DOWNLOADS) }
+            ?.forEach { runCatching { it.deleteRecursively() } }
+        val dir = java.nio.file.Files.createTempDirectory(DOWNLOADS).toFile()
         val file = File(dir, app.asset.name.substringAfterLast('/').substringAfterLast('\\'))
         val conn = (URI(app.asset.url).toURL().openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
@@ -190,9 +193,18 @@ object Apps {
         return file
     }
 
+    private const val DOWNLOADS = "decklink-apps-"
+
+    /** Null when [file] still hashes to what GitHub announced (or nothing was announced), else why not. */
+    private fun unchanged(file: File, app: App): String? {
+        val expected = app.asset.sha256 ?: return null
+        val got = runCatching { dev.netrunner.sync.Hashes.sha256(file.inputStream()) }.getOrNull()
+        return if (got.equals(expected, ignoreCase = true)) null else "Le fichier téléchargé a changé depuis sa vérification, rien n'a été installé."
+    }
+
     // ---- Where each app goes, on Windows (a .deb always installs under /opt).
 
-    private val foldersFile get() = File(File(Paths.home, "config").also { it.mkdirs() }, "apps.properties")
+    private val foldersFile get() = File(Paths.config, "apps.properties")
 
     private fun folders() = java.util.Properties().apply { if (foldersFile.isFile) foldersFile.inputStream().use { load(it) } }
 
@@ -230,6 +242,7 @@ object Apps {
 
     /** Installs another app and waits; null when it went well, else what went wrong. */
     fun install(file: File, app: App, dir: File? = folder(app)): String? {
+        unchanged(file, app)?.let { return it }
         // On Windows through a script: msiexec wants INSTALLDIR="…" as written, which Java's quoting would change.
         val command = if (windows) {
             val script = File(file.parentFile, "install.cmd")
@@ -254,6 +267,7 @@ object Apps {
     fun installSelf(file: File, app: App): String? {
         val launcher = System.getProperty("jpackage.app-path")
         val dir = file.parentFile
+        unchanged(file, app)?.let { return it }
         if (windows) {
             val script = File(dir, "update.cmd")
             val install = cmdLine(installCommand(file, Paths.installDir))

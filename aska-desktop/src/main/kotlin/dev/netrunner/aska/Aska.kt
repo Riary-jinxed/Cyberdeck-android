@@ -98,6 +98,8 @@ class Aska(private val scope: CoroutineScope) {
     private var noTools = false
     /** A change of the kit she prepared, waiting for « oui ». */
     @Volatile private var pendingEdit: Tools.Edit? = null
+    /** Something the model asked to do on the PC (or to remember), waiting for « oui ». */
+    @Volatile private var pendingAction: Tools.Confirm? = null
     private var hideJob: Job? = null
     /** The last time she spoke, asked or not: her remarks keep their distance. */
     private var lastSpoke = System.currentTimeMillis()
@@ -123,6 +125,7 @@ class Aska(private val scope: CoroutineScope) {
         override fun attach(image: String) { attached += image }
         override val deckLink get() = settings.value.deckLink
         override fun propose(edit: Tools.Edit) { pendingEdit = edit }
+        override fun confirm(action: Tools.Confirm) { pendingAction = action }
         override fun song() = _music.value
         override suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?): String {
             comfyOwn = true
@@ -325,6 +328,21 @@ class Aska(private val scope: CoroutineScope) {
         if (text == "/aide" || text == "/help") return say(Tools.help())
         // « /image un chibi qui mange un macaron »: she writes the prompt herself.
         if (text.startsWith("/image")) return send("Génère cette image avec ComfyUI (outil generate_image) : " + text.removePrefix("/image").trim().ifEmpty { "un chibi de toi qui fait coucou" })
+        pendingAction?.let { action ->
+            pendingAction = null
+            val answer = DeckLink.normalize(text).trim(' ', '!', '.')
+            if (answer in YES) {
+                history += Turn(true, text)
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { runCatching { action.run() }.getOrElse { "Ça n'a pas marché : ${it.message ?: it.javaClass.simpleName}" } }
+                    say(result)
+                    history += Turn(false, result)
+                }
+                return
+            }
+            if (answer in NO) return say("*hoche la tête* D'accord, je laisse tomber.")
+            // Anything else: dropped, and the conversation goes on.
+        }
         pendingEdit?.let { edit ->
             pendingEdit = null
             val answer = DeckLink.normalize(text).trim(' ', '!', '.')
@@ -459,7 +477,7 @@ class Aska(private val scope: CoroutineScope) {
                         talking = false
                         _bubble.value = "*${tool?.doing ?: "cherche"}…*"
                         refreshPose()
-                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), host)
+                        val result = if (tool == null) "Outil inconnu : ${call.name}" else Tools.run(tool, Tools.args(call.arguments), host, fromModel = true)
                         messages += Ollama.Message("tool", result, toolName = call.name)
                     }
                     // A picture can't ride on a tool's answer: it comes as the runner's.

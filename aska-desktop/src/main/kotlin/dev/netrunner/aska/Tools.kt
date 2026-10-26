@@ -178,19 +178,33 @@ object Tools {
             "Prêt, mais PAS encore enregistré : $summary. Demande à l'utilisateur de confirmer par « oui » (ou « non » pour annuler)."
     }
 
+    /** An action the model asked for that waits for the runner's « oui » (opening a program, a lasting memory). */
+    data class Confirm(val summary: String, val run: () -> String)
+
+    /** The tools the model may not run on its own: a copied text or a screenshot could have asked for them. */
+    private fun ask(summary: String, host: Host, run: () -> String): String {
+        host.confirm(Confirm(summary, run))
+        return "Prêt, mais PAS encore fait : $summary. Demande à l'utilisateur de confirmer par « oui » (ou « non » pour annuler)."
+    }
+
     /** What the tools need from her. */
     interface Host {
         /** A picture for her next look (base64 JPEG). */
         fun attach(image: String)
         val deckLink: String
         fun propose(edit: Edit)
+        fun confirm(action: Confirm)
         fun pomodoro(action: String, minutes: Int?): String
         fun song(): String?
         suspend fun generate(prompt: String, kind: String, negative: String, seed: Long?): String
     }
 
-    /** Runs [tool] and answers in text, errors included: the model reads them too. */
-    suspend fun run(tool: Tool, args: Map<String, String>, host: Host): String = withContext(Dispatchers.IO) {
+    /**
+     * Runs [tool] and answers in text, errors included: the model reads them too. [fromModel]: the
+     * model chose the call (not a /command typed by the runner), so what acts on the PC or her memory
+     * waits for « oui » and the probes stay on the local network.
+     */
+    suspend fun run(tool: Tool, args: Map<String, String>, host: Host, fromModel: Boolean = false): String = withContext(Dispatchers.IO) {
         val deckLink = host.deckLink
         val propose = host::propose
         fun need(name: String) = args[name]?.trim()?.takeIf { it.isNotEmpty() }
@@ -203,10 +217,15 @@ object Tools {
                 "port_check" -> {
                     val host = need("host") ?: return@runCatching "Sur quel hôte ?"
                     val port = need("port")?.toIntOrNull()?.takeIf { it in 1..65535 } ?: return@runCatching "Quel port (1 à 65535) ?"
+                    if (fromModel && !Net.local(host)) return@runCatching OUTSIDE.format("/port $host $port")
                     Net.port(host, port)
                 }
                 "wifi_status" -> Net.wifi()
-                "scan_network" -> Net.scan(need("cidr"), DeckLink.fleetAddresses(deckLink))
+                "scan_network" -> {
+                    val cidr = need("cidr")
+                    if (fromModel && cidr != null && !Net.local(cidr)) return@runCatching OUTSIDE.format("/scan $cidr")
+                    Net.scan(cidr, DeckLink.fleetAddresses(deckLink))
+                }
                 "subnet_calc" -> need("cidr")?.let { Net.subnet(it) } ?: "Quel réseau (exemple : 192.168.1.0/24) ?"
                 "diagnose_internet" -> Net.diagnose()
                 "deck_search" -> need("query")?.let { DeckLink.search(deckLink, it) } ?: "Que faut-il chercher dans le kit ?"
@@ -226,13 +245,21 @@ object Tools {
                 }
                 "pomodoro" -> host.pomodoro(need("action")?.lowercase() ?: "start", need("minutes")?.toIntOrNull())
                 "pc_health" -> Health.read().text()
-                "launch_app" -> need("name")?.let { Launcher.launch(it) } ?: "Quel programme faut-il ouvrir ?"
+                "launch_app" -> {
+                    val name = need("name") ?: return@runCatching "Quel programme faut-il ouvrir ?"
+                    if (!fromModel) return@runCatching Launcher.launch(name)
+                    val entry = Launcher.find(name).firstOrNull() ?: return@runCatching "Aucun programme du menu Démarrer ne s'appelle « $name »."
+                    ask("ouvrir ${entry.name}", host) { Launcher.launch(entry.name) }
+                }
                 "read_clipboard" -> clipboard()?.let { "Texte copié :\n" + it.take(CLIPBOARD_CHARS) + if (it.length > CLIPBOARD_CHARS) "\n[… coupé]" else "" }
                     ?: Screen.clipboardImage()?.let { host.attach(it); "Le presse-papiers contient une image : elle est jointe, regarde-la." }
                     ?: "Le presse-papiers est vide (ni texte ni image)."
                 "look_at_screen" -> Screen.capture()?.let { host.attach(it); "Capture de l'écran jointe : regarde-la pour répondre." }
                     ?: "Impossible de capturer l'écran sur ce système."
-                "remember" -> need("fact")?.let { Memory.remember(it) } ?: "Que faut-il retenir ?"
+                "remember" -> {
+                    val fact = need("fact") ?: return@runCatching "Que faut-il retenir ?"
+                    if (fromModel) ask("retenir « ${fact.take(200)} »", host) { Memory.remember(fact) } else Memory.remember(fact)
+                }
                 "forget" -> Memory.forget(need("what").orEmpty())
                 "memories" -> Memory.text()
                 "now_playing" -> host.song()?.let { "En ce moment : $it" } ?: "Aucune musique repérée (Spotify, foobar2000, MusicBee, AIMP, ou un onglet YouTube Music, Deezer, SoundCloud)."
@@ -272,4 +299,6 @@ object Tools {
     }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
     private const val CLIPBOARD_CHARS = 6000
+
+    private const val OUTSIDE = "Cette adresse n'est pas sur le réseau local : je ne la sonde que si l'utilisateur tape lui-même %s."
 }

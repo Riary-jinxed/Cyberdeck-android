@@ -25,7 +25,17 @@ object Paths {
 
     val sync: File = File(home, "sync").also { it.mkdirs() }
     val kit: File get() = File(sync, "kit")
-    private val configFile = File(File(home, "config").also { it.mkdirs() }, "decklink.properties")
+    /**
+     * The pairing code, the fleet key and As//ka's token: on Linux and macOS the folder is the
+     * owner's only (rwx------), so other accounts of the PC cannot read them.
+     */
+    val config: File get() = File(home, "config").ownerOnly()
+    private val configFile = File(config, "decklink.properties")
+
+    private fun File.ownerOnly(): File = apply {
+        mkdirs()
+        runCatching { java.nio.file.Files.setPosixFilePermissions(toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")) }
+    }
 
     private fun writable(dir: File): Boolean = runCatching {
         val probe = File(dir, "sync").also { it.mkdirs() }
@@ -58,10 +68,11 @@ object Paths {
         return key
     }
 
-    val outbox: File get() = File(File(home, "config"), "outbox.json")
+    val outbox: File get() = File(config, "outbox.json")
     /** The last report of each PC of the fleet, one JSON file per PC. */
     val fleet: File get() = File(sync, "parc").also { it.mkdirs() }
-    val deployment: File get() = File(home, "deploiement")
+    /** The deployment pack carries the fleet key too. */
+    val deployment: File get() = File(home, "deploiement").ownerOnly()
     /** Dated copies of the kit (Backups.kt). */
     val backups: File get() = File(home, "sauvegardes")
     /** Excel exports, PDF reports and label sheets. */

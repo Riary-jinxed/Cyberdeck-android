@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import dev.netrunner.sync.SafePath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.Desktop
@@ -431,6 +432,9 @@ fun CablesScreen(state: LinkState) {
 
 // ---------------------------------------------------------------------------------- logbook
 
+/** What a click on a logbook photo may open: pictures only, never a program the phone sent. */
+private val PhotoTypes = setOf("jpg", "jpeg", "png", "webp", "heic", "gif", "bmp")
+
 @Composable
 private fun Photo(file: File, height: Dp) {
     val image by produceState<ImageBitmap?>(null, file) {
@@ -487,7 +491,10 @@ fun LogbookScreen(state: LinkState) {
             if (i.photos.isNotEmpty()) {
                 Section("PHOTOS (${i.photos.size})")
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(i.photos) { name -> Photo(File(File(File(Paths.kit, "logbook"), i.id), name), 150.dp) }
+                    // Names come from the phone: kept inside the logbook folder, and only pictures.
+                    items(i.photos.mapNotNull { name -> SafePath.resolve(File(Paths.kit, "logbook"), "${i.id}/$name")?.takeIf { it.extension.lowercase() in PhotoTypes } }) { file ->
+                        Photo(file, 150.dp)
+                    }
                 }
             }
             if (i.journal.isNotEmpty()) {

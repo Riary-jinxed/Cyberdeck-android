@@ -77,7 +77,9 @@ class SyncServer(
     }
 
     private fun serve(client: Socket) {
-        client.soTimeout = 60_000
+        // One phone at a time: a silent connection from anyone on the network must not hold the
+        // server, so the hello has to come quickly; a paired phone then gets the usual minute.
+        client.soTimeout = HELLO_TIMEOUT_MS
         val key = code()?.key ?: throw IOException("aucun code d'appairage")
         val challenge = SecureChannel.newChallenge()
         client.getOutputStream().apply { write(SecureChannel.MAGIC); write(challenge); flush() }
@@ -87,6 +89,7 @@ class SyncServer(
             ch.sendMessage(Message.Error("version du protocole différente : mets à jour le launcher et Deck Link"))
             throw IOException("version ${hello.version}")
         }
+        client.soTimeout = 60_000
         if (hello.folder == BACKUPS && backups != null) return serveBackups(ch, hello.device, backups)
         if (hello.folder !in folders) {
             ch.sendMessage(Message.Error("dossier « ${hello.folder} » non pris en charge par ce PC"))
@@ -146,6 +149,7 @@ class SyncServer(
 
     companion object {
         const val DEFAULT_PORT = 47321
+        private const val HELLO_TIMEOUT_MS = 5_000
         /** The hello folder that asks for the backups instead of a sync. */
         const val BACKUPS = "sauvegardes"
     }

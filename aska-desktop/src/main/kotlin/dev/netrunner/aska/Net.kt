@@ -70,6 +70,18 @@ object Net {
 
     // ---- Probes.
 
+    /**
+     * True when [host] resolves only to this PC or the local network (private, link-local, CGNAT):
+     * where the model may probe on its own. Anything else waits for a command typed by the runner.
+     */
+    fun local(host: String): Boolean = runCatching {
+        InetAddress.getAllByName(host.trim().substringBefore('/')).all { a ->
+            a.isLoopbackAddress || a.isSiteLocalAddress || a.isLinkLocalAddress ||
+                (a is Inet4Address && (a.address[0].toInt() and 0xFF) == 100 && (a.address[1].toInt() and 0xC0) == 64) ||
+                (a !is Inet4Address && (a.address[0].toInt() and 0xFE) == 0xFC)
+        }
+    }.getOrDefault(false)
+
     data class Ping(val host: String, val sent: Int, val received: Int, val avgMs: Double?) {
         fun text() = if (received == 0) "$host : aucune réponse sur $sent ($sent perdus)."
         else "$host : $received/$sent réponses, ${sent - received} perdu(s), moyenne ${"%.0f".format(avgMs ?: 0.0)} ms."

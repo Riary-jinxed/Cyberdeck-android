@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 10 and 11 backups: the pairing code with the PC and the clients' sheets (door codes,
+     access instructions) stay on the phone; the kit reaches the PC through Deck Link instead. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="pc_link.xml" />
+    <exclude domain="file" path="kit_clients.json" />
+    <exclude domain="file" path="clients/" />
+</full-backup-content>
